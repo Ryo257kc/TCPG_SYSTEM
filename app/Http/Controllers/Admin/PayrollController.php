@@ -532,6 +532,7 @@ class PayrollController extends Controller
             'staff_id' => ['nullable', 'string', 'max:50'],
             'company_id' => ['nullable', 'string', 'max:200'],
             'row' => ['nullable', 'string', 'max:100'],
+            'recalc_koyou' => ['nullable', 'in:0,1'],
             'fields' => ['nullable', 'array'],
         ]);
 
@@ -576,10 +577,22 @@ class PayrollController extends Controller
             if (!is_string($k)) {
                 continue;
             }
+            if (is_string($v) && trim($v) === '' && array_key_exists($k, $payload)) {
+                // Keep existing value when blank is posted from hidden/non-edited inputs.
+                continue;
+            }
             $payload[$k] = $this->normalizeNumericInput($v);
         }
 
-        $this->applyComputedTotals($payload);
+        $payrollDate = sprintf('%04d-%02d-01', $year, $month);
+        $this->applyComputedTotals($payload, $staffId, $payrollDate);
+
+        if (((string)($validated['recalc_koyou'] ?? '0')) === '1') {
+            // Recalculate koyou using freshly computed rouho_target_sum,
+            // then recalc totals again so syaho_sum/deduction/net stay consistent.
+            $this->applyEmploymentInsurance($payload, $staffId, $payrollDate);
+            $this->applyComputedTotals($payload, $staffId, $payrollDate);
+        }
 
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
@@ -595,6 +608,58 @@ class PayrollController extends Controller
             ]);
 
         return $this->redirectPayrollWithQuery($validated, '給与項目を保存しました。');
+    }
+
+    public function recalcKoyou(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'target_staff_id' => ['required', 'string', 'max:50'],
+            'staff_id' => ['nullable', 'string', 'max:50'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'row' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        [$year, $month] = [(int) substr((string) $validated['month'], 0, 4), (int) substr((string) $validated['month'], 5, 2)];
+        $staffId = trim((string) $validated['target_staff_id']);
+
+        $entry = DB::connection('sqlsrv_payroll')
+            ->table('dbo.m_payroll_entries')
+            ->where('is_bonus', 0)
+            ->whereRaw('YEAR([supply_month]) = ?', [$year])
+            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('LTRIM(RTRIM(staff_code)) = ?', [$staffId])
+            ->orderBy('supply_month', 'desc')
+            ->orderBy('payroll_entry_id', 'desc')
+            ->first();
+
+        if ($entry === null) {
+            return $this->redirectPayrollWithQuery($validated, '対象データが見つかりません。');
+        }
+        if (((int) ($entry->is_edit_locked ?? 0)) === 1) {
+            return $this->redirectPayrollWithQuery($validated, '給与が確定済みのため、先に未確定へ戻してください。');
+        }
+
+        $payload = $this->decodePayload($entry->raw_payload ?? null);
+        $payrollDate = sprintf('%04d-%02d-01', $year, $month);
+        $this->applyComputedTotals($payload, $staffId, $payrollDate);
+        $this->applyEmploymentInsurance($payload, $staffId, $payrollDate);
+        $this->applyComputedTotals($payload, $staffId, $payrollDate);
+
+        $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!is_string($encodedPayload)) {
+            return $this->redirectPayrollWithQuery($validated, '雇用保険の再計算に失敗しました。');
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.m_payroll_entries')
+            ->where('payroll_entry_id', (int) $entry->payroll_entry_id)
+            ->update([
+                'raw_payload' => $encodedPayload,
+                'updated_at' => now('Asia/Tokyo'),
+            ]);
+
+        return $this->redirectPayrollWithQuery($validated, '雇用保険を再計算しました。');
     }
 
     public function syncAttendance(Request $request): RedirectResponse
@@ -646,7 +711,7 @@ class PayrollController extends Controller
             $updatedKeys[] = $mk;
         }
 
-        $this->applyComputedTotals($payload);
+        $this->applyComputedTotals($payload, $staffId, sprintf('%04d-%02d-01', $year, $month));
 
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
@@ -754,7 +819,7 @@ class PayrollController extends Controller
             $masterKeys = $this->applyPayrollMastersToPayload($payload, $masterInfo, $staffId);
             $updatedFields += count($masterKeys);
 
-            $this->applyComputedTotals($payload);
+            $this->applyComputedTotals($payload, $staffId, $payrollMonthDate);
 
             $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             if (!is_string($encodedPayload)) {
@@ -1022,6 +1087,9 @@ class PayrollController extends Controller
             $hasSlotNo = in_array('slot_no', $columns, true);
             $hasAmountKey = in_array('amount_column_key', $columns, true);
             $hasDisplayOrder = in_array('display_order', $columns, true);
+            $hasTaxTarget = in_array('tax_target', $columns, true);
+            $hasSyahoTarget = in_array('syaho_target', $columns, true);
+            $hasRouTarget = in_array('rou_target', $columns, true);
 
             $rows = DB::connection('sqlsrv_payroll')
                 ->table('dbo.t_allowance')
@@ -1035,6 +1103,9 @@ class PayrollController extends Controller
                     DB::raw($hasSlotNo ? 'slot_no' : 'NULL as slot_no'),
                     DB::raw($hasAmountKey ? 'amount_column_key' : 'NULL as amount_column_key'),
                     DB::raw($hasDisplayOrder ? 'display_order' : 'NULL as display_order'),
+                    DB::raw($hasTaxTarget ? 'tax_target' : '0 as tax_target'),
+                    DB::raw($hasSyahoTarget ? 'syaho_target' : '0 as syaho_target'),
+                    DB::raw($hasRouTarget ? 'rou_target' : '0 as rou_target'),
                 ]);
 
             $defs = [];
@@ -1051,6 +1122,9 @@ class PayrollController extends Controller
                     'allowance_name' => trim((string) ($row->allowance_name ?? '')),
                     'amount_column_key' => $amountKey,
                     'display_order' => (int) ($row->display_order ?? 0),
+                    'tax_target' => (int) ($row->tax_target ?? 0),
+                    'syaho_target' => (int) ($row->syaho_target ?? 0),
+                    'rou_target' => (int) ($row->rou_target ?? 0),
                 ];
             }
 
@@ -1238,13 +1312,32 @@ class PayrollController extends Controller
         }
 
         try {
-            $staffShou = DB::connection('sqlsrv_payroll')
-                ->table('dbo.t_staff_shou')
-                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-                ->whereDate('raise_year', '<', $cutoffDate)
-                ->orderBy('raise_year', 'desc')
-                ->orderBy('staff_shou_no', 'desc')
-                ->first();
+            $staffShouTable = $this->resolvePayrollMasterTable([
+                'dbo.m_staff_social_insurances',
+                'm_staff_social_insurances',
+                'dbo.t_staff_shou',
+                't_staff_shou',
+            ]);
+
+            $staffShou = null;
+            if ($staffShouTable !== null) {
+                $staffCodeCol = $this->payrollTableHasColumn($staffShouTable, 'staff_code') ? 'staff_code' : 'staff_id';
+                $idOrderCol = $this->payrollTableHasColumn($staffShouTable, 'staff_social_insurance_id')
+                    ? 'staff_social_insurance_id'
+                    : ($this->payrollTableHasColumn($staffShouTable, 'staff_shou_no') ? 'staff_shou_no' : null);
+
+                $query = DB::connection('sqlsrv_payroll')
+                    ->table($staffShouTable)
+                    ->whereRaw('LTRIM(RTRIM(' . $this->wrap($staffCodeCol) . ')) = ?', [$staffId])
+                    ->whereDate('raise_year', '<', $cutoffDate)
+                    ->orderBy('raise_year', 'desc');
+
+                if ($idOrderCol !== null) {
+                    $query->orderBy($idOrderCol, 'desc');
+                }
+
+                $staffShou = $query->first();
+            }
 
             if ($staffShou !== null) {
                 $result['syaho'] = [
@@ -1263,6 +1356,29 @@ class PayrollController extends Controller
         }
 
         return $result;
+    }
+
+    private function resolvePayrollMasterTable(array $candidates): ?string
+    {
+        foreach ($candidates as $table) {
+            try {
+                if (Schema::connection('sqlsrv_payroll')->hasTable($table)) {
+                    return $table;
+                }
+            } catch (\Throwable) {
+                // no-op
+            }
+        }
+        return null;
+    }
+
+    private function payrollTableHasColumn(string $table, string $column): bool
+    {
+        try {
+            return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function applyPayrollMastersToPayload(array &$payload, array $masterInfo, string $staffId): array
@@ -1417,7 +1533,7 @@ class PayrollController extends Controller
         return 0.0;
     }
 
-    private function applyComputedTotals(array &$payload): void
+    private function applyComputedTotals(array &$payload, string $staffId = '', string $payrollMonthDate = ''): void
     {
         // 社会保険計
         $syahoSum = $this->payloadNumber($payload, 'kenpo')
@@ -1426,26 +1542,34 @@ class PayrollController extends Controller
             + $this->payloadNumber($payload, 'koyou');
         $payload['syaho_sum'] = $this->normalizeNumericInput($syahoSum);
 
-        // 支給合計（課税＋非課税が入っていればそれを優先）
-        $taxable = $this->payloadNumber($payload, 'taxation_sum');
-        $nontaxable = $this->payloadNumber($payload, 'not_taxation_sum');
+        // 支給合計を内訳から再計算（課税/非課税の既存値には依存しない）
         $supplySum = 0.0;
-        if ($taxable !== 0.0 || $nontaxable !== 0.0) {
-            $supplySum = $taxable + $nontaxable;
-        } else {
-            $supplySum += $this->payloadNumber($payload, 'basic_salary');
-            $supplySum += $this->payloadNumber($payload, 'officer_com');
-            for ($i = 1; $i <= 17; $i++) {
-                $supplySum += $this->payloadNumber($payload, 'allowance_amo_' . $i);
-            }
-            $supplySum += $this->payloadNumber($payload, 'traffic_addition');
-            $supplySum += $this->payloadNumber($payload, 'leave_allowance');
-            // 現行運用上、遅早控除/欠勤控除は支給枠で管理
-            $supplySum += $this->payloadNumber($payload, 'late_deduction');
-            $supplySum += $this->payloadNumber($payload, 'absence_deduction');
+        $supplySum += $this->payloadNumber($payload, 'basic_salary');
+        $supplySum += $this->payloadNumber($payload, 'officer_com');
+        // allowance_amo_1(月給/時給)は表示用スロットとして扱い、合計には入れない
+        for ($i = 2; $i <= 17; $i++) {
+            $supplySum += $this->payloadNumber($payload, 'allowance_amo_' . $i);
         }
+        $supplySum += $this->payloadNumber($payload, 'traffic_addition');
+        $supplySum += $this->payloadNumber($payload, 'leave_allowance');
+        // 現行運用上、遅早控除/欠勤控除は支給枠で管理
+        $supplySum += $this->payloadNumber($payload, 'late_deduction');
+        $supplySum += $this->payloadNumber($payload, 'absence_deduction');
+
+        // 課税/労保/社保 対象額は手当設定フラグで算出（tax_target / rouho_target / syaho_target）
+        $targets = $this->computeTargetsFromAllowanceSettings($payload, $staffId, $supplySum);
+        $taxable = $targets['taxable'];
+        $rouhoTarget = $targets['rouho_target'];
+        $syahoTarget = $targets['syaho_target'];
+        $nontaxable = max(0.0, $supplySum - $taxable);
+        $payload['taxation_sum'] = $this->normalizeNumericInput($taxable);
+        $payload['not_taxation_sum'] = $this->normalizeNumericInput($nontaxable);
+
         $payload['supply_sum'] = $this->normalizeNumericInput($supplySum);
         $payload['pay_total'] = $this->normalizeNumericInput($supplySum);
+
+        $payload['rouho_target_sum'] = $this->normalizeNumericInput($rouhoTarget);
+        $payload['syaho_target_sum'] = $this->normalizeNumericInput($syahoTarget);
 
         // 控除合計
         $deductionSum = $syahoSum
@@ -1459,6 +1583,164 @@ class PayrollController extends Controller
         $payload['supply_deduction_sum'] = $this->normalizeNumericInput($netPay);
         $payload['net_pay'] = $this->normalizeNumericInput($netPay);
         $payload['transfer_amo'] = $this->normalizeNumericInput($netPay);
+    }
+
+    private function applyEmploymentInsurance(array &$payload, string $staffId, string $payrollMonthDate): void
+    {
+        $staffId = trim($staffId);
+        $monthDate = trim($payrollMonthDate);
+        if ($staffId === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $monthDate)) {
+            return;
+        }
+
+        $isBonus = $this->payloadNumber($payload, 'bonus') > 0
+            || in_array(strtolower((string)($payload['bonus'] ?? '')), ['true', '1'], true);
+        $base = $isBonus
+            ? $this->payloadNumber($payload, 'bonus_amo')
+            : $this->payloadNumber($payload, 'rouho_target_sum');
+
+        $ratePerMille = $this->resolveLaborInsuranceRate($monthDate);
+        if ($ratePerMille <= 0 || $base <= 0) {
+            $payload['koyou'] = 0;
+            return;
+        }
+
+        $staffDivision = $this->resolveStaffDivision($staffId);
+        if ($staffId === '001' || $staffDivision === '業務委託') {
+            $payload['koyou'] = 0;
+            return;
+        }
+
+        // Access運用互換: 千分率で計算し、円単位四捨五入
+        $koyou = round($base * ($ratePerMille / 1000), 0, PHP_ROUND_HALF_UP);
+        $payload['koyou'] = $this->normalizeNumericInput($koyou);
+    }
+
+    private function resolveLaborInsuranceRate(string $payrollMonthDate): float
+    {
+        static $cache = [];
+        if (isset($cache[$payrollMonthDate])) {
+            return $cache[$payrollMonthDate];
+        }
+
+        $conn = DB::connection('sqlsrv_payroll');
+        $candidates = [
+            ['dbo.m_labor_insurance_rates', 'apply_date', 'general_employee_rate'],
+            ['m_labor_insurance_rates', 'apply_date', 'general_employee_rate'],
+            ['dbo.t_rouho', 'rou_apply_date', 'general_st'],
+            ['t_rouho', 'rou_apply_date', 'general_st'],
+        ];
+
+        foreach ($candidates as [$table, $dateCol, $rateCol]) {
+            try {
+                if (!Schema::connection('sqlsrv_payroll')->hasTable($table)) {
+                    continue;
+                }
+                if (!Schema::connection('sqlsrv_payroll')->hasColumn($table, $dateCol) || !Schema::connection('sqlsrv_payroll')->hasColumn($table, $rateCol)) {
+                    continue;
+                }
+                $row = $conn->table($table)
+                    ->whereRaw('CONVERT(date, ' . $this->wrap($dateCol) . ') <= ?', [$payrollMonthDate])
+                    ->orderBy($dateCol, 'desc')
+                    ->first([$rateCol]);
+                if ($row !== null) {
+                    $rate = (float) ($row->{$rateCol} ?? 0);
+                    if ($rate > 0) {
+                        $cache[$payrollMonthDate] = $rate;
+                        return $rate;
+                    }
+                }
+            } catch (\Throwable) {
+                // no-op
+            }
+        }
+
+        $cache[$payrollMonthDate] = 0.0;
+        return 0.0;
+    }
+
+    private function resolveStaffDivision(string $staffId): string
+    {
+        static $cache = [];
+        $staffId = trim($staffId);
+        if ($staffId === '') {
+            return '';
+        }
+        if (array_key_exists($staffId, $cache)) {
+            return $cache[$staffId];
+        }
+        try {
+            $row = DB::connection('sqlsrv')
+                ->table('dbo.m_staffs')
+                ->whereRaw('LTRIM(RTRIM(staff_code)) = ?', [$staffId])
+                ->first(['staff_division']);
+            $cache[$staffId] = trim((string)($row->staff_division ?? ''));
+            return $cache[$staffId];
+        } catch (\Throwable) {
+            $cache[$staffId] = '';
+            return '';
+        }
+    }
+
+    private function computeTargetsFromAllowanceSettings(array $payload, string $staffId, float $supplySum): array
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '') {
+            return [
+                'taxable' => max(0.0, $this->payloadNumber($payload, 'taxation_sum')),
+                'rouho_target' => max(0.0, $this->payloadNumber($payload, 'rouho_target_sum')),
+                'syaho_target' => max(0.0, $this->payloadNumber($payload, 'syaho_target_sum')),
+            ];
+        }
+
+        $companyCode = $this->resolveStaffCompanyCode($staffId);
+        $defs = $this->resolveAllowanceDefinitionsOrdered($companyCode);
+        if ($defs === []) {
+            // fallback: keep current payload values when mapping is unavailable
+            return [
+                'taxable' => max(0.0, $this->payloadNumber($payload, 'taxation_sum')),
+                'rouho_target' => max(0.0, $this->payloadNumber($payload, 'rouho_target_sum')),
+                'syaho_target' => max(0.0, $this->payloadNumber($payload, 'syaho_target_sum')),
+            ];
+        }
+
+        $taxable = 0.0;
+        $rouhoTarget = 0.0;
+        $syahoTarget = 0.0;
+
+        foreach ($defs as $def) {
+            $key = trim((string)($def['amount_column_key'] ?? ''));
+            if ($key === '') {
+                $slotNo = (int)($def['slot_no'] ?? 0);
+                if ($slotNo > 0) {
+                    $key = 'allowance_amo_' . $slotNo;
+                }
+            }
+            if ($key === '') {
+                continue;
+            }
+
+            $amount = $this->payloadNumber($payload, $key);
+            if ((int)($def['tax_target'] ?? 0) === 1) {
+                $taxable += $amount;
+            }
+            if ((int)($def['rou_target'] ?? 0) === 1) {
+                $rouhoTarget += $amount;
+            }
+            if ((int)($def['syaho_target'] ?? 0) === 1) {
+                $syahoTarget += $amount;
+            }
+        }
+
+        $taxable = max(0.0, min($taxable, $supplySum));
+        $rouhoTarget = max(0.0, min($rouhoTarget, $supplySum));
+        $syahoTarget = max(0.0, min($syahoTarget, $supplySum));
+
+        return [
+            'taxable' => $taxable,
+            'rouho_target' => $rouhoTarget,
+            'syaho_target' => $syahoTarget,
+        ];
     }
 
     private function redirectPayrollWithQuery(array $validated, string $message): RedirectResponse

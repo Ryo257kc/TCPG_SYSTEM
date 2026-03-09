@@ -22,6 +22,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/payroll/lock', [PayrollController::class, 'lock'])->name('admin.payroll.lock');
         Route::post('/payroll/unlock', [PayrollController::class, 'unlock'])->name('admin.payroll.unlock');
         Route::post('/payroll/save', [PayrollController::class, 'save'])->name('admin.payroll.save');
+        Route::post('/payroll/recalc-koyou', [PayrollController::class, 'recalcKoyou'])->name('admin.payroll.recalc-koyou');
         Route::post('/payroll/sync-attendance', [PayrollController::class, 'syncAttendance'])->name('admin.payroll.sync-attendance');
         Route::post('/payroll/sync-attendance-bulk', [PayrollController::class, 'syncAttendanceBulk'])->name('admin.payroll.sync-attendance-bulk');
         Route::get('/attendance', [AttendanceManageController::class, 'index'])->name('admin.attendance.index');

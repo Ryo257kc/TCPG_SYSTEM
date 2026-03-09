@@ -55,6 +55,9 @@
         .cell-view { display:inline; }
         .edit-mode .cell-view { display:none; }
         .edit-mode .num-input { display:inline-block; }
+        .recalc-koyou-btn { display:none; }
+        .edit-mode .recalc-koyou-btn { display:inline-block; }
+        .edit-mode #btn-toggle-lock { display:none !important; }
 
         .earnings-total th, .earnings-total td,
         .deduction-total th, .deduction-total td,
@@ -558,6 +561,7 @@
                                     <input type="hidden" name="target_staff_id" value="{{ $selectedSummary['staff_id'] ?? '' }}">
                                     <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
                                     <input type="hidden" name="row" value="{{ $selectedRowKey }}">
+                                    <input type="hidden" id="recalc-koyou-on-save" name="recalc_koyou" value="0">
                                 </form>
                             @endif
 
@@ -578,6 +582,8 @@
                                     </form>
                                     @if (!$isLocked)
                                         <button id="btn-save-edit" type="submit" form="payroll-save-form" class="btn-act primary" style="display:none;">保存</button>
+                                        <button id="btn-clear-calc" type="button" class="btn-act" style="display:none;">支給/控除/その他クリア</button>
+                                        <button id="btn-cancel-edit" type="button" class="btn-act" style="display:none;">キャンセル</button>
                                     @endif
                                     <form method="POST" action="{{ route('admin.payroll.toggle-lock') }}" onsubmit="return confirm('編集ロックを切り替えます。よろしいですか？');">
                                         @csrf
@@ -587,7 +593,7 @@
                                         <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
                                         <input type="hidden" name="row" value="{{ $selectedRowKey }}">
                                         <input type="hidden" name="current_lock" value="{{ $isLocked ? '1' : '0' }}">
-                                        <button type="submit" class="btn-act {{ $isLocked ? '' : 'primary' }}">
+                                        <button id="btn-toggle-lock" type="submit" class="btn-act {{ $isLocked ? '' : 'primary' }}">
                                             {{ $isLocked ? '未確定に戻す' : '確定' }}
                                         </button>
                                     </form>
@@ -623,7 +629,7 @@
                                                             class="num-input"
                                                             type="text"
                                                             name="fields[{{ $r['key'] }}]"
-                                                            value="{{ (string)($r['raw'] ?? '') }}"
+                                                            value="{{ $formatComma((string)($r['raw'] ?? '')) }}"
                                                             form="payroll-save-form"
                                                         >
                                                     @else
@@ -684,7 +690,7 @@
                                                         class="num-input"
                                                         type="text"
                                                         name="fields[{{ $r['key'] }}]"
-                                                        value="{{ (string)($r['raw'] ?? '') }}"
+                                                        value="{{ $formatComma((string)($r['raw'] ?? '')) }}"
                                                         form="payroll-save-form"
                                                     >
                                                 @else
@@ -721,7 +727,20 @@
                                                 $showDeltaBlock = $hasDelta;
                                             @endphp
                                             <tr class="{{ !empty($r['is_total']) ? 'deduction-total' : '' }}">
-                                                <th>{{ $r['label'] }}</th>
+                                                <th>
+                                                    {{ $r['label'] }}
+                                                    @if (!$isLocked && $k === 'koyou')
+                                                        <form method="POST" action="{{ route('admin.payroll.recalc-koyou') }}" style="display:inline-block; margin-left:6px; vertical-align:middle;">
+                                                            @csrf
+                                                            <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                                                            <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                                                            <input type="hidden" name="target_staff_id" value="{{ $selectedSummary['staff_id'] ?? '' }}">
+                                                            <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                                                            <input type="hidden" name="row" value="{{ $selectedRowKey }}">
+                                                            <button type="submit" class="btn-act recalc-koyou-btn" style="height:22px; padding:0 7px; font-size:11px;">↩ 計算</button>
+                                                        </form>
+                                                    @endif
+                                                </th>
                                                 <td>
                                                     @if (!$isLocked && !empty($r['key']))
                                                         <span class="cell-view">{{ $r['value'] }}</span>
@@ -729,7 +748,7 @@
                                                             class="num-input"
                                                             type="text"
                                                             name="fields[{{ $r['key'] }}]"
-                                                            value="{{ (string)($r['raw'] ?? '') }}"
+                                                            value="{{ $formatComma((string)($r['raw'] ?? '')) }}"
                                                             form="payroll-save-form"
                                                         >
                                                     @else
@@ -763,7 +782,7 @@
                                                             class="num-input"
                                                             type="text"
                                                             name="fields[{{ $r['key'] }}]"
-                                                            value="{{ (string)($r['raw'] ?? '') }}"
+                                                            value="{{ $formatComma((string)($r['raw'] ?? '')) }}"
                                                             form="payroll-save-form"
                                                         >
                                                     @else
@@ -792,7 +811,7 @@
                                                             class="num-input"
                                                             type="text"
                                                             name="fields[{{ $r['key'] }}]"
-                                                            value="{{ (string)($r['raw'] ?? '') }}"
+                                                            value="{{ $formatComma((string)($r['raw'] ?? '')) }}"
                                                             form="payroll-save-form"
                                                         >
                                                     @else
@@ -867,14 +886,29 @@
 document.addEventListener('DOMContentLoaded', function () {
     var startBtn = document.getElementById('btn-start-edit');
     var saveBtn = document.getElementById('btn-save-edit');
+    var clearBtn = document.getElementById('btn-clear-calc');
+    var cancelBtn = document.getElementById('btn-cancel-edit');
     var pane = document.getElementById('payroll-detail-pane');
     var saveForm = document.getElementById('payroll-save-form');
-    var setViewMode = function () {
+    var recalcKoyouOnSave = document.getElementById('recalc-koyou-on-save');
+    var setViewMode = function (resetRecalc) {
+        if (resetRecalc === undefined) {
+            resetRecalc = true;
+        }
         if (pane) {
             pane.classList.remove('edit-mode');
         }
         if (saveBtn) {
             saveBtn.style.display = 'none';
+        }
+        if (clearBtn) {
+            clearBtn.style.display = 'none';
+        }
+        if (cancelBtn) {
+            cancelBtn.style.display = 'none';
+        }
+        if (resetRecalc && recalcKoyouOnSave) {
+            recalcKoyouOnSave.value = '0';
         }
     };
     setViewMode();
@@ -886,10 +920,71 @@ document.addEventListener('DOMContentLoaded', function () {
         if (saveBtn) {
             saveBtn.style.display = 'inline-block';
         }
+        if (clearBtn) {
+            clearBtn.style.display = 'inline-block';
+        }
+        if (cancelBtn) {
+            cancelBtn.style.display = 'inline-block';
+        }
     });
+    if (clearBtn && pane) {
+        clearBtn.addEventListener('click', function () {
+            if (recalcKoyouOnSave) {
+                recalcKoyouOnSave.value = '1';
+            }
+            var protectedKeys = {
+                // attendance: keep as-is
+                work_in_num: true,
+                absence_num: true,
+                work_time: true,
+                overtime: true,
+                night_over_time: true,
+                late_time: true,
+                work_horiday_num: true,
+                work_time_num: true,
+                horiday_true: true,
+                horiday_true_num: true,
+                days_closed: true,
+                time_closed: true,
+
+                // master-derived: keep as-is
+                basic_salary: true,
+                allowance_amo_1: true,
+                allowance_amo_2: true,
+                allowance_amo_5: true,
+                allowance_amo_10: true,
+                allowance_amo_11: true,
+                allowance_amo_12: true,
+                allowance_amo_13: true,
+                allowance_amo_14: true,
+                allowance_amo_15: true,
+                allowance_amo_16: true,
+                rent_cost: true,
+                adjustment_cost: true,
+                kenpo: true,
+                kaigo: true,
+                kounen: true,
+                resident_tax: true
+            };
+            var inputs = pane.querySelectorAll('.num-input[name^="fields["]');
+            inputs.forEach(function (input) {
+                var name = input.getAttribute('name') || '';
+                var key = name.replace(/^fields\[/, '').replace(/\]$/, '');
+                if (!protectedKeys[key]) {
+                    input.value = '0';
+                }
+            });
+        });
+    }
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+            setViewMode();
+        });
+    }
     if (saveForm) {
         saveForm.addEventListener('submit', function () {
-            setViewMode();
+            // Keep recalc_koyou flag value during submit.
+            setViewMode(false);
         });
     }
 });
