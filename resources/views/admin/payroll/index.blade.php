@@ -354,7 +354,7 @@
                         'label' => $label,
                         'key' => $amountKey,
                         'raw' => $getRaw([$amountKey], ''),
-                        'value' => $getVal([$amountKey], '-'),
+                        'value' => $formatComma($getVal([$amountKey], '-')),
                     ];
                     $allowanceKeyIndex[$amountKey] = count($allowanceRows) - 1;
                     $usedAmountKeys[$amountKey] = true;
@@ -366,35 +366,53 @@
                         if (isset($usedAmountKeys[$key])) {
                             continue;
                         }
-                        $allowanceRows[] = ['label' => '手当' . $i, 'key' => $key, 'raw' => $getRaw([$key], ''), 'value' => $getVal([$key], '-')];
+                        $allowanceRows[] = ['label' => '手当' . $i, 'key' => $key, 'raw' => $getRaw([$key], ''), 'value' => $formatComma($getVal([$key], '-'))];
                     }
                     if (!isset($usedAmountKeys['traffic_addition'])) {
-                        $allowanceRows[] = ['label' => '非課税通勤費加算', 'key' => 'traffic_addition', 'raw' => $getRaw(['traffic_addition'], ''), 'value' => $getVal(['traffic_addition'], '-')];
+                        $allowanceRows[] = ['label' => '非課税通勤費加算', 'key' => 'traffic_addition', 'raw' => $getRaw(['traffic_addition'], ''), 'value' => $formatComma($getVal(['traffic_addition'], '-'))];
                     }
                     if (!isset($usedAmountKeys['basic_salary'])) {
-                        $allowanceRows[] = ['label' => '基本給', 'key' => 'basic_salary', 'raw' => $getRaw(['basic_salary'], ''), 'value' => $getVal(['basic_salary'], '-')];
+                        $allowanceRows[] = ['label' => '基本給', 'key' => 'basic_salary', 'raw' => $getRaw(['basic_salary'], ''), 'value' => $formatComma($getVal(['basic_salary'], '-'))];
                     }
                     if (!isset($usedAmountKeys['late_deduction'])) {
-                        $allowanceRows[] = ['label' => '遅早控除', 'key' => 'late_deduction', 'raw' => $getRaw(['late_deduction'], ''), 'value' => $getVal(['late_deduction'], '-')];
+                        $allowanceRows[] = ['label' => '遅早控除', 'key' => 'late_deduction', 'raw' => $getRaw(['late_deduction'], ''), 'value' => $formatComma($getVal(['late_deduction'], '-'))];
                     }
                     if (!isset($usedAmountKeys['absence_deduction'])) {
-                        $allowanceRows[] = ['label' => '欠勤控除', 'key' => 'absence_deduction', 'raw' => $getRaw(['absence_deduction'], ''), 'value' => $getVal(['absence_deduction'], '-')];
+                        $allowanceRows[] = ['label' => '欠勤控除', 'key' => 'absence_deduction', 'raw' => $getRaw(['absence_deduction'], ''), 'value' => $formatComma($getVal(['absence_deduction'], '-'))];
                     }
                     if (!isset($usedAmountKeys['leave_allowance'])) {
-                        $allowanceRows[] = ['label' => '休業手当', 'key' => 'leave_allowance', 'raw' => $getRaw(['leave_allowance'], ''), 'value' => $getVal(['leave_allowance'], '-')];
+                        $allowanceRows[] = ['label' => '休業手当', 'key' => 'leave_allowance', 'raw' => $getRaw(['leave_allowance'], ''), 'value' => $formatComma($getVal(['leave_allowance'], '-'))];
                     }
                 }                foreach ($allowanceRows as $row) {
                     $earnings[] = $row;
                 }
-                $earnings[] = ['label' => '課税対象額', 'key' => 'taxation_sum', 'raw' => $getRaw(['taxation_sum']), 'value' => $getVal(['taxation_sum']), 'is_total' => true];
-                $earnings[] = ['label' => '非課税対象額', 'key' => 'not_taxation_sum', 'raw' => $getRaw(['not_taxation_sum']), 'value' => $getVal(['not_taxation_sum']), 'is_total' => true];
+                $taxationSumFallback = (string) $toFloat($getVal(['supply_sum'], '0'));
+                $taxationSumDisplay = $formatComma($getVal(['taxation_sum'], $taxationSumFallback));
+                $notTaxationSumDisplay = $formatComma($getVal(['not_taxation_sum'], '0'));
+                $earnings[] = ['label' => '課税対象額', 'key' => 'taxation_sum', 'raw' => $getRaw(['taxation_sum']), 'value' => $taxationSumDisplay, 'is_total' => true];
+                $earnings[] = ['label' => '非課税対象額', 'key' => 'not_taxation_sum', 'raw' => $getRaw(['not_taxation_sum']), 'value' => $notTaxationSumDisplay, 'is_total' => true];
+
+                $syahoFromPayroll = (
+                    $toFloat($getVal(['kenpo'], '0'))
+                    + $toFloat($getVal(['kaigo'], '0'))
+                    + $toFloat($getVal(['kounen'], '0'))
+                    + $toFloat($getVal(['koyou'], '0'))
+                );
+                $syahoFromMaster = (
+                    $toFloat((string)($syahoInfo['kenpo_amo'] ?? '0'))
+                    + $toFloat((string)($syahoInfo['kaigo_amo'] ?? '0'))
+                    + $toFloat((string)($syahoInfo['kounen_amo'] ?? '0'))
+                );
+                $syahoSumFallback = (string)($syahoFromPayroll > 0 ? $syahoFromPayroll : $syahoFromMaster);
+                $syahoSumResolved = $getVal(['syaho_sum'], $syahoSumFallback);
+                $syahoSumDisplay = $formatComma($syahoSumResolved);
 
                 $deductions = [
                     ['label' => '健康保険', 'key' => 'kenpo', 'raw' => $getRaw(['kenpo']), 'value' => $formatComma($getVal(['kenpo']))],
                     ['label' => '介護保険', 'key' => 'kaigo', 'raw' => $getRaw(['kaigo']), 'value' => $formatComma($getVal(['kaigo']))],
                     ['label' => '厚生年金', 'key' => 'kounen', 'raw' => $getRaw(['kounen']), 'value' => $formatComma($getVal(['kounen']))],
                     ['label' => '雇用保険', 'key' => 'koyou', 'raw' => $getRaw(['koyou']), 'value' => $formatComma($getVal(['koyou']))],
-                    ['label' => '社会保険計', 'key' => 'syaho_sum', 'raw' => $getRaw(['syaho_sum']), 'value' => $formatComma($getVal(['syaho_sum'])), 'is_total' => true],
+                    ['label' => '社会保険計', 'key' => 'syaho_sum', 'raw' => $getRaw(['syaho_sum'], $syahoSumResolved), 'value' => $syahoSumDisplay, 'is_total' => true],
                     ['label' => '所得税', 'key' => 'income_tax', 'raw' => $getRaw(['income_tax']), 'value' => $formatComma($getVal(['income_tax']))],
                     ['label' => '住民税', 'key' => 'resident_tax', 'raw' => $getRaw(['resident_tax']), 'value' => $formatComma($getVal(['resident_tax']))],
                 ];
@@ -403,7 +421,7 @@
                     ['label' => '年調過不足', 'key' => 'adjustment_year_end', 'raw' => $getRaw(['adjustment_year_end']), 'value' => $getVal(['adjustment_year_end'])],
                     ['label' => '立替清算', 'key' => 'cost_liquidation', 'raw' => $getRaw(['cost_liquidation']), 'value' => $formatComma($getVal(['cost_liquidation']))],
                     ['label' => '会社立替費用', 'key' => '会社立替費用', 'raw' => $getRaw(['会社立替費用']), 'value' => $getVal(['会社立替費用'])],
-                    ['label' => '調整控除', 'key' => 'adjustment_cost', 'raw' => $getRaw(['adjustment_cost']), 'value' => $getVal(['adjustment_cost'])],
+                    ['label' => '調整控除', 'key' => 'adjustment_cost', 'raw' => $getRaw(['adjustment_cost']), 'value' => $formatComma($getVal(['adjustment_cost']))],
                     ['label' => '振込残額', 'key' => '振込残額', 'raw' => $getRaw(['振込残額']), 'value' => $getVal(['振込残額'])],
                 ];
                 $othersTotal = 0.0;
@@ -441,17 +459,47 @@
                     ['label' => 'よこい鍼灸', 'key' => 'yokoi_hari', 'raw' => $getRaw(['yokoi_hari']), 'value' => $formatComma($getVal(['yokoi_hari']))],
                 ];
 
+                $payTotalFallback = (string)(
+                    $toFloat($getVal(['supply_sum'], '0')) > 0
+                        ? $toFloat($getVal(['supply_sum'], '0'))
+                        : ($toFloat($getVal(['taxation_sum'], '0')) + $toFloat($getVal(['not_taxation_sum'], '0')))
+                );
+                $payTotalDisplay = $formatComma((string)($selectedSummary['pay_total'] ?? ''));
+                if (trim((string)($selectedSummary['pay_total'] ?? '')) === '' || trim((string)($selectedSummary['pay_total'] ?? '')) === '-') {
+                    $payTotalDisplay = $formatComma($payTotalFallback);
+                }
+
+                $deductionTotalFallback = (string)(
+                    $toFloat($getVal(['deduction_sum'], '0')) > 0
+                        ? $toFloat($getVal(['deduction_sum'], '0'))
+                        : ($toFloat($syahoSumFallback) + $toFloat($getVal(['income_tax'], '0')) + $toFloat($getVal(['resident_tax'], '0')))
+                );
+                $deductionTotalDisplay = $formatComma((string)($selectedSummary['deduction_total'] ?? ''));
+                if (trim((string)($selectedSummary['deduction_total'] ?? '')) === '' || trim((string)($selectedSummary['deduction_total'] ?? '')) === '-') {
+                    $deductionTotalDisplay = $formatComma($deductionTotalFallback);
+                }
+
+                $netPayFallback = (string)(
+                    $toFloat($getVal(['supply_deduction_sum'], '0')) > 0
+                        ? $toFloat($getVal(['supply_deduction_sum'], '0'))
+                        : ($toFloat($payTotalFallback) - $toFloat($deductionTotalFallback))
+                );
+                $netPayDisplay = $formatComma((string)($selectedSummary['net_pay'] ?? ''));
+                if (trim((string)($selectedSummary['net_pay'] ?? '')) === '' || trim((string)($selectedSummary['net_pay'] ?? '')) === '-') {
+                    $netPayDisplay = $formatComma($netPayFallback);
+                }
+
                 $basicInfo = [
                     ['label' => '支給月', 'value' => (string)($selectedSummary['supply_month'] ?? '-')],
                     ['label' => '雇用形態', 'value' => (string)($selectedSummary['division'] ?? '-')],
                     ['label' => '税額表', 'value' => (string)($selectedStaffMeta['tax_amount'] ?? '-')],
                     ['label' => '社保対象額', 'value' => $formatComma($getVal(['syaho_target_sum']))],
                     ['label' => '労保対象額', 'value' => $formatComma($getVal(['rouho_target_sum']))],
-                    ['label' => '課税対象額', 'value' => $formatComma($getVal(['taxation_sum']))],
-                    ['label' => '非課税対象額', 'value' => $formatComma($getVal(['not_taxation_sum']))],
+                    ['label' => '課税対象額', 'value' => $taxationSumDisplay],
+                    ['label' => '非課税対象額', 'value' => $notTaxationSumDisplay],
                     ['label' => '所得税', 'value' => $formatComma($getVal(['income_tax']))],
                     ['label' => '住民税', 'value' => $formatComma($getVal(['resident_tax']))],
-                    ['label' => '社会保険計', 'value' => $formatComma($getVal(['syaho_sum']))],
+                    ['label' => '社会保険計', 'value' => $syahoSumDisplay],
                 ];
 
                 // Admin payroll calculation screen: always show all items
@@ -804,10 +852,10 @@
                         </div>
 
                         <div class="totals">
-                            <div class="total-card"><div class="k">支給合計</div><div class="v">{{ $selectedSummary['pay_total'] ?? '-' }}</div></div>
-                            <div class="total-card"><div class="k">控除合計</div><div class="v">{{ $selectedSummary['deduction_total'] ?? '-' }}</div></div>
+                            <div class="total-card"><div class="k">支給合計</div><div class="v">{{ $payTotalDisplay }}</div></div>
+                            <div class="total-card"><div class="k">控除合計</div><div class="v">{{ $deductionTotalDisplay }}</div></div>
                             <div class="total-card"><div class="k">その他合計</div><div class="v">{{ $formatComma((string)$othersTotal) }}</div></div>
-                            <div class="total-card"><div class="k">差引支給額</div><div class="v">{{ $selectedSummary['net_pay'] ?? '-' }}</div></div>
+                            <div class="total-card"><div class="k">差引支給額</div><div class="v">{{ $netPayDisplay }}</div></div>
                         </div>
                     </div>
                 </section>
@@ -848,7 +896,3 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 </body>
 </html>
-
-
-
-

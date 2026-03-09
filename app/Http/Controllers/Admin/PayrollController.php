@@ -579,6 +579,8 @@ class PayrollController extends Controller
             $payload[$k] = $this->normalizeNumericInput($v);
         }
 
+        $this->applyComputedTotals($payload);
+
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
             return $this->redirectPayrollWithQuery($validated, '保存に失敗しました。データ形式を確認してください。');
@@ -632,6 +634,19 @@ class PayrollController extends Controller
             $payload[$key] = $value;
             $updatedKeys[] = $key;
         }
+
+        $companyCode = $this->resolveStaffCompanyCode($staffId);
+        $masterInfo = $this->resolvePayrollMasterInfo(
+            $staffId,
+            sprintf('%04d-%02d-01', $year, $month),
+            $companyCode
+        );
+        $masterKeys = $this->applyPayrollMastersToPayload($payload, $masterInfo, $staffId);
+        foreach ($masterKeys as $mk) {
+            $updatedKeys[] = $mk;
+        }
+
+        $this->applyComputedTotals($payload);
 
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
@@ -733,6 +748,13 @@ class PayrollController extends Controller
                 $payload[$key] = $value;
                 $updatedFields++;
             }
+
+            $companyCode = $this->resolveStaffCompanyCode($staffId);
+            $masterInfo = $this->resolvePayrollMasterInfo($staffId, $payrollMonthDate, $companyCode);
+            $masterKeys = $this->applyPayrollMastersToPayload($payload, $masterInfo, $staffId);
+            $updatedFields += count($masterKeys);
+
+            $this->applyComputedTotals($payload);
 
             $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             if (!is_string($encodedPayload)) {
@@ -1243,6 +1265,79 @@ class PayrollController extends Controller
         return $result;
     }
 
+    private function applyPayrollMastersToPayload(array &$payload, array $masterInfo, string $staffId): array
+    {
+        $updated = [];
+        $set = function (string $payloadKey, mixed $value) use (&$payload, &$updated): void {
+            if ($value === null) {
+                return;
+            }
+            $text = trim((string) $value);
+            if ($text === '') {
+                return;
+            }
+            $normalized = $this->normalizeNumericInput($text);
+            $payload[$payloadKey] = $normalized;
+            $updated[] = $payloadKey;
+        };
+
+        $kihon = (array) ($masterInfo['kihon'] ?? []);
+        $basePay = $this->resolveBasePayForEmployment($staffId, $kihon);
+        $set('basic_salary', $basePay);
+        // "月給／時給" slot (手当1) follows employment type rule.
+        $set('allowance_amo_1', $basePay);
+        $set('allowance_amo_2', $kihon['executive_remu'] ?? null);
+        $set('allowance_amo_16', $kihon['position_allow'] ?? null);
+        $set('allowance_amo_13', $kihon['duties_allow'] ?? null);
+        $set('allowance_amo_11', $kihon['qualification_allow'] ?? null);
+        $set('allowance_amo_12', $kihon['claim_allow'] ?? null);
+        $set('allowance_amo_10', $kihon['traffic_pay'] ?? null);
+        $set('allowance_amo_5', $kihon['adjustment_add'] ?? null);
+        $set('allowance_amo_14', $kihon['rent_subsidies'] ?? null);
+        $set('rent_cost', $kihon['rent_pay'] ?? null);
+        $set('adjustment_cost', $kihon['adjustment_pay'] ?? null);
+        $set('allowance_amo_15', $kihon['fixed_overtime'] ?? null);
+
+        $syaho = (array) ($masterInfo['syaho'] ?? []);
+        $set('kenpo', $syaho['kenpo_amo'] ?? null);
+        $set('kaigo', $syaho['kaigo_amo'] ?? null);
+        $set('kounen', $syaho['kounen_amo'] ?? null);
+
+        $resident = (array) ($masterInfo['resident'] ?? []);
+        $set('resident_tax', $resident['resident_tax_month'] ?? null);
+
+        return array_values(array_unique($updated));
+    }
+
+    private function resolveBasePayForEmployment(string $staffId, array $kihon): mixed
+    {
+        $staffId = trim($staffId);
+        $employment = '';
+
+        if ($staffId !== '') {
+            try {
+                $row = DB::connection('sqlsrv')
+                    ->table('dbo.m_staffs')
+                    ->whereRaw('LTRIM(RTRIM(staff_code)) = ?', [$staffId])
+                    ->first(['staff_division', 'employment_status']);
+
+                $employment = trim((string) ($row->staff_division ?? ''));
+                if ($employment === '') {
+                    $employment = trim((string) ($row->employment_status ?? ''));
+                }
+            } catch (\Throwable) {
+                $employment = '';
+            }
+        }
+
+        // 社員: 月給 / パート: 時給 (hourly_pay優先、なければhourly_salary)
+        if (mb_strpos($employment, 'パート') !== false) {
+            return $kihon['hourly_pay'] ?? ($kihon['hourly_salary'] ?? null);
+        }
+
+        return $kihon['monthly_salary'] ?? null;
+    }
+
     private function formatAmountOrRaw(mixed $value): string
     {
         if ($value === null || $value === '') {
@@ -1304,6 +1399,68 @@ class PayrollController extends Controller
         return str_contains($normalized, '.') ? (float) $normalized : (int) $normalized;
     }
 
+    private function payloadNumber(array $payload, string $key): float
+    {
+        if (!array_key_exists($key, $payload)) {
+            return 0.0;
+        }
+        $normalized = $this->normalizeNumericInput($payload[$key]);
+        if (is_int($normalized) || is_float($normalized)) {
+            return (float) $normalized;
+        }
+        if (is_string($normalized)) {
+            $s = str_replace([',', ' ', '　'], '', trim($normalized));
+            if ($s !== '' && is_numeric($s)) {
+                return (float) $s;
+            }
+        }
+        return 0.0;
+    }
+
+    private function applyComputedTotals(array &$payload): void
+    {
+        // 社会保険計
+        $syahoSum = $this->payloadNumber($payload, 'kenpo')
+            + $this->payloadNumber($payload, 'kaigo')
+            + $this->payloadNumber($payload, 'kounen')
+            + $this->payloadNumber($payload, 'koyou');
+        $payload['syaho_sum'] = $this->normalizeNumericInput($syahoSum);
+
+        // 支給合計（課税＋非課税が入っていればそれを優先）
+        $taxable = $this->payloadNumber($payload, 'taxation_sum');
+        $nontaxable = $this->payloadNumber($payload, 'not_taxation_sum');
+        $supplySum = 0.0;
+        if ($taxable !== 0.0 || $nontaxable !== 0.0) {
+            $supplySum = $taxable + $nontaxable;
+        } else {
+            $supplySum += $this->payloadNumber($payload, 'basic_salary');
+            $supplySum += $this->payloadNumber($payload, 'officer_com');
+            for ($i = 1; $i <= 17; $i++) {
+                $supplySum += $this->payloadNumber($payload, 'allowance_amo_' . $i);
+            }
+            $supplySum += $this->payloadNumber($payload, 'traffic_addition');
+            $supplySum += $this->payloadNumber($payload, 'leave_allowance');
+            // 現行運用上、遅早控除/欠勤控除は支給枠で管理
+            $supplySum += $this->payloadNumber($payload, 'late_deduction');
+            $supplySum += $this->payloadNumber($payload, 'absence_deduction');
+        }
+        $payload['supply_sum'] = $this->normalizeNumericInput($supplySum);
+        $payload['pay_total'] = $this->normalizeNumericInput($supplySum);
+
+        // 控除合計
+        $deductionSum = $syahoSum
+            + $this->payloadNumber($payload, 'income_tax')
+            + $this->payloadNumber($payload, 'resident_tax');
+        $payload['deduction_sum'] = $this->normalizeNumericInput($deductionSum);
+        $payload['deduction_total'] = $this->normalizeNumericInput($deductionSum);
+
+        // 差引支給額
+        $netPay = $supplySum - $deductionSum;
+        $payload['supply_deduction_sum'] = $this->normalizeNumericInput($netPay);
+        $payload['net_pay'] = $this->normalizeNumericInput($netPay);
+        $payload['transfer_amo'] = $this->normalizeNumericInput($netPay);
+    }
+
     private function redirectPayrollWithQuery(array $validated, string $message): RedirectResponse
     {
         $query = [
@@ -1324,7 +1481,7 @@ class PayrollController extends Controller
 
     private function resolveTimeCardTable(): ?string
     {
-        $candidates = ['dbo.m_time_cards', 'm_time_cards', 'dbo.t_time_card', 't_time_card'];
+        $candidates = ['dbo.m_time_cards', 'm_time_cards'];
         foreach ($candidates as $table) {
             try {
                 if (Schema::connection('sqlsrv')->hasTable($table)) {
@@ -1402,5 +1559,3 @@ class PayrollController extends Controller
         return $cache[$column];
     }
 }
-
-
