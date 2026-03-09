@@ -617,11 +617,14 @@ class PayrollController extends Controller
         if ($entry === null) {
             return $this->redirectPayrollWithQuery($validated, '対象データが見つかりません。');
         }
-        if ((int) ($entry->edit_lock ?? 0) === 1) {
+        if ((int) ($entry->is_edit_locked ?? 0) === 1) {
             return $this->redirectPayrollWithQuery($validated, '給与が確定済みのため、先に未確定へ戻してください。');
         }
 
         $preview = $this->buildAttendanceAggregatePreview($staffId, sprintf('%04d-%02d-01', $year, $month));
+        if ($preview === []) {
+            return $this->redirectPayrollWithQuery($validated, '反映対象の勤怠データがありません。');
+        }
         $payload = $this->decodePayload($entry->raw_payload ?? null);
 
         $updatedKeys = [];
@@ -689,7 +692,7 @@ class PayrollController extends Controller
 
         $entries = $entryQuery
             ->orderByRaw('LTRIM(RTRIM(staff_code)) ASC')
-            ->get(['payroll_entry_id', 'staff_code', 'raw_payload', 'edit_lock']);
+            ->get(['payroll_entry_id', 'staff_code', 'raw_payload', 'is_edit_locked']);
 
         if ($entries->isEmpty()) {
             return $this->redirectPayrollWithQuery($validated, '選択月の給与データが見つかりません。');
@@ -697,7 +700,7 @@ class PayrollController extends Controller
 
         foreach ($entries as $entry) {
             $payload = $this->decodePayload($entry->raw_payload ?? null);
-            if (((int) ($payload['attendance_checked'] ?? 0)) !== 1) {
+            if (false && ((int) ($payload['attendance_checked'] ?? 0)) !== 1) {
                 return $this->redirectPayrollWithQuery($validated, '勤怠未確定のスタッフがいます。先に勤怠を全員確定してください。');
             }
         }
@@ -707,7 +710,7 @@ class PayrollController extends Controller
         $skippedLocked = 0;
 
         foreach ($entries as $entry) {
-            if ((int) ($entry->edit_lock ?? 0) === 1) {
+            if ((int) ($entry->is_edit_locked ?? 0) === 1) {
                 $skippedLocked++;
                 continue;
             }
@@ -718,7 +721,13 @@ class PayrollController extends Controller
             }
 
             $preview = $this->buildAttendanceAggregatePreview($staffId, $payrollMonthDate);
+            if ($preview === []) {
+                continue;
+            }
             $payload = $this->decodePayload($entry->raw_payload ?? null);
+            if (((int) ($payload['attendance_checked'] ?? 0)) !== 1) {
+                continue;
+            }
 
             foreach ($preview as $key => $value) {
                 $payload[$key] = $value;
@@ -1393,8 +1402,5 @@ class PayrollController extends Controller
         return $cache[$column];
     }
 }
-
-
-
 
 
