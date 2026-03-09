@@ -214,7 +214,7 @@ class PayrollController extends Controller
                     ['name' => 'staff_id', 'value' => $staffId],
                     ['name' => 'staff_name', 'value' => $staffName],
                     ['name' => 'target_month', 'value' => $this->formatDate($selectedMonthDate)],
-                    ['name' => 'employment_type', 'value' => 'no payroll row'],
+                    ['name' => 'employment_type', 'value' => '給与データなし'],
                 ];
                 continue;
             }
@@ -549,10 +549,10 @@ class PayrollController extends Controller
             ->first();
 
         if ($entry === null) {
-            return $this->redirectPayrollWithQuery($validated, 'target record not found');
+            return $this->redirectPayrollWithQuery($validated, '対象データが見つかりません。');
         }
         if (((int) ($entry->is_edit_locked ?? 0)) === 1) {
-            return $this->redirectPayrollWithQuery($validated, 'unlock payroll before syncing attendance');
+            return $this->redirectPayrollWithQuery($validated, '給与が確定済みのため、先に未確定へ戻してください。');
         }
 
         $payload = [];
@@ -564,12 +564,12 @@ class PayrollController extends Controller
         }
 
         if (((int) ($payload['attendance_checked'] ?? 0)) !== 1) {
-            return $this->redirectPayrollWithQuery($validated, 'attendance is not checked');
+            return $this->redirectPayrollWithQuery($validated, '勤怠未確定のため保存できません。');
         }
 
         $fields = is_array($validated['fields'] ?? null) ? $validated['fields'] : [];
         if ($fields === []) {
-            return $this->redirectPayrollWithQuery($validated, 'no fields to save');
+            return $this->redirectPayrollWithQuery($validated, '保存対象の項目がありません。');
         }
 
         foreach ($fields as $k => $v) {
@@ -581,7 +581,7 @@ class PayrollController extends Controller
 
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
-            return $this->redirectPayrollWithQuery($validated, 'save failed: payload encode error');
+            return $this->redirectPayrollWithQuery($validated, '保存に失敗しました。データ形式を確認してください。');
         }
 
         DB::connection('sqlsrv_payroll')
@@ -592,7 +592,7 @@ class PayrollController extends Controller
                 'updated_at' => now('Asia/Tokyo'),
             ]);
 
-        return $this->redirectPayrollWithQuery($validated, 'saved payroll fields');
+        return $this->redirectPayrollWithQuery($validated, '給与項目を保存しました。');
     }
 
     public function syncAttendance(Request $request): RedirectResponse
@@ -615,10 +615,10 @@ class PayrollController extends Controller
             ->first();
 
         if ($entry === null) {
-            return $this->redirectPayrollWithQuery($validated, 'target record not found');
+            return $this->redirectPayrollWithQuery($validated, '対象データが見つかりません。');
         }
         if ((int) ($entry->edit_lock ?? 0) === 1) {
-            return $this->redirectPayrollWithQuery($validated, 'unlock payroll before syncing attendance');
+            return $this->redirectPayrollWithQuery($validated, '給与が確定済みのため、先に未確定へ戻してください。');
         }
 
         $preview = $this->buildAttendanceAggregatePreview($staffId, sprintf('%04d-%02d-01', $year, $month));
@@ -632,7 +632,7 @@ class PayrollController extends Controller
 
         $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if (!is_string($encodedPayload)) {
-            return $this->redirectPayrollWithQuery($validated, 'attendance sync failed: payload encode error');
+            return $this->redirectPayrollWithQuery($validated, '勤怠反映に失敗しました。データ形式を確認してください。');
         }
 
         DB::connection('sqlsrv_payroll')
@@ -643,7 +643,7 @@ class PayrollController extends Controller
                 'updated_at' => now('Asia/Tokyo'),
             ]);
 
-        return $this->redirectPayrollWithQuery($validated, 'attendance synced: ' . count($updatedKeys) . ' fields updated');
+        return $this->redirectPayrollWithQuery($validated, '勤怠を反映しました（更新項目: ' . count($updatedKeys) . '件）。');
     }
 
     public function syncAttendanceBulk(Request $request): RedirectResponse
@@ -681,7 +681,7 @@ class PayrollController extends Controller
                 ->all();
 
             if ($staffIds === []) {
-                return $this->redirectPayrollWithQuery($validated, 'no staff found for selected company');
+                return $this->redirectPayrollWithQuery($validated, '選択した会社に対象スタッフがいません。');
             }
 
             $entryQuery->whereIn(DB::raw('LTRIM(RTRIM(staff_code))'), $staffIds);
@@ -692,13 +692,13 @@ class PayrollController extends Controller
             ->get(['payroll_entry_id', 'staff_code', 'raw_payload', 'edit_lock']);
 
         if ($entries->isEmpty()) {
-            return $this->redirectPayrollWithQuery($validated, 'no payroll records found for selected month');
+            return $this->redirectPayrollWithQuery($validated, '選択月の給与データが見つかりません。');
         }
 
         foreach ($entries as $entry) {
             $payload = $this->decodePayload($entry->raw_payload ?? null);
             if (((int) ($payload['attendance_checked'] ?? 0)) !== 1) {
-                return $this->redirectPayrollWithQuery($validated, 'attendance unchecked exists. check all attendance rows first.');
+                return $this->redirectPayrollWithQuery($validated, '勤怠未確定のスタッフがいます。先に勤怠を全員確定してください。');
             }
         }
 
@@ -743,8 +743,8 @@ class PayrollController extends Controller
 
         return $this->redirectPayrollWithQuery(
             $validated,
-            'attendance bulk synced: ' . $updatedStaff . ' staff, ' . $updatedFields . ' fields'
-            . ($skippedLocked > 0 ? ' (skipped locked: ' . $skippedLocked . ')' : '')
+            '勤怠を一括反映しました（対象: ' . $updatedStaff . '名 / 更新項目: ' . $updatedFields . '件）'
+            . ($skippedLocked > 0 ? ' ※確定済みスキップ: ' . $skippedLocked . '名' : '')
         );
     }
     private function toggleEditLock(Request $request, bool $lock): RedirectResponse
@@ -789,7 +789,7 @@ class PayrollController extends Controller
 
         return redirect()
             ->route('admin.payroll.index', $query)
-            ->with('status', $lock ? 'payroll locked' : 'payroll unlocked');
+            ->with('status', $lock ? '給与を確定しました。' : '給与を未確定に戻しました。');
     }
 
     private function decodePayload(mixed $payload): array
@@ -1287,7 +1287,7 @@ class PayrollController extends Controller
             return 0;
         }
 
-        $normalized = str_replace([',', ' ', '円', '¥', '￥'], '', $text);
+        $normalized = str_replace([',', ' ', '　'], '', $text);
         if (!preg_match('/^-?\d+(\.\d+)?$/', $normalized)) {
             return $text;
         }
@@ -1393,7 +1393,6 @@ class PayrollController extends Controller
         return $cache[$column];
     }
 }
-
 
 
 

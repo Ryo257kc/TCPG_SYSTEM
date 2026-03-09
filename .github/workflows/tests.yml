@@ -13,6 +13,18 @@ permissions:
   contents: read
 
 jobs:
+  encoding:
+    runs-on: windows-latest
+    name: Encoding Guard
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run repository encoding guard
+        shell: pwsh
+        run: ./scripts/check-repo-encoding.ps1 -Root .
+
   tests:
     runs-on: ubuntu-latest
 

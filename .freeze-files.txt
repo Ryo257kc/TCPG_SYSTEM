@@ -1,0 +1,7 @@
+﻿# one path per line (repo-relative)
+# add frozen files below
+app/Http/Controllers/Admin/Attendance/AttendanceManageController.php
+resources/views/admin/attendance/index.blade.php
+resources/views/admin/attendance/partials/bulk_selector.blade.php
+resources/views/admin/attendance/partials/daily_table.blade.php
+resources/views/admin/attendance/partials/summary_table.blade.php

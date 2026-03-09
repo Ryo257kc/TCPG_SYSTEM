@@ -129,6 +129,26 @@
                 CSV
             </button>
         </form>
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <form method="POST" action="{{ route('admin.payroll.sync-attendance') }}" onsubmit="return confirm('選択スタッフの勤怠を給与明細へ反映します。実行しますか？');">
+                @csrf
+                <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                <button type="submit" {{ $selectedStaffId === '' ? 'disabled' : '' }} style="height:32px; border:1px solid #1f4f8f; border-radius:8px; padding:0 12px; background:#1f4f8f; color:#fff; cursor:pointer;">
+                    給与明細へ反映
+                </button>
+            </form>
+            <form method="POST" action="{{ route('admin.payroll.sync-attendance-bulk') }}" onsubmit="return confirm('対象条件の勤怠を一括で給与明細へ反映します。実行しますか？');">
+                @csrf
+                <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                <button type="submit" style="height:32px; border:1px solid #cfd9e8; border-radius:8px; padding:0 12px; background:#fff; color:#1f2937; cursor:pointer;">
+                    勤怠一括反映
+                </button>
+            </form>
+        </div>
 
         @if (session('status'))
             <div class="flash">{{ session('status') }}</div>
@@ -839,7 +859,6 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 </body>
 </html>
-
 
 
 

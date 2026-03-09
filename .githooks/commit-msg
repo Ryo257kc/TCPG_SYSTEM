@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# commit-msg: require TARGET declaration in commit message
+MSG_FILE="$1"
+if ! grep -q "TARGET: tcpg_system_admin_laravel" "$MSG_FILE"; then
+  echo "[RULE] commit message must include: TARGET: tcpg_system_admin_laravel"
+  exit 1
+fi
+exit 0

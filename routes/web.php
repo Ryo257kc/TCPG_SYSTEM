@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Admin\MasterController;
-use App\Http\Controllers\Admin\AttendanceController;
+use App\Http\Controllers\Admin\Attendance\AttendanceManageController;
 use App\Http\Controllers\Admin\PayrollController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,11 +24,11 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/payroll/save', [PayrollController::class, 'save'])->name('admin.payroll.save');
         Route::post('/payroll/sync-attendance', [PayrollController::class, 'syncAttendance'])->name('admin.payroll.sync-attendance');
         Route::post('/payroll/sync-attendance-bulk', [PayrollController::class, 'syncAttendanceBulk'])->name('admin.payroll.sync-attendance-bulk');
-        Route::get('/attendance', [AttendanceController::class, 'index'])->name('admin.attendance.index');
-        Route::post('/attendance/check', [AttendanceController::class, 'check'])->name('admin.attendance.check');
-        Route::post('/attendance/day-update', [AttendanceController::class, 'updateDay'])->name('admin.attendance.day-update');
-        Route::post('/attendance/shift-bulk-create', [AttendanceController::class, 'shiftBulkCreate'])->name('admin.attendance.shift-bulk-create');
-        Route::post('/attendance/shift-bulk-delete', [AttendanceController::class, 'shiftBulkDelete'])->name('admin.attendance.shift-bulk-delete');
+        Route::get('/attendance', [AttendanceManageController::class, 'index'])->name('admin.attendance.index');
+        Route::post('/attendance/check', [AttendanceManageController::class, 'check'])->name('admin.attendance.check');
+        Route::post('/attendance/day-update', [AttendanceManageController::class, 'updateDay'])->name('admin.attendance.day-update');
+        Route::post('/attendance/shift-bulk-create', [AttendanceManageController::class, 'shiftBulkCreate'])->name('admin.attendance.shift-bulk-create');
+        Route::post('/attendance/shift-bulk-delete', [AttendanceManageController::class, 'shiftBulkDelete'])->name('admin.attendance.shift-bulk-delete');
         Route::get('/master/company', [MasterController::class, 'company'])->name('admin.master.company');
         Route::get('/master/staff', [MasterController::class, 'staff'])->name('admin.master.staff');
         Route::get('/master/store', [MasterController::class, 'store'])->name('admin.master.store');

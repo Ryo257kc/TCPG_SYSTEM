@@ -109,10 +109,24 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        'sqlsrv_payroll' => [
+            'driver' => 'sqlsrv',
+            'url' => env('PAYROLL_DB_URL'),
+            'host' => env('PAYROLL_DB_HOST', 'localhost'),
+            'port' => env('PAYROLL_DB_PORT', '1433'),
+            'database' => env('PAYROLL_DB_DATABASE', 'laravel'),
+            'username' => env('PAYROLL_DB_USERNAME', 'root'),
+            'password' => env('PAYROLL_DB_PASSWORD', ''),
+            'charset' => env('PAYROLL_DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('PAYROLL_DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('PAYROLL_DB_TRUST_SERVER_CERTIFICATE', 'false'),
+        ],
     ],
 
     /*
@@ -129,6 +143,21 @@ return [
     'migrations' => [
         'table' => 'migrations',
         'update_date_on_publish' => true,
+
+        'sqlsrv_payroll' => [
+            'driver' => 'sqlsrv',
+            'url' => env('PAYROLL_DB_URL'),
+            'host' => env('PAYROLL_DB_HOST', 'localhost'),
+            'port' => env('PAYROLL_DB_PORT', '1433'),
+            'database' => env('PAYROLL_DB_DATABASE', 'laravel'),
+            'username' => env('PAYROLL_DB_USERNAME', 'root'),
+            'password' => env('PAYROLL_DB_PASSWORD', ''),
+            'charset' => env('PAYROLL_DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('PAYROLL_DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('PAYROLL_DB_TRUST_SERVER_CERTIFICATE', 'false'),
+        ],
     ],
 
     /*

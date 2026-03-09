@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# pre-commit: enforce admin work rules
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/enforce-work-rules.ps1"
+exit $?
