@@ -5,3 +5,6 @@ resources/views/admin/attendance/index.blade.php
 resources/views/admin/attendance/partials/bulk_selector.blade.php
 resources/views/admin/attendance/partials/daily_table.blade.php
 resources/views/admin/attendance/partials/summary_table.blade.php
+app/Http/Controllers/Admin/PayrollController.php
+resources/views/admin/payroll/index.blade.php
+routes/web.php
