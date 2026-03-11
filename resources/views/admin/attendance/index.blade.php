@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -36,10 +36,13 @@
 </head>
 <body>
 <div class="wrap">
+    @php
+        $payrollMonth = date('Y-m', strtotime($selectedMonth . '-01 +1 month'));
+    @endphp
     <div class="top">
         <div class="title">TCPG SYSTEM 勤怠管理</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <a class="btn" href="{{ route('admin.payroll.index', ['month' => $selectedMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">給与計算</a>
+            <a class="btn" href="{{ route('admin.payroll.index', ['month' => $payrollMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">給与計算</a>
             <a class="btn" href="{{ route('admin.dashboard', ['page' => 'bonus-detail']) }}">賞与計算</a>
             <a class="btn" href="{{ route('admin.dashboard') }}">ダッシュボード</a>
         </div>
@@ -69,19 +72,16 @@
                 <button type="submit">表示</button>
             </form>
             <button type="button" id="shift-ops-toggle" class="btn ops-toggle" aria-expanded="false">シフト作成</button>
+            <form id="sync-attendance-form" method="POST" action="{{ route('admin.payroll.sync-attendance-bulk') }}" onsubmit="return confirm('勤怠集計を一括反映します。実行しますか？');">
+                @csrf
+                <input type="hidden" name="month" value="{{ $payrollMonth }}">
+                <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                <button type="submit" class="btn-primary">勤怠一括反映</button>
+            </form>
         </div>
 
         <div id="shift-ops" class="shift-ops">
-            <div class="shift-ops-head">
-                <form method="POST" action="{{ route('admin.payroll.sync-attendance-bulk') }}" onsubmit="return confirm('勤怠集計を一括反映します。実行しますか？');">
-                    @csrf
-                    <input type="hidden" name="month" value="{{ $selectedMonth }}">
-                    <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
-                    <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
-                    <button type="submit" class="btn-primary">勤怠一括反映</button>
-                </form>
-            </div>
-
             @include('admin.attendance.partials.bulk_selector', [
                 'displayStaffRows' => $bulkStaffRows,
                 'selectedStaffId' => $selectedStaffId,
@@ -139,7 +139,7 @@
 </div>
 <script>
 (() => {
-    const forms = ['shift-bulk-create-form', 'shift-bulk-delete-form'];
+    const forms = ['shift-bulk-create-form', 'shift-bulk-delete-form', 'sync-attendance-form'];
     const checks = document.querySelectorAll('.js-target-staff');
     const ops = document.getElementById('shift-ops');
     const toggle = document.getElementById('shift-ops-toggle');

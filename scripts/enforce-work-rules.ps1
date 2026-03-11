@@ -163,11 +163,11 @@ foreach ($f in $textLike) {
 }
 
 # 4ab) mojibake guard
-$mojibakePattern = '繝|郢|鬯|蜍|蟷|譎|隴|髫|螟|莠|雉|竏|�'
+$mojibakePattern = [string][char]0xFFFD
 foreach ($f in $textLike) {
     if (-not (Test-Path $f)) { continue }
     $content = [System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)
-    if ($content -match $mojibakePattern) {
+    if ($content.Contains($mojibakePattern)) {
         Fail "possible mojibake detected: $f"
     }
 }

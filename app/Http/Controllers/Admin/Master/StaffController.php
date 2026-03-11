@@ -19,26 +19,27 @@ class StaffController extends Controller
         $keyword = trim((string) $request->query('q', ''));
 
         $query = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs as ms')
-            ->leftJoin('dbo.m_stores as st', 'ms.store_code', '=', 'st.store_code')
+            ->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.section', '=', 'st.store_code')
             ->select([
-                DB::raw('ms.staff_code as staff_id'),
+                DB::raw('ms.staff_id as staff_id'),
                 'ms.staff_name',
-                'ms.staff_name_kana',
-                'ms.store_code',
+                DB::raw('ms.staff_name_furi as staff_name_kana'),
+                DB::raw('ms.section as store_code'),
                 DB::raw('st.store_name as store_name'),
-                'ms.employment_status',
-                'ms.is_store_manager',
+                DB::raw('ms.employment as employment_status'),
+                DB::raw('ms.is_store_management_user as is_store_manager'),
                 'ms.is_daily_report_user',
-                'ms.retire_date',
+                DB::raw('ms.tai_date as retire_date'),
             ])
-            ->orderBy('ms.staff_code');
+            ->orderBy('ms.staff_id');
 
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
                 $q->where('ms.staff_code', 'like', '%' . $keyword . '%')
+                    ->orWhere('ms.staff_id', 'like', '%' . $keyword . '%')
                     ->orWhere('ms.staff_name', 'like', '%' . $keyword . '%')
-                    ->orWhere('ms.store_code', 'like', '%' . $keyword . '%');
+                    ->orWhere('ms.section', 'like', '%' . $keyword . '%');
             });
         }
 
@@ -60,7 +61,7 @@ class StaffController extends Controller
             'keyword' => $keyword,
             'rows' => $rows,
             'rowCount' => count($rows),
-            'source' => 'm_staffs',
+            'source' => 'mx_staffs',
         ]);
     }
 }

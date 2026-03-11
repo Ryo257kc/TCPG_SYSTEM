@@ -26,16 +26,16 @@ class LoginController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $staffId = trim($credentials['staff_id']);
-        $password = (string) $credentials['password'];
+        $staffId = mb_convert_kana(trim((string) $credentials['staff_id']), 'as', 'UTF-8');
+        $password = trim((string) $credentials['password']);
 
         $staff = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs')
-            ->whereRaw('LTRIM(RTRIM(staff_code)) = ?', [$staffId])
-            ->where('is_store_manager', 1)
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM(CAST(staff_id as nvarchar(50)))) = ?', [$staffId])
+            ->where('is_store_management_user', 1)
             ->first();
 
-        if (!$staff || (string) ($staff->login_password ?? '') !== $password) {
+        if (!$staff || trim((string) ($staff->password ?? '')) !== $password) {
             return back()
                 ->withInput($request->except('password'))
                 ->withErrors([
@@ -45,7 +45,7 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
         $request->session()->put('admin_logged_in', true);
-        $request->session()->put('admin_staff_id', $staffId);
+        $request->session()->put('admin_staff_id', (string) ($staff->staff_id ?? $staffId));
         $request->session()->put('admin_staff_name', (string) ($staff->staff_name ?? ''));
 
         return redirect()->route('admin.dashboard');

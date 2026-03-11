@@ -19,10 +19,10 @@ class AllowanceController extends Controller
 
         $selectedOfficeName = trim((string) $request->query('office_name', ''));
         $allowanceTable = $this->resolveAllowanceTable();
-        $source = $allowanceTable === 'm_allowances' ? 'm_allowances' : 't_allowance';
+        $source = $allowanceTable;
 
         $companyOptions = DB::connection('sqlsrv')
-            ->table('dbo.m_companies')
+            ->table('dbo.mx_companies')
             ->select('company_code', 'company_name')
             ->whereNotNull('company_code')
             ->whereRaw("LTRIM(RTRIM(company_code)) <> ''")
@@ -347,7 +347,7 @@ class AllowanceController extends Controller
 
     private function resolveAllowanceTable(): string
     {
-        return 't_allowance';
+        return 'mx_allowance';
     }
 
     private function hasPayrollColumn(string $table, string $column): bool

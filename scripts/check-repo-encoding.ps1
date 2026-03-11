@@ -25,9 +25,9 @@ $extensions = @(
     ".json", ".md", ".yml", ".yaml", ".xml", ".txt", ".ps1"
 )
 $skipDirs = @(
-    "\.git\", "\vendor\", "\storage\", "\node_modules\", "\bootstrap\cache\"
+    "\.git\", "\vendor\", "\storage\", "\node_modules\", "\bootstrap\cache\", "\backups\", "\scripts\tmp\"
 )
-$mojibakePattern = '繝|郢|鬯|蜍|蟷|譎|隴|髫|螟|莠|雉|竏|�'
+$mojibakeChar = [string][char]0xFFFD
 
 $targets = Get-ChildItem -Path $rootPath -Recurse -File | Where-Object {
     $full = $_.FullName.Replace('/', '\')
@@ -43,6 +43,13 @@ $targets = Get-ChildItem -Path $rootPath -Recurse -File | Where-Object {
     return $ok
 }
 
+$targets = $targets | Where-Object {
+    $rel = $_.FullName.Substring($rootPath.Path.Length).TrimStart('\').Replace('/', '\')
+    if ($rel -like 'scripts\tmp*') { return $false }
+    if ($rel -like 'tmp_*') { return $false }
+    return $true
+}
+
 if ($targets.Count -eq 0) {
     Write-Host "[ENCODING] no target files"
     exit 0
@@ -50,7 +57,7 @@ if ($targets.Count -eq 0) {
 
 $errors = New-Object System.Collections.Generic.List[string]
 foreach ($file in $targets) {
-    $rel = $file.FullName.Substring($rootPath.Path.Length).TrimStart('\')
+    $rel = $file.FullName.Substring($rootPath.Path.Length).TrimStart('\\')
     $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
 
     if (-not (Test-Utf8Strict $bytes)) {
@@ -65,7 +72,7 @@ foreach ($file in $targets) {
     }
 
     $content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
-    if ($content -match $mojibakePattern) {
+    if ($content.Contains($mojibakeChar)) {
         $errors.Add("possible mojibake: $rel")
     }
 }

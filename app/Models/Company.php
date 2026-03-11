@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
-    protected $table = 'm_companies';
+    protected $table = 'mx_companies';
 
     protected $primaryKey = 'company_id';
 
@@ -42,3 +42,4 @@ class Company extends Model
         return $this->hasMany(Store::class, 'company_id', 'company_id');
     }
 }
+

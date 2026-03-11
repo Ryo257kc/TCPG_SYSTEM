@@ -1,0 +1,16 @@
+﻿.freeze-files.txt
+app/Http/Controllers/Admin/Attendance/AttendanceManageController.php
+app/Http/Controllers/Admin/LoginController.php
+app/Http/Controllers/Admin/Master/AllowanceController.php
+app/Http/Controllers/Admin/Master/CompanyController.php
+app/Http/Controllers/Admin/Master/StaffController.php
+app/Http/Controllers/Admin/Master/StoreController.php
+app/Http/Controllers/Admin/PayrollController.php
+app/Models/Company.php
+app/Models/Store.php
+resources/views/admin/attendance/index.blade.php
+resources/views/admin/attendance/partials/daily_table.blade.php
+resources/views/admin/dashboard/index.blade.php
+resources/views/admin/master/allowance/index.blade.php
+resources/views/admin/payroll/index.blade.php
+routes/web.php

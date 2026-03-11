@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM 給与計算</title>
+    <title>TCPG SYSTEM 管理者給与計算</title>
     <style>
         body { margin:0; font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif; background:#ecf2fb; color:#1f2937; }
         .wrap { width:min(1760px,99vw); margin:14px auto; }
@@ -14,12 +14,17 @@
         .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
         .filters input, .filters select, .filters button { height:32px; border:1px solid #cfd9e8; border-radius:8px; padding:0 10px; background:#fff; }
         .filters button { cursor:pointer; }
+        .seed-ops { display:none; border:1px solid #d7e4f8; background:#f8fbff; border-radius:10px; padding:10px; margin:0 0 12px; }
+        .seed-ops.is-open { display:block; }
+        .seed-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:6px 10px; max-height:180px; overflow:auto; border:1px solid #dce7f7; background:#fff; border-radius:8px; padding:8px; margin-bottom:8px; }
+        .seed-check { display:flex; align-items:center; gap:6px; font-size:12px; color:#344054; }
+        .seed-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .flash { margin-bottom:10px; border:1px solid #cfe0fb; background:#edf4ff; color:#1f4f8f; border-radius:8px; padding:8px 10px; font-size:13px; }
         .meta { color:#667085; font-size:13px; margin-bottom:10px; }
         .empty { text-align:center; color:#667085; padding:22px; }
 
-        .layout { display:grid; grid-template-columns: 220px 1fr; gap:10px; min-height: 72vh; }
-        .staff-list { background:#f7faff; border:1px solid #d9e5f7; border-radius:10px; padding:6px; overflow:auto; max-height:72vh; }
+        .layout { display:grid; grid-template-columns: 220px 1fr; gap:10px; min-height: 72vh; align-items:stretch; }
+        .staff-list { background:#f7faff; border:1px solid #d9e5f7; border-radius:10px; padding:6px; overflow:auto; align-self:start; }
         .staff-item { display:block; text-decoration:none; color:inherit; border:1px solid #dce6f5; background:#fff; border-radius:8px; padding:6px 8px; margin-bottom:6px; }
         .staff-item.active { border-color:#6aa0f0; box-shadow:0 0 0 2px rgba(106,160,240,.18); }
         .staff-id { display:flex; gap:4px; align-items:center; flex-wrap:wrap; font-size:11px; color:#475467; }
@@ -47,6 +52,9 @@
         .section { background:#fff; border:1px solid #d9e5f7; border-radius:10px; padding:8px; }
         .section.reference { background:#f6f8fc; }
         .section h3 { margin:0 0 6px; font-size:13px; font-weight:800; color:#1f2937; }
+        .memo-box { margin-top:8px; border-top:1px solid #e4ebf7; padding-top:8px; }
+        .memo-title { font-size:12px; font-weight:700; color:#475467; margin-bottom:4px; }
+        .memo-body { min-height:110px; white-space:pre-wrap; word-break:break-word; font-size:12px; color:#111827; background:#fff; border:1px solid #dde6f5; border-radius:8px; padding:8px; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
         th, td { border-bottom:1px solid #edf2fb; padding:4px 6px; font-size:12px; vertical-align:top; }
         th { width:48%; text-align:left; color:#334155; font-weight:700; }
@@ -57,6 +65,8 @@
         .edit-mode .num-input { display:inline-block; }
         .recalc-koyou-btn { display:none; }
         .edit-mode .recalc-koyou-btn { display:inline-block; }
+        .recalc-premium-btn { display:none; }
+        .edit-mode .recalc-premium-btn { display:inline-block; }
         .edit-mode #btn-toggle-lock { display:none !important; }
 
         .earnings-total th, .earnings-total td,
@@ -89,10 +99,13 @@
 </head>
 <body>
 <div class="wrap">
+    @php
+        $attendanceMonth = date('Y-m', strtotime($selectedMonth . '-01 -1 month'));
+    @endphp
     <div class="top">
-        <div class="title">TCPG SYSTEM 給与計算</div>
+        <div class="title">TCPG SYSTEM 管理者給与計算</div>
         <div style="display:flex; gap:8px; align-items:center;">
-            <a class="btn" href="{{ route('admin.attendance.index', ['month' => $selectedMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">勤怠管理</a>
+            <a class="btn" href="{{ route('admin.attendance.index', ['month' => $attendanceMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">勤怠管理</a>
             <a class="btn" href="{{ route('admin.dashboard', ['page' => 'bonus-detail']) }}">賞与計算</a>
             <a class="btn" href="{{ route('admin.dashboard') }}">ダッシュボード</a>
         </div>
@@ -131,23 +144,49 @@
             >
                 CSV
             </button>
+            <button type="button" id="payroll-seed-toggle" aria-expanded="false" onclick="(function(btn){var box=document.getElementById('payroll-seed-ops');if(!box){return;}var open=box.classList.toggle('is-open');btn.setAttribute('aria-expanded', open ? 'true' : 'false');btn.textContent = open ? '給与データ作成を閉じる' : '給与データ作成';})(this);">給与データ作成</button>
         </form>
-        <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <form method="POST" action="{{ route('admin.payroll.sync-attendance-bulk') }}" onsubmit="return confirm('対象条件の勤怠を一括で給与明細へ反映します。実行しますか？');">
-                @csrf
-                <input type="hidden" name="month" value="{{ $selectedMonth }}">
-                <button type="submit" style="height:32px; border:1px solid #1f4f8f; border-radius:8px; padding:0 12px; background:#1f4f8f; color:#fff; cursor:pointer;">
-                    勤怠一括反映
-                </button>
-            </form>
+        <div id="payroll-seed-ops" class="seed-ops">
+            <div class="seed-grid">
+                @forelse(($bulkStaffRows ?? []) as $staff)
+                    <label class="seed-check">
+                        <input
+                            type="checkbox"
+                            class="js-payroll-seed-target"
+                            value="{{ $staff['staff_id'] }}"
+                            @checked($selectedStaffId !== '' && $selectedStaffId === $staff['staff_id'])
+                        >
+                        <span>{{ $staff['staff_id'] }} {{ $staff['staff_name'] }}</span>
+                    </label>
+                @empty
+                    <div style="font-size:12px; color:#667085;">選択可能なスタッフがいません。</div>
+                @endforelse
+            </div>
+            <div class="seed-actions">
+                <button type="button" class="js-payroll-seed-all">全選択</button>
+                <button type="button" class="js-payroll-seed-clear">全解除</button>
+                <form id="payroll-seed-create-form" method="POST" action="{{ route('admin.payroll.seed-bulk-create') }}" style="margin:0;">
+                    @csrf
+                    <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                    <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                    <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                    <button type="submit">給与データ一括作成</button>
+                </form>
+                <form id="payroll-seed-delete-form" method="POST" action="{{ route('admin.payroll.seed-bulk-delete') }}" style="margin:0;" onsubmit="return confirm('選択スタッフの対象月給与データを削除します。よろしいですか？');">
+                    @csrf
+                    <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                    <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                    <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                    <button type="submit" class="btn-danger">給与データ一括削除</button>
+                </form>
+            </div>
         </div>
-
         @if (session('status'))
             <div class="flash">{{ session('status') }}</div>
         @endif
 
         <div class="meta">
-            対象件数 {{ count($summaryRows) }} / 勤怠確定済 {{ (int)($attendanceCheckedCount ?? 0) }} / 勤怠未確定 {{ (int)($attendanceUncheckedCount ?? 0) }}
+            対象者数 {{ count($summaryRows) }} / 勤怠確定済 {{ (int)($attendanceCheckedCount ?? 0) }} / 勤怠未確定 {{ (int)($attendanceUncheckedCount ?? 0) }}
         </div>
 
         @if (empty($summaryRows))
@@ -193,8 +232,20 @@
                     }
                     return $default;
                 };
+                $hasVal = function (array $keys) use ($payload): bool {
+                    foreach ($keys as $k) {
+                        if (!array_key_exists($k, $payload)) {
+                            continue;
+                        }
+                        $v = trim((string)($payload[$k] ?? ''));
+                        if ($v !== '' && $v !== '-') {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
                                 $formatComma = function (string $v): string {
-                    $n = str_replace([',', '円', ' '], '', trim($v));
+                    $n = str_replace([',', '¥', ' '], '', trim($v));
                     if ($n === '' || $n === '-') {
                         return $v;
                     }
@@ -208,7 +259,7 @@
                     return number_format($f, 2);
                 };
                 $toFloat = function (string $v): float {
-                    $n = str_replace([',', '円', ' '], '', trim($v));
+                    $n = str_replace([',', '¥', ' '], '', trim($v));
                     if ($n === '' || $n === '-' || !is_numeric($n)) {
                         return 0.0;
                     }
@@ -220,7 +271,7 @@
                 };
 
                 $isZero = function (string $v): bool {
-                    $n = str_replace([',', '円', ' '], '', trim($v));
+                    $n = str_replace([',', '¥', ' '], '', trim($v));
                     return $n === '' || $n === '-' || (is_numeric($n) && (float)$n == 0.0);
                 };
 
@@ -230,7 +281,7 @@
                     ['label' => '出勤時間', 'key' => 'work_time', 'raw' => $getRaw(['work_time']), 'value' => $getVal(['work_time'])],
                     ['label' => '残業時間', 'key' => 'overtime', 'raw' => $getRaw(['overtime']), 'value' => $getVal(['overtime'])],
                     ['label' => '深夜残業時間', 'key' => 'night_over_time', 'raw' => $getRaw(['night_over_time']), 'value' => $getVal(['night_over_time'])],
-                    ['label' => '遅刻早退控除', 'key' => 'late_time', 'raw' => $getRaw(['late_time']), 'value' => $getVal(['late_time'])],
+                    ['label' => '遅早控除', 'key' => 'late_time', 'raw' => $getRaw(['late_time']), 'value' => $getVal(['late_time'])],
                     ['label' => '休日出勤日数', 'key' => 'work_horiday_num', 'raw' => $getRaw(['work_horiday_num']), 'value' => $getVal(['work_horiday_num'])],
                     ['label' => '休日出勤時間', 'key' => 'work_time_num', 'raw' => $getRaw(['work_time_num']), 'value' => $getVal(['work_time_num'])],
                     ['label' => '有休使用日数', 'key' => 'horiday_true', 'raw' => $getRaw(['horiday_true']), 'value' => $getVal(['horiday_true'])],
@@ -239,7 +290,7 @@
                     ['label' => '休業時間', 'key' => 'time_closed', 'raw' => $getRaw(['time_closed']), 'value' => $getVal(['time_closed'])],
                 ];
 
-                $attendanceExtra = [
+                                $attendanceExtra = [
                     ['label' => '扶養人数', 'value' => $getVal(['fuyo_sum'], (string)($selectedStaffMeta['fuyo_sum'] ?? '-'))],
                     ['label' => '税額表', 'value' => (string)($selectedStaffMeta['tax_amount'] ?? '-')],
                     ['label' => '日額交通費', 'value' => (string)($selectedStaffMeta['traffic_day'] ?? '-')],
@@ -248,7 +299,7 @@
                 ];
 
                 $kihonMasterRows = [
-                    ['label' => '改定年月', 'value' => (string)($kihonInfo['decision_date'] ?? '-')],
+                    ['label' => '基本給決定日', 'value' => (string)($kihonInfo['decision_date'] ?? '-')],
                     ['label' => '月給', 'value' => (string)($kihonInfo['monthly_salary'] ?? '-')],
                     ['label' => '役員報酬', 'value' => (string)($kihonInfo['executive_remu'] ?? '-')],
                     ['label' => '時給', 'value' => (string)($kihonInfo['hourly_salary'] ?? ($kihonInfo['hourly_pay'] ?? '-'))],
@@ -256,15 +307,15 @@
                     ['label' => '職務手当', 'value' => (string)($kihonInfo['duties_allow'] ?? '-')],
                     ['label' => '資格手当', 'value' => (string)($kihonInfo['qualification_allow'] ?? '-')],
                     ['label' => '請求手当', 'value' => (string)($kihonInfo['claim_allow'] ?? '-')],
-                    ['label' => '交通費', 'value' => (string)($kihonInfo['traffic_pay'] ?? '-')],
+                    ['label' => '通勤費', 'value' => (string)($kihonInfo['traffic_pay'] ?? '-')],
                     ['label' => '調整手当', 'value' => (string)($kihonInfo['adjustment_add'] ?? '-')],
                     ['label' => '家賃補助', 'value' => (string)($kihonInfo['rent_subsidies'] ?? '-')],
-                    ['label' => '家賃徴収', 'value' => (string)($kihonInfo['rent_pay'] ?? '-')],
+                    ['label' => '家賃負担', 'value' => (string)($kihonInfo['rent_pay'] ?? '-')],
                     ['label' => '調整控除', 'value' => (string)($kihonInfo['adjustment_pay'] ?? '-')],
                     ['label' => '固定残業', 'value' => (string)($kihonInfo['fixed_overtime'] ?? '-')],
                 ];
                 $blankIfZero = function (string $v): string {
-                    $n = str_replace([',', '円', ' '], '', trim($v));
+                    $n = str_replace([',', '¥', ' '], '', trim($v));
                     if ($n === '' || $n === '-') {
                         return $v;
                     }
@@ -279,7 +330,7 @@
                 unset($r);
 
                 $syahoMasterRows = [
-                    ['label' => '社保改定年月', 'value' => (string)($syahoInfo['raise_year'] ?? '-')],
+                    ['label' => '社保改定年', 'value' => (string)($syahoInfo['raise_year'] ?? '-')],
                     ['label' => '健保額', 'value' => (string)($syahoInfo['kenpo_amo'] ?? '-')],
                     ['label' => '介護額', 'value' => (string)($syahoInfo['kaigo_amo'] ?? '-')],
                     ['label' => '厚年額', 'value' => (string)($syahoInfo['kounen_amo'] ?? '-')],
@@ -293,10 +344,16 @@
                     ['label' => '住民税対象月', 'value' => (string)($residentInfo['target_month'] ?? '-')],
                     ['label' => '住民税月額', 'value' => (string)($residentInfo['resident_tax_month'] ?? '-')],
                 ];
+                $taxBaseAfterSyahoDisplay = '-';
+                if ($hasVal(['taxation_sum']) && $hasVal(['syaho_sum'])) {
+                    $taxBaseAfterSyaho = $toFloat($getVal(['taxation_sum'], '0')) - $toFloat($getVal(['syaho_sum'], '0'));
+                    $taxBaseAfterSyahoDisplay = $formatComma((string)$taxBaseAfterSyaho);
+                }
 
                 $basicInfo = [
                     ['label' => '社保対象額', 'value' => $formatComma($getVal(['syaho_target_sum']))],
                     ['label' => '労保対象額', 'value' => $formatComma($getVal(['rouho_target_sum']))],
+                    ['label' => '社保控除後計', 'value' => $taxBaseAfterSyahoDisplay],
                 ];
 
                 $attendanceBasicMerged = [];
@@ -309,11 +366,11 @@
                     $mergedSeen[$label] = true;
                     $attendanceBasicMerged[] = $row;
                 }
+                $staffMemo = trim((string)($selectedStaffMeta['memo'] ?? ''));
 
                 $earnings = [];
                 $allowanceRows = [];
                 $usedAmountKeys = [];
-                $allowanceKeyIndex = [];
                 $defs = collect($allowanceDefinitions ?? [])
                     ->sortBy(function ($d) {
                         $displayOrder = (int)($d['display_order'] ?? 0);
@@ -334,32 +391,25 @@
                     if ($amountKey === '') {
                         continue;
                     }
+                    if (isset($usedAmountKeys[$amountKey])) {
+                        continue;
+                    }
 
                     $label = trim((string)($def['allowance_name'] ?? ''));
                     if ($label === '') {
                         $label = $slotNo > 0 ? ('手当' . $slotNo) : $amountKey;
                     }
-
-                    if (isset($usedAmountKeys[$amountKey])) {
-                        if (isset($allowanceKeyIndex[$amountKey])) {
-                            $idx = (int) $allowanceKeyIndex[$amountKey];
-                            $existingLabel = (string) ($allowanceRows[$idx]['label'] ?? '');
-                            $existingGeneric = preg_match('/^手当\d+$/u', $existingLabel) === 1 || $existingLabel === $amountKey;
-                            $newGeneric = preg_match('/^手当\d+$/u', $label) === 1 || $label === $amountKey;
-                            if ($existingGeneric && !$newGeneric) {
-                                $allowanceRows[$idx]['label'] = $label;
-                            }
-                        }
-                        continue;
+                    $valueKeys = [$amountKey];
+                    if ($amountKey === 'allowance_amo_1') {
+                        // 手当設定のキーは維持しつつ、値が未格納なら basic_salary を表示フォールバック
+                        $valueKeys[] = 'basic_salary';
                     }
-
                     $allowanceRows[] = [
                         'label' => $label,
                         'key' => $amountKey,
-                        'raw' => $getRaw([$amountKey], ''),
-                        'value' => $formatComma($getVal([$amountKey], '-')),
+                        'raw' => $getRaw($valueKeys, ''),
+                        'value' => $formatComma($getVal($valueKeys, '-')),
                     ];
-                    $allowanceKeyIndex[$amountKey] = count($allowanceRows) - 1;
                     $usedAmountKeys[$amountKey] = true;
                 }
 
@@ -369,13 +419,10 @@
                         if (isset($usedAmountKeys[$key])) {
                             continue;
                         }
-                        $allowanceRows[] = ['label' => '手当' . $i, 'key' => $key, 'raw' => $getRaw([$key], ''), 'value' => $formatComma($getVal([$key], '-'))];
+                        $allowanceRows[] = ['label' => ('手当' . $i), 'key' => $key, 'raw' => $getRaw([$key], ''), 'value' => $formatComma($getVal([$key], '-'))];
                     }
                     if (!isset($usedAmountKeys['traffic_addition'])) {
                         $allowanceRows[] = ['label' => '非課税通勤費加算', 'key' => 'traffic_addition', 'raw' => $getRaw(['traffic_addition'], ''), 'value' => $formatComma($getVal(['traffic_addition'], '-'))];
-                    }
-                    if (!isset($usedAmountKeys['basic_salary'])) {
-                        $allowanceRows[] = ['label' => '基本給', 'key' => 'basic_salary', 'raw' => $getRaw(['basic_salary'], ''), 'value' => $formatComma($getVal(['basic_salary'], '-'))];
                     }
                     if (!isset($usedAmountKeys['late_deduction'])) {
                         $allowanceRows[] = ['label' => '遅早控除', 'key' => 'late_deduction', 'raw' => $getRaw(['late_deduction'], ''), 'value' => $formatComma($getVal(['late_deduction'], '-'))];
@@ -392,8 +439,8 @@
                 $taxationSumFallback = (string) $toFloat($getVal(['supply_sum'], '0'));
                 $taxationSumDisplay = $formatComma($getVal(['taxation_sum'], $taxationSumFallback));
                 $notTaxationSumDisplay = $formatComma($getVal(['not_taxation_sum'], '0'));
-                $earnings[] = ['label' => '課税対象額', 'key' => 'taxation_sum', 'raw' => $getRaw(['taxation_sum']), 'value' => $taxationSumDisplay, 'is_total' => true];
-                $earnings[] = ['label' => '非課税対象額', 'key' => 'not_taxation_sum', 'raw' => $getRaw(['not_taxation_sum']), 'value' => $notTaxationSumDisplay, 'is_total' => true];
+                $earnings[] = ['label' => '課税支給合計', 'key' => 'taxation_sum', 'raw' => $getRaw(['taxation_sum']), 'value' => $taxationSumDisplay, 'is_total' => true];
+                $earnings[] = ['label' => '非課税支給合計', 'key' => 'not_taxation_sum', 'raw' => $getRaw(['not_taxation_sum']), 'value' => $notTaxationSumDisplay, 'is_total' => true];
 
                 $syahoFromPayroll = (
                     $toFloat($getVal(['kenpo'], '0'))
@@ -401,13 +448,12 @@
                     + $toFloat($getVal(['kounen'], '0'))
                     + $toFloat($getVal(['koyou'], '0'))
                 );
-                $syahoFromMaster = (
-                    $toFloat((string)($syahoInfo['kenpo_amo'] ?? '0'))
-                    + $toFloat((string)($syahoInfo['kaigo_amo'] ?? '0'))
-                    + $toFloat((string)($syahoInfo['kounen_amo'] ?? '0'))
-                );
-                $syahoSumFallback = (string)($syahoFromPayroll > 0 ? $syahoFromPayroll : $syahoFromMaster);
-                $syahoSumResolved = $getVal(['syaho_sum'], $syahoSumFallback);
+                $syahoSumResolved = $getVal(['syaho_sum'], '-');
+                if ((trim((string)$syahoSumResolved) === '' || trim((string)$syahoSumResolved) === '-') && (
+                    $hasVal(['kenpo']) || $hasVal(['kaigo']) || $hasVal(['kounen']) || $hasVal(['koyou'])
+                )) {
+                    $syahoSumResolved = (string)$syahoFromPayroll;
+                }
                 $syahoSumDisplay = $formatComma($syahoSumResolved);
 
                 $deductions = [
@@ -415,7 +461,7 @@
                     ['label' => '介護保険', 'key' => 'kaigo', 'raw' => $getRaw(['kaigo']), 'value' => $formatComma($getVal(['kaigo']))],
                     ['label' => '厚生年金', 'key' => 'kounen', 'raw' => $getRaw(['kounen']), 'value' => $formatComma($getVal(['kounen']))],
                     ['label' => '雇用保険', 'key' => 'koyou', 'raw' => $getRaw(['koyou']), 'value' => $formatComma($getVal(['koyou']))],
-                    ['label' => '社会保険計', 'key' => 'syaho_sum', 'raw' => $getRaw(['syaho_sum'], $syahoSumResolved), 'value' => $syahoSumDisplay, 'is_total' => true],
+                    ['label' => '社会保険計', 'key' => 'syaho_sum', 'raw' => $getRaw(['syaho_sum'], trim((string)$syahoSumResolved) === '-' ? '' : (string)$syahoSumResolved), 'value' => $syahoSumDisplay, 'is_total' => true],
                     ['label' => '所得税', 'key' => 'income_tax', 'raw' => $getRaw(['income_tax']), 'value' => $formatComma($getVal(['income_tax']))],
                     ['label' => '住民税', 'key' => 'resident_tax', 'raw' => $getRaw(['resident_tax']), 'value' => $formatComma($getVal(['resident_tax']))],
                 ];
@@ -423,9 +469,9 @@
                 $others = [
                     ['label' => '年調過不足', 'key' => 'adjustment_year_end', 'raw' => $getRaw(['adjustment_year_end']), 'value' => $getVal(['adjustment_year_end'])],
                     ['label' => '立替清算', 'key' => 'cost_liquidation', 'raw' => $getRaw(['cost_liquidation']), 'value' => $formatComma($getVal(['cost_liquidation']))],
-                    ['label' => '会社立替費用', 'key' => '会社立替費用', 'raw' => $getRaw(['会社立替費用']), 'value' => $getVal(['会社立替費用'])],
-                    ['label' => '調整控除', 'key' => 'adjustment_cost', 'raw' => $getRaw(['adjustment_cost']), 'value' => $formatComma($getVal(['adjustment_cost']))],
                     ['label' => '振込残額', 'key' => '振込残額', 'raw' => $getRaw(['振込残額']), 'value' => $getVal(['振込残額'])],
+                    ['label' => '調整控除', 'key' => 'adjustment_cost', 'raw' => $getRaw(['adjustment_cost']), 'value' => $formatComma($getVal(['adjustment_cost']))],
+                    ['label' => '会社立替費用', 'key' => '会社立替費用', 'raw' => $getRaw(['会社立替費用']), 'value' => $getVal(['会社立替費用'])],
                 ];
                 $othersTotal = 0.0;
                 foreach ($others as $o) {
@@ -440,26 +486,42 @@
                     : '-';
                 $isLocked = ((string)($selectedSummary['edit_lock'] ?? '0')) === '1';
 
-                $salesKitazaike = $toFloat($getVal(['kitazaike']));
-                $salesHigashi = $toFloat($getVal(['higashi_kakogawa']));
-                $salesTsubasa = $toFloat($getVal(['tsubasa_harima']));
-                $salesOwn = $toFloat($getVal(['own_cost']));
-                $salesUnpaid = $toFloat($getVal(['unpaid_amo']));
-                $salesSubtotal = $salesKitazaike + $salesHigashi + $salesTsubasa + $salesOwn + $salesUnpaid;
+                $numOrNull = function (array $keys) use ($getVal, $toFloat): ?float {
+                    $v = trim((string)$getVal($keys, ''));
+                    if ($v === '' || $v === '-') {
+                        return null;
+                    }
+                    return $toFloat($v);
+                };
+                $dispNum = function (?float $v) use ($formatComma): string {
+                    if ($v === null) {
+                        return '-';
+                    }
+                    return $formatComma((string)$v);
+                };
+                $salesKitazaike = $numOrNull(['kitazaike']);
+                $salesHigashi = $numOrNull(['higashi_kakogawa']);
+                $salesTsubasa = $numOrNull(['tsubasa_harima']);
+                $salesOwn = $numOrNull(['own_cost']);
+                $salesUnpaid = $numOrNull(['unpaid_amo']);
+                $salesSubtotal = null;
+                if ($salesKitazaike !== null || $salesHigashi !== null || $salesTsubasa !== null || $salesOwn !== null || $salesUnpaid !== null) {
+                    $salesSubtotal = (float)($salesKitazaike ?? 0) + (float)($salesHigashi ?? 0) + (float)($salesTsubasa ?? 0) + (float)($salesOwn ?? 0) + (float)($salesUnpaid ?? 0);
+                }
 
-                                $sales = [
-                    ['label' => '人数', 'key' => 'peple_num', 'raw' => $getRaw(['peple_num', 'people_num']), 'value' => $formatComma($getVal(['peple_num', 'people_num']))],
-                    ['label' => '距離', 'key' => 'km', 'raw' => $getRaw(['km']), 'value' => $formatComma($getVal(['km']))],
-                    ['label' => '北在家', 'key' => 'kitazaike', 'raw' => $getRaw(['kitazaike']), 'value' => $formatComma((string)$salesKitazaike)],
-                    ['label' => '東加古川', 'key' => 'higashi_kakogawa', 'raw' => $getRaw(['higashi_kakogawa']), 'value' => $formatComma((string)$salesHigashi)],
-                    ['label' => 'つばさ播磨', 'key' => 'tsubasa_harima', 'raw' => $getRaw(['tsubasa_harima']), 'value' => $formatComma((string)$salesTsubasa)],
-                    ['label' => '自費', 'key' => 'own_cost', 'raw' => $getRaw(['own_cost']), 'value' => $formatComma((string)$salesOwn)],
-                    ['label' => '未収額', 'key' => 'unpaid_amo', 'raw' => $getRaw(['unpaid_amo']), 'value' => $formatComma((string)$salesUnpaid)],
-                    ['label' => '北在家〜未収額 合計', 'value' => $formatComma((string)$salesSubtotal)],
-                    ['label' => 'さくら鍼灸', 'key' => 'sakura_hari', 'raw' => $getRaw(['sakura_hari']), 'value' => $formatComma($getVal(['sakura_hari']))],
-                    ['label' => 'おりた鍼灸', 'key' => 'orita_hari', 'raw' => $getRaw(['orita_hari']), 'value' => $formatComma($getVal(['orita_hari']))],
-                    ['label' => 'みやもと鍼灸', 'key' => 'miyamoto_hari', 'raw' => $getRaw(['miyamoto_hari']), 'value' => $formatComma($getVal(['miyamoto_hari']))],
-                    ['label' => 'よこい鍼灸', 'key' => 'yokoi_hari', 'raw' => $getRaw(['yokoi_hari']), 'value' => $formatComma($getVal(['yokoi_hari']))],
+                $sales = [
+                    ['label' => '人数', 'key' => 'peple_num', 'raw' => $getRaw(['peple_num', 'people_num']), 'value' => $dispNum($numOrNull(['peple_num', 'people_num']))],
+                    ['label' => '距離', 'key' => 'km', 'raw' => $getRaw(['km']), 'value' => $dispNum($numOrNull(['km']))],
+                    ['label' => '北在家', 'key' => 'kitazaike', 'raw' => $getRaw(['kitazaike']), 'value' => $dispNum($salesKitazaike)],
+                    ['label' => '東加古川', 'key' => 'higashi_kakogawa', 'raw' => $getRaw(['higashi_kakogawa']), 'value' => $dispNum($salesHigashi)],
+                    ['label' => 'つばさ播磨', 'key' => 'tsubasa_harima', 'raw' => $getRaw(['tsubasa_harima']), 'value' => $dispNum($salesTsubasa)],
+                    ['label' => '自費', 'key' => 'own_cost', 'raw' => $getRaw(['own_cost']), 'value' => $dispNum($salesOwn)],
+                    ['label' => '未収額', 'key' => 'unpaid_amo', 'raw' => $getRaw(['unpaid_amo']), 'value' => $dispNum($salesUnpaid)],
+                    ['label' => '北在家〜未収額 合計', 'value' => $dispNum($salesSubtotal), 'is_total' => true],
+                    ['label' => 'さくら鍼灸', 'key' => 'sakura_hari', 'raw' => $getRaw(['sakura_hari']), 'value' => $dispNum($numOrNull(['sakura_hari']))],
+                    ['label' => '織田鍼灸', 'key' => 'orita_hari', 'raw' => $getRaw(['orita_hari']), 'value' => $dispNum($numOrNull(['orita_hari']))],
+                    ['label' => '宮本鍼灸', 'key' => 'miyamoto_hari', 'raw' => $getRaw(['miyamoto_hari']), 'value' => $dispNum($numOrNull(['miyamoto_hari']))],
+                    ['label' => '横井鍼灸', 'key' => 'yokoi_hari', 'raw' => $getRaw(['yokoi_hari']), 'value' => $dispNum($numOrNull(['yokoi_hari']))],
                 ];
 
                 $payTotalFallback = (string)(
@@ -475,7 +537,7 @@
                 $deductionTotalFallback = (string)(
                     $toFloat($getVal(['deduction_sum'], '0')) > 0
                         ? $toFloat($getVal(['deduction_sum'], '0'))
-                        : ($toFloat($syahoSumFallback) + $toFloat($getVal(['income_tax'], '0')) + $toFloat($getVal(['resident_tax'], '0')))
+                        : ($toFloat((string)$syahoSumResolved) + $toFloat($getVal(['income_tax'], '0')) + $toFloat($getVal(['resident_tax'], '0')))
                 );
                 $deductionTotalDisplay = $formatComma((string)($selectedSummary['deduction_total'] ?? ''));
                 if (trim((string)($selectedSummary['deduction_total'] ?? '')) === '' || trim((string)($selectedSummary['deduction_total'] ?? '')) === '-') {
@@ -493,16 +555,17 @@
                 }
 
                 $basicInfo = [
-                    ['label' => '支給月', 'value' => (string)($selectedSummary['supply_month'] ?? '-')],
-                    ['label' => '雇用形態', 'value' => (string)($selectedSummary['division'] ?? '-')],
+                    ['label' => '', 'value' => (string)($selectedSummary['supply_month'] ?? '-')],
+                    ['label' => '', 'value' => (string)($selectedSummary['division'] ?? '-')],
                     ['label' => '税額表', 'value' => (string)($selectedStaffMeta['tax_amount'] ?? '-')],
-                    ['label' => '社保対象額', 'value' => $formatComma($getVal(['syaho_target_sum']))],
-                    ['label' => '労保対象額', 'value' => $formatComma($getVal(['rouho_target_sum']))],
-                    ['label' => '課税対象額', 'value' => $taxationSumDisplay],
-                    ['label' => '非課税対象額', 'value' => $notTaxationSumDisplay],
-                    ['label' => '所得税', 'value' => $formatComma($getVal(['income_tax']))],
-                    ['label' => '住民税', 'value' => $formatComma($getVal(['resident_tax']))],
-                    ['label' => '社会保険計', 'value' => $syahoSumDisplay],
+                    ['label' => '', 'value' => $formatComma($getVal(['syaho_target_sum']))],
+                    ['label' => '社保控除後計', 'value' => $taxBaseAfterSyahoDisplay],
+                    ['label' => '', 'value' => $formatComma($getVal(['rouho_target_sum']))],
+                    ['label' => '', 'value' => $taxationSumDisplay],
+                    ['label' => '', 'value' => $notTaxationSumDisplay],
+                    ['label' => '', 'value' => $formatComma($getVal(['income_tax']))],
+                    ['label' => '', 'value' => $formatComma($getVal(['resident_tax']))],
+                    ['label' => '', 'value' => $syahoSumDisplay],
                 ];
 
                 // Admin payroll calculation screen: always show all items
@@ -515,12 +578,13 @@
                         @php
                             $query = request()->query();
                             $query['row'] = $row['key'];
-                            $lockState = (string)($row['edit_lock'] ?? '');
-                            $stateClass = $lockState === '1' ? 'state-locked' : ($lockState === '0' ? 'state-unlocked' : 'state-pending');
-                            $pillClass = $lockState === '1' ? 'locked' : ($lockState === '0' ? 'unlocked' : 'pending');
-                            $pillText = $lockState === '1' ? '確定済' : ($lockState === '0' ? '未確定' : '未設定');
-                            $checked = (string)($row['attendance_checked'] ?? '0') === '1';
-                            $attendanceText = $checked ? '確定済' : '未確認';
+                            $lockState = trim((string)($row['edit_lock'] ?? ''));
+                            $lockNum = $lockState === '' ? -1 : (int)$lockState;
+                            $stateClass = $lockNum === 1 ? 'state-locked' : ($lockNum === 0 ? 'state-unlocked' : 'state-pending');
+                            $pillClass = $lockNum === 1 ? 'locked' : ($lockNum === 0 ? 'unlocked' : 'pending');
+                            $pillText = $lockNum === 1 ? '確定済' : ($lockNum === 0 ? '未確定' : '未設定');
+                            $checked = ((int)($row['attendance_checked'] ?? 0)) === 1;
+                            $attendanceText = $checked ? '勤怠確定済' : '勤怠未確定';
                             $staffName = trim((string)($row['staff_name'] ?? '')) !== '' ? (string)$row['staff_name'] : '-';
                         @endphp
                         <a class="staff-item {{ $stateClass }} {{ $selectedRowKey === $row['key'] ? 'active' : '' }}" href="{{ route('admin.payroll.index', $query) }}">
@@ -582,7 +646,7 @@
                                     </form>
                                     @if (!$isLocked)
                                         <button id="btn-save-edit" type="submit" form="payroll-save-form" class="btn-act primary" style="display:none;">保存</button>
-                                        <button id="btn-clear-calc" type="button" class="btn-act" style="display:none;">支給/控除/その他クリア</button>
+                                        <button id="btn-clear-calc" type="button" class="btn-act" style="display:none;">勤怠/支給/控除/その他をクリア</button>
                                         <button id="btn-cancel-edit" type="button" class="btn-act" style="display:none;">キャンセル</button>
                                     @endif
                                     <form method="POST" action="{{ route('admin.payroll.toggle-lock') }}" onsubmit="return confirm('編集ロックを切り替えます。よろしいですか？');">
@@ -604,21 +668,31 @@
                         </div>
                     </div>
 
-                    <div class="sections">
+                        <div id="payroll-calc-sections" class="sections">
                         <div class="section-grid">
                             <div class="section-stack">
                                 <section class="section">
-                                    <h3>勤怠項目</h3>
+                                    <h3>勤怠集計</h3>
                                     <table>
                                         <tbody>
                                         @forelse($attendance as $r)
                                             @php
                                                 $k = (string)($r['key'] ?? '');
-                                                $hasPreview = $k !== '' && isset($attendancePreview[$k]);
-                                                $previewVal = $hasPreview ? (float)$attendancePreview[$k] : null;
+                                                $eps = 0.000001;
+                                                $isPaidLeaveRemain = ($k === 'horiday_true_num');
                                                 $savedVal = $toFloat((string)($r['value'] ?? '0'));
-                                                $delta = $hasPreview ? ($previewVal - $savedVal) : null;
-                                                $hasDelta = $hasPreview && abs((float)$delta) > 0.000001;
+                                                $hasPreviewValue = !$isPaidLeaveRemain && $k !== '' && isset($attendancePreview[$k]);
+                                                // Fallback to saved value so non-zero rows always show the preview line.
+                                                $previewVal = $hasPreviewValue ? (float)$attendancePreview[$k] : $savedVal;
+                                                $prevMonthVal = ($isPaidLeaveRemain && isset($previousPayrollPreview[$k])) ? (float)$previousPayrollPreview[$k] : null;
+                                                $delta = null;
+                                                if ($isPaidLeaveRemain && $prevMonthVal !== null) {
+                                                    $delta = $savedVal - $prevMonthVal;
+                                                } elseif ($hasPreviewValue) {
+                                                    $delta = $previewVal - $savedVal;
+                                                }
+                                                $showPreview = !$isPaidLeaveRemain && abs((float)$previewVal) > $eps;
+                                                $hasDelta = $delta !== null && abs((float)$delta) > $eps;
                                             @endphp
                                             <tr>
                                                 <th>{{ $r['label'] }}</th>
@@ -635,11 +709,15 @@
                                                     @else
                                                         {{ $r['value'] }}
                                                     @endif
-                                                    @if ($hasPreview)
+                                                    @if ($showPreview || $hasDelta)
                                                         <div class="small" style="margin-top:4px; font-size:11px; font-weight:500; color:#9ca3af;">
-                                                            勤怠取得値 {{ $fmtCompact((float)$previewVal) }}
+                                                            @if ($showPreview)
+                                                                勤怠集計値 {{ $fmtCompact((float)$previewVal) }}
+                                                            @endif
                                                             @if ($hasDelta)
-                                                                <span style="color:#b42318; font-weight:500;"> / 差分 {{ $formatComma((string)$delta) }}</span>
+                                                                <span style="color:#b42318; font-weight:500;">
+                                                                    {{ $showPreview ? ' / ' : '' }}{{ $isPaidLeaveRemain ? '前月差分' : '差分' }} {{ ((float)$delta > 0 ? '+' : '') . $formatComma((string)$delta) }}
+                                                                </span>
                                                             @endif
                                                         </div>
                                                     @endif
@@ -663,6 +741,10 @@
                                         @endforelse
                                         </tbody>
                                     </table>
+                                    <div class="memo-box">
+                                        <div class="memo-title">メモ</div>
+                                        <div class="memo-body">{{ $staffMemo !== '' ? $staffMemo : '-' }}</div>
+                                    </div>
                                 </section>
                             </div>
 
@@ -682,7 +764,23 @@
                                             $showDeltaBlock = $hasDelta;
                                         @endphp
                                         <tr class="{{ !empty($r['is_total']) ? 'earnings-total' : '' }}">
-                                            <th>{{ $r['label'] }}</th>
+                                            <th>
+                                                {{ $r['label'] }}
+                                                @if (
+                                                    !$isLocked
+                                                    && in_array($k, ['allowance_amo_8', 'allowance_amo_9', 'allowance_amo_7', 'late_deduction', 'absence_deduction'], true)
+                                                )
+                                                    <form method="POST" action="{{ route('admin.payroll.recalc-premium-deduction') }}" style="display:inline-block; margin-left:6px; vertical-align:middle;">
+                                                        @csrf
+                                                        <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                                                        <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                                                        <input type="hidden" name="target_staff_id" value="{{ $selectedSummary['staff_id'] ?? '' }}">
+                                                        <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                                                        <input type="hidden" name="row" value="{{ $selectedRowKey }}">
+                                                        <button type="submit" class="btn-act recalc-premium-btn" style="height:22px; padding:0 7px; font-size:11px;">↩ 計算</button>
+                                                    </form>
+                                                @endif
+                                            </th>
                                             <td>
                                                 @if (!$isLocked && !empty($r['key']))
                                                     <span class="cell-view">{{ $r['value'] }}</span>
@@ -698,7 +796,7 @@
                                                 @endif
                                                 @if ($showDeltaBlock)
                                                     <div class="small" style="margin-top:4px; font-size:11px; font-weight:500; color:#9ca3af;">
-                                                            <span style="color:#b42318; font-weight:500;">差分 {{ $formatComma((string)$delta) }}</span>
+                                                            <span style="color:#b42318; font-weight:500;">差分 {{ ((float)$delta > 0 ? '+' : '') . $formatComma((string)$delta) }}</span>
                                                     </div>
                                                 @endif
                                             </td>
@@ -756,7 +854,7 @@
                                                     @endif
                                                     @if ($showDeltaBlock)
                                                         <div class="small" style="margin-top:4px; font-size:11px; font-weight:500; color:#9ca3af;">
-                                                            <span style="color:#b42318; font-weight:500;">差分 {{ $formatComma((string)$delta) }}</span>
+                                                            <span style="color:#b42318; font-weight:500;">差分 {{ ((float)$delta > 0 ? '+' : '') . $formatComma((string)$delta) }}</span>
                                                         </div>
                                                     @endif
                                                 </td>
@@ -802,7 +900,7 @@
                                     <table>
                                         <tbody>
                                         @forelse($sales as $r)
-                                            <tr class="{{ $r['label'] === '北在家〜未収額 合計' ? 'sales-total' : '' }}">
+                                            <tr class="{{ !empty($r['is_total']) ? 'sales-total' : '' }}">
                                                 <th>{{ $r['label'] }}</th>
                                                 <td>
                                                     @if (!$isLocked && !empty($r['key']))
@@ -889,6 +987,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var clearBtn = document.getElementById('btn-clear-calc');
     var cancelBtn = document.getElementById('btn-cancel-edit');
     var pane = document.getElementById('payroll-detail-pane');
+    var staffList = document.querySelector('.staff-list');
+    var calcSections = document.getElementById('payroll-calc-sections');
     var saveForm = document.getElementById('payroll-save-form');
     var recalcKoyouOnSave = document.getElementById('recalc-koyou-on-save');
     var setViewMode = function (resetRecalc) {
@@ -912,6 +1012,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
     setViewMode();
+
+        var syncStaffListHeight = function () {
+            if (!staffList || !calcSections) {
+                return;
+            }
+            if (window.innerWidth <= 760) {
+                staffList.style.height = '';
+                staffList.style.maxHeight = '';
+                return;
+            }
+            var target = calcSections.offsetHeight;
+            var totalCard = document.querySelector('.totals .total-card');
+            var bonusHeight = totalCard ? (totalCard.offsetHeight * 2) : 0;
+            var rowAdjust = 32; // 基本給1行分の微調整
+            if (target > 0) {
+                var finalHeight = target + bonusHeight + rowAdjust;
+                staffList.style.height = finalHeight + 'px';
+                staffList.style.maxHeight = finalHeight + 'px';
+            }
+        };
+    syncStaffListHeight();
+    window.addEventListener('resize', syncStaffListHeight);
+
     if (!startBtn || !pane) {
         return;
     }
@@ -987,7 +1110,70 @@ document.addEventListener('DOMContentLoaded', function () {
             setViewMode(false);
         });
     }
+
+    var seedOps = document.getElementById('payroll-seed-ops');
+    var seedToggle = document.getElementById('payroll-seed-toggle');
+    var seedChecks = document.querySelectorAll('.js-payroll-seed-target');
+    var seedAll = document.querySelector('.js-payroll-seed-all');
+    var seedClear = document.querySelector('.js-payroll-seed-clear');
+    var seedForms = ['payroll-seed-create-form', 'payroll-seed-delete-form'];
+
+    var syncSeedTargets = function () {
+        var selected = Array.from(seedChecks).filter(function (el) { return el.checked; }).map(function (el) { return el.value; });
+        seedForms.forEach(function (id) {
+            var form = document.getElementById(id);
+            if (!form) return;
+            form.querySelectorAll('input[name="target_staff_ids[]"]').forEach(function (node) { node.remove(); });
+            selected.forEach(function (staffId) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'target_staff_ids[]';
+                input.value = staffId;
+                form.appendChild(input);
+            });
+        });
+    };
+
+    if (seedAll) {
+        seedAll.addEventListener('click', function () {
+            seedChecks.forEach(function (el) { el.checked = true; });
+            syncSeedTargets();
+        });
+    }
+    if (seedClear) {
+        seedClear.addEventListener('click', function () {
+            seedChecks.forEach(function (el) { el.checked = false; });
+            syncSeedTargets();
+        });
+    }
+    seedChecks.forEach(function (el) {
+        el.addEventListener('change', syncSeedTargets);
+    });
+    syncSeedTargets();
+
+    if (seedToggle && seedOps) {
+        var setSeedOpen = function (open) {
+            seedOps.classList.toggle('is-open', open);
+            seedToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            seedToggle.textContent = open ? '給与データ作成を閉じる' : '給与データ作成';
+        };
+        setSeedOpen(false);
+        seedToggle.addEventListener('click', function () {
+            setSeedOpen(!seedOps.classList.contains('is-open'));
+        });
+    }
 });
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+

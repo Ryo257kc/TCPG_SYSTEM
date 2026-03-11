@@ -1,0 +1,8 @@
+﻿# repo-relative prefixes/files allowed for current task
+resources/views/admin/payroll_v2/
+app/Http/Controllers/Admin/PayrollV2Controller.php
+app/Services/Admin/Payroll/
+routes/web.php
+scripts/
+.page-scope.txt
+.freeze-files.txt
