@@ -18,3 +18,10 @@
 
 ## 6) Failure Behavior
 - On rule mismatch: STOP and report mismatch.
+
+## 7) Payroll View Split Rule
+- Do not implement new UI blocks in `resources/views/admin_v2/payroll/index.blade.php`.
+- Implement new UI only under `resources/views/admin_v2/payroll/partials/*.blade.php`.
+- Keep `index.blade.php` as layout shell + `@include` calls only (no large HTML blocks).
+- Do not use regex/find-replace bulk edits for Blade/HTML structure changes.
+- For layout changes, edit block-by-block and verify after each step.

@@ -19,6 +19,21 @@ function Test-Utf8Strict([byte[]]$Bytes) {
     }
 }
 
+function Test-PossibleMojibake([string]$Content) {
+    if ($Content.Contains([string][char]0xFFFD)) { return $true }
+
+    $patterns = @(
+        '(?:\u7E67|\u7E5D|\u8340|\u8763|\u870D|\u879F|\u8C55|\u9006|\u8B5B|\u9A65|\u90A8|\u8793){2,}',
+        '(?:\u92C9|\u50DF|\u5116|\u5114|\u50D7|\u50E2|\u50FC){2,}'
+    )
+
+    foreach ($p in $patterns) {
+        if ($Content -match $p) { return $true }
+    }
+
+    return $false
+}
+
 $rootPath = Resolve-Path $Root
 $extensions = @(
     ".php", ".blade.php", ".js", ".ts", ".css", ".scss",
@@ -27,7 +42,6 @@ $extensions = @(
 $skipDirs = @(
     "\.git\", "\vendor\", "\storage\", "\node_modules\", "\bootstrap\cache\", "\backups\", "\scripts\tmp\"
 )
-$mojibakeChar = [string][char]0xFFFD
 
 $targets = Get-ChildItem -Path $rootPath -Recurse -File | Where-Object {
     $full = $_.FullName.Replace('/', '\')
@@ -72,7 +86,7 @@ foreach ($file in $targets) {
     }
 
     $content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
-    if ($content.Contains($mojibakeChar)) {
+    if (Test-PossibleMojibake $content) {
         $errors.Add("possible mojibake: $rel")
     }
 }
@@ -86,3 +100,5 @@ if ($errors.Count -gt 0) {
 
 Write-Host ("[ENCODING] OK: {0} files checked" -f $targets.Count) -ForegroundColor Green
 exit 0
+
+

@@ -1,4 +1,4 @@
-﻿param()
+param()
 
 $ErrorActionPreference = 'Stop'
 
@@ -15,6 +15,21 @@ function Test-Utf8Strict([byte[]]$Bytes) {
     } catch {
         return $false
     }
+}
+
+function Test-PossibleMojibake([string]$Content) {
+    if ($Content.Contains([string][char]0xFFFD)) { return $true }
+
+    $patterns = @(
+        '(?:\u7E67|\u7E5D|\u8340|\u8763|\u870D|\u879F|\u8C55|\u9006|\u8B5B|\u9A65|\u90A8|\u8793){2,}',
+        '(?:\u92C9|\u50DF|\u5116|\u5114|\u50D7|\u50E2|\u50FC){2,}'
+    )
+
+    foreach ($p in $patterns) {
+        if ($Content -match $p) { return $true }
+    }
+
+    return $false
 }
 
 $repoRoot = (git rev-parse --show-toplevel 2>$null)
@@ -164,11 +179,10 @@ foreach ($f in $textLike) {
 }
 
 # 4ab) mojibake guard
-$mojibakePattern = [string][char]0xFFFD
 foreach ($f in $textLike) {
     if (-not (Test-Path $f)) { continue }
     $content = [System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8)
-    if ($content.Contains($mojibakePattern)) {
+    if (Test-PossibleMojibake $content) {
         Fail "possible mojibake detected: $f"
     }
 }
@@ -207,3 +221,7 @@ if ($needViewCheck) {
 
 Write-Host "[RULE] all checks passed." -ForegroundColor Green
 exit 0
+
+
+
+
