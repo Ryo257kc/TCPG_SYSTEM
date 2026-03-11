@@ -44,6 +44,7 @@ $allowedPatterns = @(
     '^scripts/',
     '^\.githooks/',
     '^\.freeze-files\.txt$',
+    '^\.page-scope\.txt$',
     '^README\.md$'
 )
 
@@ -81,7 +82,7 @@ if (Test-Path '.freeze-files.txt') {
 }
 
 # 3) change isolation (max 3 work files)
-$ignoreForCount = @('^docs/', '^scripts/', '^\.githooks/', '^\.freeze-files\.txt$', '^README\.md$')
+$ignoreForCount = @('^docs/', '^scripts/', '^\.githooks/', '^\.freeze-files\.txt$', '^\.page-scope\.txt$', '^README\.md$')
 $workFiles = @()
 foreach ($f in $staged) {
     $skip = $false
