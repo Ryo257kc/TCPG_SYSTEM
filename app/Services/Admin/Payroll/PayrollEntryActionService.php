@@ -52,12 +52,12 @@ class PayrollEntryActionService
 
         $entryIdCol = $this->payrollColumn('payroll_entry_id', 'kyuyo_sho_no');
         $update = [$payloadCol => $encoded];
-        if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'updated_at')) {
+        if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'updated_at')) {
             $update['updated_at'] = now('Asia/Tokyo');
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($entryIdCol, (int) ($entry->{$entryIdCol} ?? 0))
             ->update($update);
 
@@ -84,7 +84,7 @@ class PayrollEntryActionService
         }
 
         $query = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($bonusCol, 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month]);
@@ -132,12 +132,12 @@ class PayrollEntryActionService
             }
 
             $update = [$payloadCol => $encoded];
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'updated_at')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'updated_at')) {
                 $update['updated_at'] = now('Asia/Tokyo');
             }
 
             DB::connection('sqlsrv_payroll')
-                ->table('dbo.m_payroll_entries')
+                ->table('dbo.mx_kyuyo_shou')
                 ->where($entryIdCol, (int) ($entry->{$entryIdCol} ?? 0))
                 ->update($update);
 
@@ -212,12 +212,12 @@ class PayrollEntryActionService
 
         $entryIdCol = $this->payrollColumn('payroll_entry_id', 'kyuyo_sho_no');
         $update = [$payloadCol => $encoded];
-        if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'updated_at')) {
+        if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'updated_at')) {
             $update['updated_at'] = now('Asia/Tokyo');
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($entryIdCol, (int) ($entry->{$entryIdCol} ?? 0))
             ->update($update);
 
@@ -252,12 +252,12 @@ class PayrollEntryActionService
         $lockCol = $this->payrollColumn('is_edit_locked', 'edit_lock');
 
         $update = [$lockCol => $lock ? 1 : 0];
-        if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'updated_at')) {
+        if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'updated_at')) {
             $update['updated_at'] = now('Asia/Tokyo');
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($entryIdCol, (int) ($entry->{$entryIdCol} ?? 0))
             ->update($update);
 
@@ -271,7 +271,7 @@ class PayrollEntryActionService
         $entryIdCol = $this->payrollColumn('payroll_entry_id', 'kyuyo_sho_no');
 
         return DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($bonusCol, 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
@@ -322,10 +322,10 @@ class PayrollEntryActionService
 
     private function payrollColumn(string $preferred, ?string $fallback): string
     {
-        if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', $preferred)) {
+        if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', $preferred)) {
             return $preferred;
         }
-        if ($fallback !== null && Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', $fallback)) {
+        if ($fallback !== null && Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', $fallback)) {
             return $fallback;
         }
 

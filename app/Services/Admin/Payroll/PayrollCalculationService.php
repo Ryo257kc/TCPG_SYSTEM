@@ -225,7 +225,7 @@ class PayrollCalculationService
 
         try {
             $kihonTable = $this->resolvePayrollMasterTable([
-                'dbo.m_kihon', 'm_kihon',
+                'dbo.mx_kihon', 'mx_kihon',
                 'dbo.mx_kihon', 'mx_kihon',
                 'dbo.t_kihon', 't_kihon',
             ]);
@@ -268,7 +268,7 @@ class PayrollCalculationService
 
         try {
             $residentTable = $this->resolvePayrollMasterTable([
-                'dbo.m_resident', 'm_resident',
+                'dbo.mx_resident', 'mx_resident',
                 'dbo.mx_resident', 'mx_resident',
                 'dbo.t_resident', 't_resident',
             ]);
@@ -299,8 +299,8 @@ class PayrollCalculationService
 
         try {
             $staffShouTable = $this->resolvePayrollMasterTable([
-                'dbo.m_staff_social_insurances', 'm_staff_social_insurances',
-                'dbo.m_staff_shou', 'm_staff_shou',
+                'dbo.mx_staff_shou', 'mx_staff_shou',
+                'dbo.mx_staff_shou', 'mx_staff_shou',
                 'dbo.mx_staff_shou', 'mx_staff_shou',
                 'dbo.t_staff_shou', 't_staff_shou',
             ]);
@@ -613,8 +613,8 @@ class PayrollCalculationService
 
         $conn = DB::connection('sqlsrv_payroll');
         $candidates = [
-            ['dbo.m_labor_insurance_rates', 'apply_date', 'general_employee_rate'],
-            ['m_labor_insurance_rates', 'apply_date', 'general_employee_rate'],
+            ['dbo.mx_rouho', 'apply_date', 'general_employee_rate'],
+            ['mx_rouho', 'apply_date', 'general_employee_rate'],
             ['dbo.t_rouho', 'rou_apply_date', 'general_st'],
             ['t_rouho', 'rou_apply_date', 'general_st'],
         ];
@@ -986,7 +986,7 @@ class PayrollCalculationService
 
     private function resolveAllowanceTable(): ?string
     {
-        foreach (['dbo.mx_allowance', 'mx_allowance', 'dbo.m_allowance', 'm_allowance', 'dbo.t_allowance', 't_allowance'] as $table) {
+        foreach (['dbo.mx_allowance', 'mx_allowance', 'dbo.mx_allowance', 'mx_allowance', 'dbo.t_allowance', 't_allowance'] as $table) {
             try {
                 if (Schema::connection('sqlsrv_payroll')->hasTable($table)) {
                     return $table;
@@ -1001,13 +1001,13 @@ class PayrollCalculationService
 
     private function payrollTable(): string
     {
-        foreach (['dbo.m_payroll_entries', 'm_payroll_entries', 'dbo.mx_kyuyo_shou', 'mx_kyuyo_shou'] as $table) {
+        foreach (['dbo.mx_kyuyo_shou', 'mx_kyuyo_shou', 'dbo.mx_kyuyo_shou', 'mx_kyuyo_shou'] as $table) {
             if (Schema::connection('sqlsrv_payroll')->hasTable($table)) {
                 return $table;
             }
         }
 
-        return 'dbo.m_payroll_entries';
+        return 'dbo.mx_kyuyo_shou';
     }
 
     private function payrollColumn(string $preferred, ?string $fallback): string
@@ -1025,35 +1025,35 @@ class PayrollCalculationService
 
     private function staffTable(): string
     {
-        foreach (['dbo.mx_staffs', 'mx_staffs', 'dbo.m_staffs', 'm_staffs'] as $table) {
+        foreach (['dbo.mx_staffs', 'mx_staffs', 'dbo.mx_staffs', 'mx_staffs'] as $table) {
             if (Schema::connection('sqlsrv')->hasTable($table)) {
                 return $table;
             }
         }
 
-        return 'dbo.m_staffs';
+        return 'dbo.mx_staffs';
     }
 
     private function storeTable(): string
     {
-        foreach (['dbo.mx_stores', 'mx_stores', 'dbo.m_stores', 'm_stores'] as $table) {
+        foreach (['dbo.mx_stores', 'mx_stores', 'dbo.mx_stores', 'mx_stores'] as $table) {
             if (Schema::connection('sqlsrv')->hasTable($table)) {
                 return $table;
             }
         }
 
-        return 'dbo.m_stores';
+        return 'dbo.mx_stores';
     }
 
     private function companyTable(): string
     {
-        foreach (['dbo.mx_companies', 'mx_companies', 'dbo.m_companies', 'm_companies'] as $table) {
+        foreach (['dbo.mx_companies', 'mx_companies', 'dbo.mx_companies', 'mx_companies'] as $table) {
             if (Schema::connection('sqlsrv')->hasTable($table)) {
                 return $table;
             }
         }
 
-        return 'dbo.m_companies';
+        return 'dbo.mx_companies';
     }
 
     private function staffColumn(string $preferred, string $fallback): string

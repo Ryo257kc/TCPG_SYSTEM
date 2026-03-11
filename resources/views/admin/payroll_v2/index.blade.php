@@ -26,8 +26,9 @@
 
         .layout { display:grid; grid-template-columns:220px 1fr; gap:10px; min-height:72vh; align-items:start; }
         .staff-list { background:#f7faff; border:1px solid #d9e5f7; border-radius:10px; padding:6px; overflow:auto; }
-        .staff-item { display:block; text-decoration:none; color:inherit; border:1px solid #dce6f5; background:#fff; border-radius:8px; padding:6px 8px; margin-bottom:6px; }
+        .staff-item { display:block; text-decoration:none; color:inherit; border:1px solid #dce6f5; background:#fff; border-radius:8px; padding:5px 8px; margin-bottom:6px; }
         .staff-item.active { border-color:#6aa0f0; box-shadow:0 0 0 2px rgba(106,160,240,.18); }
+        .staff-item.unconfirmed { background:#fff1f2; border-color:#fecaca; }
         .staff-id { display:flex; gap:4px; align-items:center; flex-wrap:wrap; font-size:11px; color:#475467; }
         .staff-name { margin-top:4px; font-size:14px; font-weight:700; color:#1f2937; }
         .lock-pill { font-size:10px; padding:1px 6px; border-radius:999px; border:1px solid transparent; }
@@ -169,14 +170,14 @@
         <div class="layout">
             <aside class="staff-list">
                 @forelse($summaryRows as $row)
-                    <a class="staff-item @if(($selectedSummary['staff_id'] ?? '') === $row['staff_id']) active @endif" href="{{ route('admin.payroll-v2.index', ['month' => $selectedMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $row['staff_id']]) }}">
+                    <a class="staff-item @if(($selectedSummary['staff_id'] ?? '') === $row['staff_id']) active @endif @if(!$row['is_edit_locked']) unconfirmed @endif" href="{{ route('admin.payroll-v2.index', ['month' => $selectedMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $row['staff_id']]) }}">
+                        <div class="staff-name">{{ $row['staff_name'] !== '' ? $row['staff_name'] : '-' }}</div>
                         <div class="staff-id">
                             <span>{{ $row['staff_id'] }}</span>
-                            @if($row['is_edit_locked'])<span class="lock-pill locked">確定済</span>@else<span class="lock-pill unlocked">未確定</span>@endif
-                            @if($row['attendance_checked'])<span class="lock-pill att-checked">勤怠確定</span>@else<span class="lock-pill att-unchecked">勤怠未確定</span>@endif
+                            <span>・</span>
+                            <span>{{ ($row['staff_division'] ?? '') !== '' ? $row['staff_division'] : '-' }}</span>
+                            @if($row['attendance_checked'])<span class="lock-pill att-checked">勤怠済</span>@else<span class="lock-pill att-unchecked">勤怠未</span>@endif
                         </div>
-                        <div class="staff-name">{{ $row['staff_name'] !== '' ? $row['staff_name'] : '-' }}</div>
-                        <div class="staff-id">{{ $row['staff_division'] !== '' ? $row['staff_division'] : '-' }} / {{ $row['store_short_name'] !== '' ? $row['store_short_name'] : '-' }}</div>
                     </a>
                 @empty
                     <div class="empty">対象データがありません</div>
@@ -351,12 +352,22 @@
 
 <script>
 (function(){
+    function syncListHeight(){
+        var list = document.querySelector('.staff-list');
+        var pane = document.querySelector('.detail-pane');
+        if(!list || !pane){ return; }
+        list.style.maxHeight = pane.offsetHeight + 'px';
+    }
+    window.addEventListener('load', syncListHeight);
+    window.addEventListener('resize', syncListHeight);
+
     var seedToggle = document.getElementById('payroll-seed-toggle');
     var seedOps = document.getElementById('payroll-seed-ops');
     if(seedToggle && seedOps){
         seedToggle.addEventListener('click', function(){
             var open = seedOps.classList.toggle('is-open');
             seedToggle.textContent = open ? '給与データ作成を閉じる' : '給与データ作成';
+            syncListHeight();
         });
     }
 })();
@@ -393,6 +404,9 @@ function injectTargets(formId){
         btnEdit.style.display = 'none';
         btnSave.style.display = 'inline-block';
         btnCancel.style.display = 'inline-block';
+        var list = document.querySelector('.staff-list');
+        var pane = document.querySelector('.detail-pane');
+        if(list && pane){ list.style.maxHeight = pane.offsetHeight + 'px'; }
     });
 
     btnCancel.addEventListener('click', function(){
@@ -402,6 +416,9 @@ function injectTargets(formId){
         btnCancel.style.display = 'none';
         var form = document.getElementById('payload-save');
         if(form){ form.reset(); }
+        var list = document.querySelector('.staff-list');
+        var pane = document.querySelector('.detail-pane');
+        if(list && pane){ list.style.maxHeight = pane.offsetHeight + 'px'; }
     });
 })();
 </script>

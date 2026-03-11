@@ -17,7 +17,7 @@ class AttendanceAggregateService
         $fromDate = $attendanceMonthDate;
         $toDate = date('Y-m-t', strtotime($fromDate));
 
-        $table = 'dbo.m_time_cards';
+        $table = 'dbo.mx_time_cards';
         if (!Schema::connection('sqlsrv')->hasTable($table)) {
             return [];
         }

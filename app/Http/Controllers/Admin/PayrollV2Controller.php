@@ -88,7 +88,7 @@ class PayrollV2Controller extends Controller
         $payloadColumn = $this->payrollColumn('raw_payload', null);
 
         $availableMonths = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->selectRaw('YEAR([supply_month]) as y, MONTH([supply_month]) as m')
             ->where($bonusColumn, 0)
             ->whereNotNull('supply_month')
@@ -109,7 +109,7 @@ class PayrollV2Controller extends Controller
         $selectedStaffId = trim((string) $request->query('staff_id', ''));
 
         $companyOptions = DB::connection('sqlsrv')
-            ->table('dbo.m_stores')
+            ->table('dbo.mx_stores')
             ->select('company_name')
             ->whereNotNull('company_name')
             ->whereRaw('LTRIM(RTRIM(company_name)) <> ?', [''])
@@ -128,8 +128,8 @@ class PayrollV2Controller extends Controller
         $staffDivisionExpr = $this->staffDivisionSelectExpr();
 
         $staffQuery = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs as ms')
-            ->leftJoin('dbo.m_stores as st', 'ms.' . $staffStoreColumn, '=', 'st.store_code')
+            ->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.' . $staffStoreColumn, '=', 'st.store_code')
             ->whereNotNull('ms.' . $staffIdColumn)
             ->whereRaw('LTRIM(RTRIM(ms.' . $staffIdColumn . ')) <> ?', [''])
             ->selectRaw('LTRIM(RTRIM(ms.' . $staffIdColumn . ')) as staff_id, ms.staff_name, ' . $staffDivisionExpr . ' as staff_division, st.company_name, st.store_short_name');
@@ -161,7 +161,7 @@ class PayrollV2Controller extends Controller
         }
 
         $rowsQuery = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($bonusColumn, 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month]);
@@ -310,7 +310,7 @@ class PayrollV2Controller extends Controller
         $lockCol = $this->payrollColumn('is_edit_locked', 'edit_lock');
 
         $existingIds = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($bonusCol, 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
@@ -340,29 +340,29 @@ class PayrollV2Controller extends Controller
                 $lockCol => 0,
             ];
 
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'raw_payload')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'raw_payload')) {
                 $insert['raw_payload'] = '{}';
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'payment_total')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'payment_total')) {
                 $insert['payment_total'] = 0;
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'salary_total')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'salary_total')) {
                 $insert['salary_total'] = 0;
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'transfer_amount')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'transfer_amount')) {
                 $insert['transfer_amount'] = 0;
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'bonus_amount')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'bonus_amount')) {
                 $insert['bonus_amount'] = 0;
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'created_at')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'created_at')) {
                 $insert['created_at'] = now('Asia/Tokyo');
             }
-            if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', 'updated_at')) {
+            if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', 'updated_at')) {
                 $insert['updated_at'] = now('Asia/Tokyo');
             }
 
-            DB::connection('sqlsrv_payroll')->table('dbo.m_payroll_entries')->insert($insert);
+            DB::connection('sqlsrv_payroll')->table('dbo.mx_kyuyo_shou')->insert($insert);
             $created++;
         }
 
@@ -401,7 +401,7 @@ class PayrollV2Controller extends Controller
         $lockCol = $this->payrollColumn('is_edit_locked', 'edit_lock');
 
         $entries = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where($bonusCol, 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
@@ -420,7 +420,7 @@ class PayrollV2Controller extends Controller
                 continue;
             }
             $deleted += DB::connection('sqlsrv_payroll')
-                ->table('dbo.m_payroll_entries')
+                ->table('dbo.mx_kyuyo_shou')
                 ->where($entryIdCol, (int) $entry->entry_id)
                 ->delete();
         }
@@ -538,7 +538,8 @@ class PayrollV2Controller extends Controller
         $service = app(\App\Services\Admin\Payroll\AttendanceAggregateService::class);
 
         return $service;
-    }
+    }
+
     private function runCalculationAction(Request $request, string $action): RedirectResponse
     {
         try {
@@ -654,7 +655,7 @@ class PayrollV2Controller extends Controller
 
     private function loadAllowanceMeta(string $companyName): array
     {
-        $table = $this->firstExistingTable('sqlsrv_payroll', ['dbo.m_allowance', 'dbo.mx_allowance']);
+        $table = $this->firstExistingTable('sqlsrv_payroll', ['dbo.mx_allowance', 'dbo.mx_allowance']);
         if ($table === null) {
             return ['labels' => [], 'orders' => []];
         }
@@ -719,8 +720,8 @@ class PayrollV2Controller extends Controller
             return ['labels' => [], 'orders' => []];
         }
 
-        $staffTable = $this->firstExistingTable('sqlsrv', ['dbo.m_staffs', 'dbo.mx_staffs']);
-        $storeTable = $this->firstExistingTable('sqlsrv', ['dbo.m_stores', 'dbo.mx_stores']);
+        $staffTable = $this->firstExistingTable('sqlsrv', ['dbo.mx_staffs', 'dbo.mx_staffs']);
+        $storeTable = $this->firstExistingTable('sqlsrv', ['dbo.mx_stores', 'dbo.mx_stores']);
         if ($staffTable === null || $storeTable === null) {
             return ['labels' => [], 'orders' => []];
         }
@@ -768,7 +769,7 @@ class PayrollV2Controller extends Controller
             $out[] = $companyName;
         }
 
-        $companyTable = $this->firstExistingTable('sqlsrv', ['dbo.m_companies', 'dbo.mx_companies']);
+        $companyTable = $this->firstExistingTable('sqlsrv', ['dbo.mx_companies', 'dbo.mx_companies']);
         if ($companyTable !== null) {
             $cols = $this->tableColumns('sqlsrv', $companyTable);
             $nameCol = $this->pickColumn($cols, ['company_name', 'name']);
@@ -881,7 +882,7 @@ class PayrollV2Controller extends Controller
             return [];
         }
 
-        $table = $this->firstExistingTable('sqlsrv', ['dbo.m_staffs', 'dbo.mx_staffs']);
+        $table = $this->firstExistingTable('sqlsrv', ['dbo.mx_staffs', 'dbo.mx_staffs']);
         if ($table === null) {
             return [];
         }
@@ -971,10 +972,10 @@ class PayrollV2Controller extends Controller
 
     private function payrollColumn(string $preferred, ?string $fallback): string
     {
-        if (Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', $preferred)) {
+        if (Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', $preferred)) {
             return $preferred;
         }
-        if ($fallback !== null && Schema::connection('sqlsrv_payroll')->hasColumn('m_payroll_entries', $fallback)) {
+        if ($fallback !== null && Schema::connection('sqlsrv_payroll')->hasColumn('mx_kyuyo_shou', $fallback)) {
             return $fallback;
         }
 
@@ -983,10 +984,10 @@ class PayrollV2Controller extends Controller
 
     private function staffColumn(string $preferred, string $fallback): string
     {
-        if (Schema::connection('sqlsrv')->hasColumn('m_staffs', $preferred)) {
+        if (Schema::connection('sqlsrv')->hasColumn('mx_staffs', $preferred)) {
             return $preferred;
         }
-        if (Schema::connection('sqlsrv')->hasColumn('m_staffs', $fallback)) {
+        if (Schema::connection('sqlsrv')->hasColumn('mx_staffs', $fallback)) {
             return $fallback;
         }
 
@@ -995,8 +996,8 @@ class PayrollV2Controller extends Controller
 
     private function staffDivisionSelectExpr(): string
     {
-        $hasDivision = Schema::connection('sqlsrv')->hasColumn('m_staffs', 'staff_division');
-        $hasEmploymentStatus = Schema::connection('sqlsrv')->hasColumn('m_staffs', 'employment_status');
+        $hasDivision = Schema::connection('sqlsrv')->hasColumn('mx_staffs', 'staff_division');
+        $hasEmploymentStatus = Schema::connection('sqlsrv')->hasColumn('mx_staffs', 'employment_status');
 
         if ($hasDivision && $hasEmploymentStatus) {
             return 'ISNULL(ms.staff_division, ms.employment_status)';

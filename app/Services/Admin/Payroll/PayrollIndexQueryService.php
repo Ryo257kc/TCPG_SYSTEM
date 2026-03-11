@@ -11,7 +11,7 @@ class PayrollIndexQueryService
     public function resolveMonth(Request $request): array
     {
         $availableMonths = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->selectRaw('YEAR([supply_month]) as y, MONTH([supply_month]) as m')
             ->where('is_bonus', 0)
             ->whereNotNull('supply_month')
@@ -38,7 +38,7 @@ class PayrollIndexQueryService
     public function companyOptions(): array
     {
         return DB::connection('sqlsrv')
-            ->table('dbo.m_stores')
+            ->table('dbo.mx_stores')
             ->select('company_name')
             ->whereNotNull('company_name')
             ->whereRaw('LTRIM(RTRIM(company_name)) <> ?', [''])
@@ -56,7 +56,7 @@ class PayrollIndexQueryService
     public function targetStaffIdsFromPayroll(int $year, int $month): array
     {
         return DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where('is_bonus', 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
@@ -72,8 +72,8 @@ class PayrollIndexQueryService
     public function staffContext(array $targetStaffIdsFromPayroll, string $selectedCompanyId): array
     {
         $staffQuery = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs as ms')
-            ->leftJoin('dbo.m_stores as st', 'ms.store_code', '=', 'st.store_code')
+            ->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.store_code', '=', 'st.store_code')
             ->selectRaw('LTRIM(RTRIM(ms.staff_code)) as staff_id, ms.staff_name');
 
         if ($targetStaffIdsFromPayroll === []) {
@@ -108,7 +108,7 @@ class PayrollIndexQueryService
         usort($staffOptions, static fn ($a, $b) => strcmp((string)($a['staff_id'] ?? ''), (string)($b['staff_id'] ?? '')));
 
         $staffNameMap = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs')
+            ->table('dbo.mx_staffs')
             ->selectRaw('LTRIM(RTRIM(staff_code)) as staff_id, staff_name')
             ->whereNotNull('staff_code')
             ->get()
@@ -117,7 +117,7 @@ class PayrollIndexQueryService
 
         $hasStaffDivision = $this->staffHasColumn('staff_division');
         $staffDivisionMap = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs')
+            ->table('dbo.mx_staffs')
             ->selectRaw(
                 'LTRIM(RTRIM(staff_code)) as staff_id, '
                 . ($hasStaffDivision ? 'staff_division, ' : '')
@@ -133,8 +133,8 @@ class PayrollIndexQueryService
             ->all();
 
         $staffOrgMap = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs as ms')
-            ->leftJoin('dbo.m_stores as st', 'ms.store_code', '=', 'st.store_code')
+            ->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.store_code', '=', 'st.store_code')
             ->selectRaw('LTRIM(RTRIM(ms.staff_code)) as staff_id, st.company_name, st.store_name')
             ->whereNotNull('ms.staff_code')
             ->get()
@@ -160,7 +160,7 @@ class PayrollIndexQueryService
     public function rawRowByStaff(int $year, int $month, string $selectedStaffId, string $selectedCompanyId, array $staffIdsByCompany): array
     {
         $rawRows = DB::connection('sqlsrv_payroll')
-            ->table('dbo.m_payroll_entries')
+            ->table('dbo.mx_kyuyo_shou')
             ->where('is_bonus', 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
@@ -198,7 +198,7 @@ class PayrollIndexQueryService
         $monthEndDate = date('Y-m-t', strtotime($monthStartDate));
 
         $activeStaffIds = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs')
+            ->table('dbo.mx_staffs')
             ->whereNotNull('staff_code')
             ->whereRaw('LTRIM(RTRIM(staff_code)) <> ?', [''])
             ->where(function ($q) use ($monthEndDate) {
@@ -217,8 +217,8 @@ class PayrollIndexQueryService
             ->all();
 
         $bulkStaffQuery = DB::connection('sqlsrv')
-            ->table('dbo.m_staffs as ms')
-            ->leftJoin('dbo.m_stores as st', 'ms.store_code', '=', 'st.store_code')
+            ->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.store_code', '=', 'st.store_code')
             ->selectRaw('LTRIM(RTRIM(ms.staff_code)) as staff_id, ms.staff_name');
 
         if ($activeStaffIds === []) {
@@ -245,7 +245,7 @@ class PayrollIndexQueryService
 
     private function staffHasColumn(string $column): bool
     {
-        return Schema::connection('sqlsrv')->hasColumn('dbo.m_staffs', $column)
-            || Schema::connection('sqlsrv')->hasColumn('m_staffs', $column);
+        return Schema::connection('sqlsrv')->hasColumn('dbo.mx_staffs', $column)
+            || Schema::connection('sqlsrv')->hasColumn('mx_staffs', $column);
     }
 }
