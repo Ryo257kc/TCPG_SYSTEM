@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use App\Http\Controllers\Admin\V2\AttendanceV2Controller;
 use App\Http\Controllers\Admin\V2\DashboardV2Controller;
@@ -7,7 +7,6 @@ use App\Http\Controllers\Admin\V2\Master\AllowanceV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CompanyV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StaffV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StoreV2Controller;
-use App\Http\Controllers\Admin\V2\PayrollV2Controller;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -23,8 +22,7 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/', [DashboardV2Controller::class, 'index'])->name('admin.dashboard');
 
         Route::get('/attendance', [AttendanceV2Controller::class, 'index'])->name('admin.attendance.index');
-        Route::get('/payroll', [PayrollV2Controller::class, 'index'])->name('admin.payroll.index');
-        Route::get('/payroll-v2', [PayrollV2Controller::class, 'index'])->name('admin.payroll-v2.index');
+        require __DIR__ . '/admin/payroll_v2.php';
 
         Route::get('/master/company', [CompanyV2Controller::class, 'index'])->name('admin.master.company');
         Route::post('/master/company/update', [CompanyV2Controller::class, 'update'])->name('admin.master.company.update');
@@ -35,3 +33,5 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/allowance', [AllowanceV2Controller::class, 'update'])->name('admin.master.allowance.update');
     });
 });
+
+

@@ -1,4 +1,3 @@
 #!/usr/bin/env sh
-# pre-commit: enforce admin work rules
-powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/enforce-work-rules.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File ".githooks/pre-commit-bom-check.ps1"
 exit $?

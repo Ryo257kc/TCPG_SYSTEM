@@ -28,6 +28,9 @@ class PayrollV2MonthService
         if (!preg_match('/^\d{4}-\d{2}$/', $selectedMonth)) {
             return $availableMonths[0] ?? $defaultMonth;
         }
+        if (!in_array($selectedMonth, $availableMonths, true)) {
+            return $availableMonths[0] ?? $defaultMonth;
+        }
         return $selectedMonth;
     }
 }

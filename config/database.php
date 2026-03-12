@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Support\Str;
 
@@ -109,7 +109,7 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            'encrypt' => env('APP_ENV', 'production') === 'local' ? 'no' : env('DB_ENCRYPT', 'yes'),
             'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
@@ -124,7 +124,7 @@ return [
             'charset' => env('PAYROLL_DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'encrypt' => env('PAYROLL_DB_ENCRYPT', 'yes'),
+            'encrypt' => env('APP_ENV', 'production') === 'local' ? 'no' : env('PAYROLL_DB_ENCRYPT', 'yes'),
             'trust_server_certificate' => env('PAYROLL_DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
     ],
@@ -155,7 +155,7 @@ return [
             'charset' => env('PAYROLL_DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'encrypt' => env('PAYROLL_DB_ENCRYPT', 'yes'),
+            'encrypt' => env('APP_ENV', 'production') === 'local' ? 'no' : env('PAYROLL_DB_ENCRYPT', 'yes'),
             'trust_server_certificate' => env('PAYROLL_DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
     ],
@@ -210,3 +210,4 @@ return [
     ],
 
 ];
+

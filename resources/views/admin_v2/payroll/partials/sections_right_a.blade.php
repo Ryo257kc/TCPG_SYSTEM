@@ -1,4 +1,3 @@
-﻿<div style="display:grid;gap:8px;">
 @foreach($rightA as $title=>$items)
 @php $source = $title === $baseInfoTitle ? $baseInfoView : $summary; @endphp
 <section class="card readonly-card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
@@ -7,6 +6,12 @@
 $val = $m===-1 ? $tFrom($source,$k) : $nFrom($source,$k,$m);
 if (in_array($k, ['social_join', 'employment_join'], true)) {
     $val = ((int)$val === 1) ? '有' : '無';
+}
+if ($k === 'yukyu_month') {
+    $v = trim((string) $val);
+    if ($v !== '' && is_numeric($v)) {
+        $val = ((string) ((int) $v)) . '月';
+    }
 }
 @endphp
 @if ($k === 'memo')
@@ -18,4 +23,3 @@ if (in_array($k, ['social_join', 'employment_join'], true)) {
 @endforeach
 </table></section>
 @endforeach
-</div>

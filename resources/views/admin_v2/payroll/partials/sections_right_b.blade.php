@@ -1,4 +1,3 @@
-﻿<div style="display:grid;gap:8px;">
 @foreach($rightB as $title=>$items)
 @php
 $source = $title === $masterTitle
@@ -15,4 +14,3 @@ $val = $m===-1 ? $tFrom($source,$k) : $nFrom($source,$k,$m);
 @endforeach
 </table></section>
 @endforeach
-</div>

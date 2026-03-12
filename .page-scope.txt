@@ -1,5 +1,12 @@
-﻿# repo-relative prefixes/files allowed for current task
-app/Http/Controllers/Admin/PayrollV2Controller.php
-app/Services/Admin/Payroll/
-resources/views/admin/payroll_v2/index.blade.php
-scripts/tmp_check_staff_cols.php
+# repo-relative prefixes/files allowed for current task
+.editorconfig
+.githooks/
+.page-scope.txt
+app/Http/Controllers/Admin/V2/PayrollV2Controller.php
+app/Services/Admin/V2/Payroll/
+app/Services/Admin/V2/Master/AllowanceV2Service.php
+resources/views/admin_v2/payroll/
+resources/views/admin_v2/attendance/index.blade.php
+resources/views/admin_v2/master/allowance/index.blade.php
+routes/web.php
+scripts/

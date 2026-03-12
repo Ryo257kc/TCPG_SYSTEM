@@ -87,6 +87,6 @@ class AllowanceV2Service
             ->where('allowance_no', $allowanceNo)
             ->update($payload);
 
-        return '更新しました。';
+        return 'Updated.';
     }
 }

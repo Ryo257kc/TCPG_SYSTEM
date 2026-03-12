@@ -16,3 +16,7 @@ indent_size = 2
 
 [compose.yaml]
 indent_size = 4
+
+[*.{png,jpg,jpeg,gif,ico,pdf,zip}]
+insert_final_newline = false
+trim_trailing_whitespace = false
