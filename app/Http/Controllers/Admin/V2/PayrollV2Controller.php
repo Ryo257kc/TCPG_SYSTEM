@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
+use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
+use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
+use App\Services\Admin\V2\Payroll\PayrollV2DeleteService;
 use App\Services\Admin\V2\Payroll\PayrollV2EmploymentInsuranceService;
 use App\Services\Admin\V2\Payroll\PayrollV2IncomeTaxService;
 use App\Services\Admin\V2\Payroll\PayrollV2KihonService;
@@ -26,6 +29,9 @@ class PayrollV2Controller extends Controller
     public function __construct(
         private readonly PayrollV2MonthService $monthService,
         private readonly PayrollV2CompanyService $companyService,
+        private readonly PayrollV2CreateCandidatesService $createCandidatesService,
+        private readonly PayrollV2CreateService $createService,
+        private readonly PayrollV2DeleteService $deleteService,
         private readonly PayrollV2StaffService $staffService,
         private readonly PayrollV2SummaryService $summaryService,
         private readonly PayrollV2KihonService $kihonService,
@@ -43,8 +49,9 @@ class PayrollV2Controller extends Controller
 
     public function index(Request $request): View
     {
-        $availableMonths = $this->monthService->availableMonths();
-        $selectedMonth = $this->monthService->normalize((string) $request->query('month', ''), $availableMonths);
+        $availablePaymentDates = $this->monthService->availablePaymentDates();
+        $selectedPaymentDate = $this->monthService->normalizePaymentDate((string) $request->query('payment_date', ''), $availablePaymentDates);
+        $selectedMonth = $this->monthService->monthFromPaymentDate($selectedPaymentDate);
 
         [$year, $month] = array_map('intval', explode('-', $selectedMonth));
 
@@ -57,22 +64,17 @@ class PayrollV2Controller extends Controller
         }
 
         $staffRows = $this->staffService->staffs($selectedCompanyId);
-        $summaryMap = $this->summaryService->summaryMap($year, $month);
-        $previousSummaryMap = $this->summaryService->previousSummaryMap($year, $month);
+        $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate);
+        $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate);
         $kihonMap = $this->kihonService->map($year, $month);
         $staffMasterMap = $this->staffMasterService->map();
         $shahoMap = $this->shahoService->map($year, $month);
         $residentMap = $this->residentService->map($year, $month);
 
-        // Usually we show only staff that has payroll rows in the selected month.
-        // If month data is empty (e.g. after month fallback mismatch), keep staff list
-        // so the UI does not collapse to an empty main panel.
-        if (!empty($summaryMap)) {
-            $staffRows = array_values(array_filter(
-                $staffRows,
-                static fn (array $staff): bool => isset($summaryMap[$staff['staff_id']])
-            ));
-        }
+        $staffRows = array_values(array_filter(
+            $staffRows,
+            static fn (array $staff): bool => isset($summaryMap[$staff['staff_id']])
+        ));
 
         if ($selectedStaffId !== '' && !in_array($selectedStaffId, array_column($staffRows, 'staff_id'), true)) {
             $selectedStaffId = '';
@@ -93,7 +95,8 @@ class PayrollV2Controller extends Controller
         $labelOverrides = $this->allowanceLabelService->labelMap();
 
         return view('admin_v2.payroll.index', [
-            'availableMonths' => $availableMonths,
+            'availablePaymentDates' => $availablePaymentDates,
+            'selectedPaymentDate' => $selectedPaymentDate,
             'selectedMonth' => $selectedMonth,
             'companyOptions' => $companyOptions,
             'selectedCompanyId' => $selectedCompanyId,
@@ -165,7 +168,7 @@ class PayrollV2Controller extends Controller
     {
         $v = $request->validate([
             'staff_id' => ['required', 'string', 'max:20'],
-            'month' => ['required', 'regex:/^\\d{4}-\\d{2}$/'],
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
             'company_id' => ['nullable', 'string', 'max:200'],
         ]);
 
@@ -206,6 +209,94 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function createCandidates(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $payload = $this->createCandidatesService->payload(
+            $year,
+            $month,
+            (string) ($v['company_id'] ?? ''),
+            (string) ($v['payment_date'] ?? '')
+        );
+
+        return response()->json([
+            'ok' => true,
+            'candidates' => $payload['candidates'],
+            'suggested_payment_date' => $payload['suggested_payment_date'],
+            'payment_date_options' => $payload['payment_date_options'],
+        ]);
+    }
+
+    public function create(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
+            'staff_ids' => ['required', 'array', 'min:1'],
+            'staff_ids.*' => ['required', 'string', 'max:20'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $result = $this->createService->create(
+            $year,
+            $month,
+            array_map('strval', (array) $v['staff_ids']),
+            (string) ($v['company_id'] ?? ''),
+            (string) ($v['payment_date'] ?? '')
+        );
+
+        if ($result['created'] === 0 && $result['skipped'] === 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => '対象者がありません。表示条件を確認してください。',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'created' => $result['created'],
+            'skipped' => $result['skipped'],
+            'created_ids' => $result['created_ids'],
+            'skipped_ids' => $result['skipped_ids'],
+        ]);
+    }
+
+    public function delete(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'payment_date' => ['required', 'date_format:Y-m-d'],
+            'staff_ids' => ['required', 'array', 'min:1'],
+            'staff_ids.*' => ['required', 'string', 'max:20'],
+        ]);
+
+        $result = $this->deleteService->delete(
+            array_map('strval', (array) $v['staff_ids']),
+            (string) $v['payment_date']
+        );
+
+        if ($result['deleted'] === 0 && $result['skipped'] === 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => '対象者がありません。表示条件を確認してください。',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'deleted' => $result['deleted'],
+            'skipped' => $result['skipped'],
+            'deleted_ids' => $result['deleted_ids'],
+            'skipped_ids' => $result['skipped_ids'],
+        ]);
+    }
+
     public function confirm(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -221,7 +312,7 @@ class PayrollV2Controller extends Controller
         if ($checked && !$attendanceChecked) {
             return response()->json([
                 'ok' => false,
-                'message' => '勤怠未確定のため給与確定できません。',
+                'message' => '勤怠未確定のため、給与を確定できません。',
             ], 422);
         }
 

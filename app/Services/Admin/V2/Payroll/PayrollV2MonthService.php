@@ -7,30 +7,42 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2MonthService
 {
     /** @return list<string> */
-    public function availableMonths(): array
+    public function availablePaymentDates(): array
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->selectRaw('YEAR([supply_month]) as y, MONTH([supply_month]) as m')
+            ->selectRaw('CONVERT(date, [supply_month]) as payment_date')
             ->where('bonus', 0)
             ->whereNotNull('supply_month')
-            ->groupByRaw('YEAR([supply_month]), MONTH([supply_month])')
-            ->orderByRaw('YEAR([supply_month]) desc, MONTH([supply_month]) desc')
+            ->groupByRaw('CONVERT(date, [supply_month])')
+            ->orderByRaw('CONVERT(date, [supply_month]) desc')
             ->get()
-            ->map(fn ($r) => sprintf('%04d-%02d', (int) $r->y, (int) $r->m))
+            ->map(static function ($row): string {
+                $value = trim((string) ($row->payment_date ?? ''));
+                return $value === '' ? '' : date('Y-m-d', strtotime($value));
+            })
+            ->filter(static fn (string $value): bool => $value !== '')
             ->values()
             ->all();
     }
 
-    public function normalize(string $selectedMonth, array $availableMonths): string
+    public function normalizePaymentDate(string $selectedPaymentDate, array $availablePaymentDates): string
     {
-        $defaultMonth = now('Asia/Tokyo')->startOfMonth()->format('Y-m');
-        if (!preg_match('/^\d{4}-\d{2}$/', $selectedMonth)) {
-            return $availableMonths[0] ?? $defaultMonth;
+        $selectedPaymentDate = trim($selectedPaymentDate);
+        if ($selectedPaymentDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedPaymentDate)) {
+            return $selectedPaymentDate;
         }
-        if (!in_array($selectedMonth, $availableMonths, true)) {
-            return $availableMonths[0] ?? $defaultMonth;
+
+        return $availablePaymentDates[0] ?? now('Asia/Tokyo')->format('Y-m-d');
+    }
+
+    public function monthFromPaymentDate(string $paymentDate): string
+    {
+        $ts = strtotime($paymentDate);
+        if ($ts === false) {
+            return now('Asia/Tokyo')->format('Y-m');
         }
-        return $selectedMonth;
+
+        return date('Y-m', $ts);
     }
 }

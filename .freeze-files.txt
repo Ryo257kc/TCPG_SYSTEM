@@ -1,5 +1,6 @@
-# one path per line (repo-relative)
+﻿# one path per line (repo-relative)
 resources/views/admin_v2/payroll/
 app/Services/Admin/V2/Payroll/
 app/Http/Controllers/Admin/V2/PayrollV2Controller.php
 routes/web.php
+routes/admin/payroll_v2.php

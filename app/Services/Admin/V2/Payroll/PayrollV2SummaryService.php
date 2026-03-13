@@ -7,13 +7,16 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2SummaryService
 {
     /** @return array<string, array<string, mixed>> */
-    public function summaryMap(int $year, int $month): array
+    public function summaryMapByPaymentDate(string $paymentDate): array
     {
+        if (!$this->isValidPaymentDate($paymentDate)) {
+            return [];
+        }
+
         $rows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('bonus', 0)
-            ->whereRaw('YEAR([supply_month]) = ?', [$year])
-            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
             ->orderBy('kyuyo_sho_no', 'desc')
             ->get();
 
@@ -21,19 +24,14 @@ class PayrollV2SummaryService
     }
 
     /** @return array<string, array<string, mixed>> */
-    public function previousSummaryMap(int $year, int $month): array
+    public function previousSummaryMapByPaymentDate(string $paymentDate): array
     {
-        [$prevYear, $prevMonth] = $this->previousYearMonth($year, $month);
+        $previousPaymentDate = $this->previousPaymentDate($paymentDate);
+        if ($previousPaymentDate === '') {
+            return [];
+        }
 
-        $rows = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
-            ->whereRaw('YEAR([supply_month]) = ?', [$prevYear])
-            ->whereRaw('MONTH([supply_month]) = ?', [$prevMonth])
-            ->orderBy('kyuyo_sho_no', 'desc')
-            ->get();
-
-        return $this->toMap($rows);
+        return $this->summaryMapByPaymentDate($previousPaymentDate);
     }
 
     /**
@@ -55,14 +53,39 @@ class PayrollV2SummaryService
         return $map;
     }
 
-    /** @return array{0:int,1:int} */
-    private function previousYearMonth(int $year, int $month): array
+    private function previousPaymentDate(string $paymentDate): string
     {
-        if ($month <= 1) {
-            return [$year - 1, 12];
+        if (!$this->isValidPaymentDate($paymentDate)) {
+            return '';
         }
 
-        return [$year, $month - 1];
+        $dates = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->selectRaw('CONVERT(date, [supply_month]) as payment_date')
+            ->where('bonus', 0)
+            ->whereNotNull('supply_month')
+            ->groupByRaw('CONVERT(date, [supply_month])')
+            ->orderByRaw('CONVERT(date, [supply_month]) desc')
+            ->get()
+            ->map(static function ($row): string {
+                $value = trim((string) ($row->payment_date ?? ''));
+                return $value === '' ? '' : date('Y-m-d', strtotime($value));
+            })
+            ->filter(static fn (string $value): bool => $value !== '')
+            ->values()
+            ->all();
+
+        $index = array_search($paymentDate, $dates, true);
+        if ($index === false || !isset($dates[$index + 1])) {
+            return '';
+        }
+
+        return $dates[$index + 1];
+    }
+
+    private function isValidPaymentDate(string $paymentDate): bool
+    {
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($paymentDate)) === 1;
     }
 
     /**
@@ -115,7 +138,6 @@ class PayrollV2SummaryService
      */
     private function normalizeSummaryRow(array $row): array
     {
-        // Legacy column spellings in mx_kyuyo_shou: horiday_* (typo).
         $aliases = [
             'work_holiday_num' => 'work_horiday_num',
             'holiday_true' => 'horiday_true',

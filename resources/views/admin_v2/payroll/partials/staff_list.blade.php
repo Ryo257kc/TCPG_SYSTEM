@@ -7,7 +7,7 @@
     @php
         $isActive = $currentStaffId !== null && $currentStaffId === ($row['staff_id'] ?? null);
     @endphp
-    <a class="staff-item {{ $isActive ? 'active' : '' }}" href="{{ route('admin.payroll.index', ['month' => $selectedMonth, 'company_id' => $selectedCompanyId, 'staff_id' => $row['staff_id']]) }}">
+    <a class="staff-item {{ $isActive ? 'active' : '' }}" href="{{ route('admin.payroll.index', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId, 'staff_id' => $row['staff_id']]) }}">
         <p class="staff-name">{{ $row['staff_name'] }}</p>
         <div class="staff-meta">
             <span>{{ $row['staff_id'] }}</span>
@@ -20,4 +20,3 @@
     <div class="empty">No staff found.</div>
 @endforelse
 </aside>
-

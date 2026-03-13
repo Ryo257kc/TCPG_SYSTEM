@@ -11,3 +11,6 @@ Route::post('/payroll/calc-koyou', [PayrollV2Controller::class, 'calcKoyou'])->n
 Route::post('/payroll/calc-overtime-deduction', [PayrollV2Controller::class, 'calcOvertimeDeduction'])->name('admin.payroll.calc-overtime-deduction');
 Route::post('/payroll/calc-income-tax', [PayrollV2Controller::class, 'calcIncomeTax'])->name('admin.payroll.calc-income-tax');
 Route::post('/payroll/confirm', [PayrollV2Controller::class, 'confirm'])->name('admin.payroll.confirm');
+Route::get('/payroll/create-candidates', [PayrollV2Controller::class, 'createCandidates'])->name('admin.payroll.create-candidates');
+Route::post('/payroll/create', [PayrollV2Controller::class, 'create'])->name('admin.payroll.create');
+Route::post('/payroll/delete', [PayrollV2Controller::class, 'delete'])->name('admin.payroll.delete');
