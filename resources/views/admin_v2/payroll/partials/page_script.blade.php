@@ -5,6 +5,7 @@
   if (!root) return;
 
   var saveUrl = @json(route('admin.payroll.update'));
+  var attendanceReflectUrl = @json(route('admin.payroll.attendance-reflect'));
   var calcRecalculateUrl = @json(route('admin.payroll.recalculate'));
   var calcKoyouUrl = @json(route('admin.payroll.calc-koyou'));
   var calcOvertimeDeductionUrl = @json(route('admin.payroll.calc-overtime-deduction'));
@@ -116,6 +117,38 @@
 
   if (attendanceConfirmNote && isAttendanceConfirmed) {
     attendanceConfirmNote.hidden = true;
+  }
+
+  if (attendanceReflectBtn) {
+    attendanceReflectBtn.addEventListener('click', function(){
+      attendanceReflectBtn.disabled = true;
+
+      fetch(attendanceReflectUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrf,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          staff_id: staffId,
+          month: month
+        })
+      })
+      .then(function(res){ return res.json(); })
+      .then(function(json){
+        if (!json || json.ok !== true) {
+          throw new Error('attendance reflect failed');
+        }
+        location.reload();
+      })
+      .catch(function(){
+        alert('勤怠反映に失敗しました。');
+      })
+      .finally(function(){
+        attendanceReflectBtn.disabled = false;
+      });
+    });
   }
 
   var resetPayrollCreateCandidates = function(){

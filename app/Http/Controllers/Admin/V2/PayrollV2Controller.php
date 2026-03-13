@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
+use App\Services\Admin\V2\Payroll\PayrollV2AttendanceReflectService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
@@ -41,6 +42,7 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2ShahoService $shahoService,
         private readonly PayrollV2ResidentService $residentService,
         private readonly PayrollV2AllowanceLabelService $allowanceLabelService,
+        private readonly PayrollV2AttendanceReflectService $attendanceReflectService,
         private readonly AttendanceV2ListSummaryService $attendanceListSummaryService,
         private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
         private readonly PayrollV2UpdateService $updateService,
@@ -168,6 +170,23 @@ class PayrollV2Controller extends Controller
             $month,
             (string) ($v['company_id'] ?? '')
         );
+
+        return response()->json([
+            'ok' => true,
+            'updated' => $updated,
+        ]);
+    }
+
+    public function reflectAttendance(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:20'],
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $updated = $this->attendanceReflectService->reflect((string) $v['staff_id'], $year, $month);
+        $updated += (int) $this->employmentInsuranceService->recalculate((string) $v['staff_id'], $year, $month);
 
         return response()->json([
             'ok' => true,

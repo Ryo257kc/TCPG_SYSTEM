@@ -21,7 +21,7 @@ class PayrollV2EmploymentInsuranceService
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
             ->orderByDesc('kyuyo_sho_no')
-            ->first(['kyuyo_sho_no', 'rouho_target_sum']);
+            ->first();
 
         if (!$current || !isset($current->kyuyo_sho_no)) {
             return 0;
@@ -32,35 +32,175 @@ class PayrollV2EmploymentInsuranceService
             ->whereNotNull('rou_apply_date')
             ->where('rou_apply_date', '<=', $firstDay)
             ->orderByDesc('rou_apply_date')
-            ->first(['general_st']);
+            ->first();
 
-        $generalSt = (float) ($rouho->general_st ?? 0);
+        $syaho = $conn->table('dbo.mx_syaho')
+            ->whereNotNull('jidou_apply_date')
+            ->where('jidou_apply_date', '<=', $firstDay)
+            ->orderByDesc('jidou_apply_date')
+            ->first(['jidou_kyuyo']);
+
+        $rouhoRow = (array) ($rouho ?? []);
+        $generalSt = (float) ($rouhoRow['general_st'] ?? 0);
+        $generalOf = (float) ($rouhoRow['general_of'] ?? 0);
+        $rousaiRitu = $this->pickFirstNumericValue($rouhoRow, [
+            'rousai_ritu',
+            'rousai_rate',
+            'rousai',
+            'rousai_general',
+            'general_rousai',
+        ]);
+        $jidouRitu = (float) ($syaho->jidou_kyuyo ?? 0);
         $target = (float) ($current->rouho_target_sum ?? 0);
 
         $staff = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
-            ->first(['staff_division', 'koyou']);
+            ->first(['staff_division', 'koyou', 'section']);
+
+        $staffShahoRows = $conn->table('dbo.mx_staff_shou')
+            ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
+            ->orderByDesc('raise_year')
+            ->get()
+            ->map(static fn ($row): array => (array) $row)
+            ->all();
+        $staffShaho = $this->pickStaffShahoByMonth($staffShahoRows, $year, $month);
 
         $division = trim((string) ($staff->staff_division ?? ''));
         $hasKoyou = ((int) ($staff->koyou ?? 0)) === 1;
+        $storeCode = trim((string) ($staff->section ?? ''));
 
         $isExcluded =
             $staffId === '001'
-            || mb_strpos($division, '管理責任者') !== false
-            || mb_strpos($division, '業務委託') !== false
+            || mb_strpos($division, '保育事業部') !== false
+            || mb_strpos($division, '鍼灸整骨院') !== false
             || !$hasKoyou;
 
         $koyou = 0;
+        $koyouOffice = 0;
         if (!$isExcluded && $generalSt > 0 && $target > 0) {
-            $raw = $target * ($generalSt / 1000.0);
-            $floor = (int) floor($raw);
-            $fraction = $raw - $floor;
-            $koyou = $fraction <= 0.5 ? $floor : (int) round($raw, 0, PHP_ROUND_HALF_UP);
+            $koyou = $this->roundInsuranceAmount($target * ($generalSt / 1000.0));
         }
+        if (!$isExcluded && ($generalOf + $generalSt) > 0 && $target > 0) {
+            $total = $this->roundInsuranceAmount($target * (($generalOf + $generalSt) / 1000.0));
+            $koyouOffice = max(0, $total - $koyou);
+        }
+
+        $jidouBase = $this->pickFirstNumericValue($staffShaho, [
+            'kounen_monthly_amo',
+            'kounen_h',
+            'kounen',
+        ]);
+        $jidouOffice = ($jidouRitu > 0 && $jidouBase > 0)
+            ? (int) floor($jidouBase * ($jidouRitu / 1000.0))
+            : 0;
+
+        $rousaiBase = floor($target / 1000.0) * 1000.0;
+        $rousaiRate = $storeCode === '003' ? 3.5 : $rousaiRitu;
+        $rousaiOffice = ($rousaiRate > 0 && $rousaiBase > 0)
+            ? (int) floor($rousaiBase * ($rousaiRate / 1000.0))
+            : 0;
 
         return $conn->table('dbo.mx_kyuyo_shou')
             ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
-            ->update(['koyou' => $koyou]);
+            ->update([
+                'koyou' => $koyou,
+                'koyou_office' => $koyouOffice,
+                'jidou_office' => $jidouOffice,
+                'rousai_office' => $rousaiOffice,
+            ]);
+    }
+
+    private function roundInsuranceAmount(float $raw): int
+    {
+        $floor = (int) floor($raw);
+        $fraction = $raw - $floor;
+
+        return $fraction <= 0.5 ? $floor : (int) round($raw, 0, PHP_ROUND_HALF_UP);
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $keys
+     */
+    private function pickFirstNumericValue(array $row, array $keys): float
+    {
+        foreach ($keys as $key) {
+            $value = $row[$key] ?? null;
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (is_numeric($value)) {
+                return (float) $value;
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return array<string,mixed>
+     */
+    private function pickStaffShahoByMonth(array $rows, int $year, int $month): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        $targetSep = $this->targetSeptember($year, $month);
+        if ($targetSep === null) {
+            return $rows[0];
+        }
+
+        $anchor = null;
+        foreach ($rows as $row) {
+            $date = $this->toDate($row['raise_year'] ?? null);
+            if ($date === null) {
+                continue;
+            }
+
+            if ((int) $date->format('Y') === (int) $targetSep->format('Y') && (int) $date->format('n') === 9) {
+                return $row;
+            }
+
+            if ($date <= $targetSep) {
+                $anchor = $row;
+                break;
+            }
+        }
+
+        return $anchor ?? $rows[0];
+    }
+
+    private function targetSeptember(int $year, int $month): ?\DateTimeImmutable
+    {
+        if ($year < 2000 || $month < 1 || $month > 12) {
+            return null;
+        }
+
+        $targetYear = $month >= 10 ? $year : ($year - 1);
+
+        return new \DateTimeImmutable(sprintf('%04d-09-30 23:59:59', $targetYear));
+    }
+
+    private function toDate(mixed $value): ?\DateTimeImmutable
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($text);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable())->setTimestamp($timestamp);
     }
 }

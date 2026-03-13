@@ -199,3 +199,4 @@ $attendance = $filterBySummary($attendance);
 $sales = $filterBySummary($sales);
 $supply = $filterBySummary($supply);
 $mid = $filterBySummary($mid);
+?>

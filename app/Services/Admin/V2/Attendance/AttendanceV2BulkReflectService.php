@@ -187,7 +187,6 @@ class AttendanceV2BulkReflectService
      */
     private function accumulate(array &$summary, object $timeCard): void
     {
-        $holidayCategory = trim((string) ($timeCard->holiday_category ?? ''));
         $workType = trim((string) ($timeCard->work_type ?? ''));
         $workTypeTime = (float) ($timeCard->work_type_time ?? 0);
         $paidLeaveUsed = (float) ($timeCard->paid_leave_used ?? 0);
@@ -207,10 +206,10 @@ class AttendanceV2BulkReflectService
         );
         $workHours = $changeScheduled > 0 ? $changeScheduled : $shiftScheduled;
 
-        $isHoliday = in_array($holidayCategory, ['休日', '祝日'], true);
-        $isHolidayWork = in_array($workType, ['休出', '法出'], true);
-        $isAbsent = $workType === '欠勤';
-        $isLateEarly = in_array($workType, ['遅刻', '早退', '遅早'], true);
+        $isHolidayWork = in_array($workType, ['莨大・', '豕募・'], true);
+        $isAbsent = $workType === '谺蜍､';
+        $isLateEarly = in_array($workType, ['驕・綾', '譌ｩ騾', '驕・掠'], true);
+        $isClosed = $workType === '休業';
         $hasChangeRecord = $this->hasAnyTimeValue([
             $timeCard->change_start ?? null,
             $timeCard->change_leave ?? null,
@@ -231,8 +230,9 @@ class AttendanceV2BulkReflectService
         if ($isLateEarly) {
             $summary['late_time'] += $workTypeTime;
         }
-        if ($isHoliday && !$isHolidayWork) {
+        if ($isClosed) {
             $summary['days_closed'] += 1;
+            $summary['time_closed'] += $workTypeTime;
         }
 
         $summary['work_time'] += $workHours;

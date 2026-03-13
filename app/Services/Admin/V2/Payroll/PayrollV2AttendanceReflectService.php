@@ -2,13 +2,17 @@
 
 namespace App\Services\Admin\V2\Payroll;
 
-use Illuminate\Support\Facades\DB;
+use App\Services\Admin\V2\Attendance\AttendanceV2AttendanceStaffService;
+use App\Services\Admin\V2\Attendance\AttendanceV2BulkReflectService;
 
 class PayrollV2AttendanceReflectService
 {
-    /**
-     * 指定給与月の明細へ、前月明細の勤怠項目を反映する
-     */
+    public function __construct(
+        private readonly AttendanceV2AttendanceStaffService $attendanceStaffService,
+        private readonly AttendanceV2BulkReflectService $bulkReflectService,
+    ) {
+    }
+
     public function reflect(string $staffId, int $year, int $month): int
     {
         $staffId = trim($staffId);
@@ -16,68 +20,23 @@ class PayrollV2AttendanceReflectService
             return 0;
         }
 
-        [$prevYear, $prevMonth] = $this->previousYearMonth($year, $month);
+        [$attendanceYear, $attendanceMonth] = $this->previousYearMonth($year, $month);
+        $fromDate = sprintf('%04d-%02d-01', $attendanceYear, $attendanceMonth);
+        $toDate = date('Y-m-t', strtotime($fromDate));
+        $staffRows = $this->attendanceStaffService->staffs($fromDate, $toDate, '');
 
-        $conn = DB::connection('sqlsrv_payroll');
+        $targetRows = array_values(array_filter(
+            $staffRows,
+            static fn (array $row): bool => trim((string) ($row['staff_id'] ?? '')) === $staffId
+        ));
 
-        $current = $conn->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
-            ->whereRaw('YEAR([supply_month]) = ?', [$year])
-            ->whereRaw('MONTH([supply_month]) = ?', [$month])
-            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
-            ->orderByDesc('kyuyo_sho_no')
-            ->first(['kyuyo_sho_no']);
-
-        if (!$current || !isset($current->kyuyo_sho_no)) {
+        if ($targetRows === []) {
             return 0;
         }
 
-        $prev = $conn->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
-            ->whereRaw('YEAR([supply_month]) = ?', [$prevYear])
-            ->whereRaw('MONTH([supply_month]) = ?', [$prevMonth])
-            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
-            ->orderByDesc('kyuyo_sho_no')
-            ->first($this->sourceColumns());
+        $result = $this->bulkReflectService->reflect($targetRows, $attendanceYear, $attendanceMonth);
 
-        if (!$prev) {
-            return 0;
-        }
-
-        $payload = [];
-        foreach ($this->columnMap() as $from => $to) {
-            $payload[$to] = $prev->{$from} ?? null;
-        }
-
-        return $conn->table('dbo.mx_kyuyo_shou')
-            ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
-            ->update($payload);
-    }
-
-    /** @return array<string,string> from=>to */
-    private function columnMap(): array
-    {
-        return [
-            'work_in_num' => 'work_in_num',
-            'absence_num' => 'absence_num',
-            'work_time' => 'work_time',
-            'work_time_num' => 'work_time_num',
-            'work_horiday_num' => 'work_horiday_num',
-            'overtime' => 'overtime',
-            'late_time' => 'late_time',
-            'night_over_time' => 'night_over_time',
-            'horiday_true' => 'horiday_true',
-            'horiday_true_num' => 'horiday_true_num',
-            'days_closed' => 'days_closed',
-            'time_closed' => 'time_closed',
-            'work_kiso_num' => 'work_kiso_num',
-        ];
-    }
-
-    /** @return list<string> */
-    private function sourceColumns(): array
-    {
-        return array_keys($this->columnMap());
+        return (int) ($result['updated'] ?? 0);
     }
 
     /** @return array{0:int,1:int} */
