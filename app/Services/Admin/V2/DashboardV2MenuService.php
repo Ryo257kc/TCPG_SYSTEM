@@ -19,6 +19,7 @@ class DashboardV2MenuService
                 ['key' => 'master-staff', 'label' => 'スタッフマスタ', 'url' => '/admin/master/staff'],
                 ['key' => 'master-store', 'label' => '店舗マスタ', 'url' => '/admin/master/store'],
                 ['key' => 'master-allowance', 'label' => '手当設定', 'url' => '/admin/master/allowance'],
+                ['key' => 'master-calendar', 'label' => 'カレンダー', 'url' => '/admin/master/calendar'],
             ],
         ];
     }
@@ -36,6 +37,7 @@ class DashboardV2MenuService
             'master-staff' => ['title' => 'スタッフマスタ', 'description' => 'スタッフマスタページへ移動します。'],
             'master-store' => ['title' => '店舗マスタ', 'description' => '店舗マスタページへ移動します。'],
             'master-allowance' => ['title' => '手当設定', 'description' => '手当設定ページへ移動します。'],
+            'master-calendar' => ['title' => 'カレンダー', 'description' => 'カレンダーマスタページへ移動します。'],
         ];
     }
 }

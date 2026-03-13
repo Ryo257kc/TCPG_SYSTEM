@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\Admin\V2\AttendanceV2Controller;
 use App\Http\Controllers\Admin\V2\DashboardV2Controller;
 use App\Http\Controllers\Admin\V2\LoginV2Controller;
 use App\Http\Controllers\Admin\V2\Master\AllowanceV2Controller;
+use App\Http\Controllers\Admin\V2\Master\CalendarV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CompanyV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StaffV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StoreV2Controller;
@@ -21,7 +21,7 @@ Route::prefix('admin')->group(function (): void {
     Route::middleware('admin.auth')->group(function (): void {
         Route::get('/', [DashboardV2Controller::class, 'index'])->name('admin.dashboard');
 
-        Route::get('/attendance', [AttendanceV2Controller::class, 'index'])->name('admin.attendance.index');
+        require __DIR__ . '/admin/attendance_v2.php';
         require __DIR__ . '/admin/payroll_v2.php';
 
         Route::get('/master/company', [CompanyV2Controller::class, 'index'])->name('admin.master.company');
@@ -31,6 +31,10 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/store/update', [StoreV2Controller::class, 'update'])->name('admin.master.store.update');
         Route::get('/master/allowance', [AllowanceV2Controller::class, 'index'])->name('admin.master.allowance');
         Route::post('/master/allowance', [AllowanceV2Controller::class, 'update'])->name('admin.master.allowance.update');
+        Route::get('/master/calendar', [CalendarV2Controller::class, 'index'])->name('admin.master.calendar');
+        Route::post('/master/calendar/update', [CalendarV2Controller::class, 'update'])->name('admin.master.calendar.update');
+        Route::post('/master/calendar/delete', [CalendarV2Controller::class, 'delete'])->name('admin.master.calendar.delete');
+        Route::post('/master/calendar/import-public-holidays', [CalendarV2Controller::class, 'importPublicHolidays'])->name('admin.master.calendar.import-public-holidays');
     });
 });
 

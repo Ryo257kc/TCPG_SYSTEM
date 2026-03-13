@@ -30,6 +30,7 @@ input[type="text"],input[type="number"]{width:100%}
       <a class="btn" href="{{ route('admin.master.company') }}">&#20250;&#31038;&#12510;&#12473;&#12479;</a>
       <a class="btn" href="{{ route('admin.master.staff') }}">&#12473;&#12479;&#12483;&#12501;&#12510;&#12473;&#12479;</a>
       <a class="btn" href="{{ route('admin.master.store') }}">&#24215;&#33303;&#12510;&#12473;&#12479;</a>
+      <a class="btn" href="{{ route('admin.master.calendar') }}">&#12459;&#12524;&#12531;&#12480;&#12540;</a>
       <a class="btn" href="{{ route('admin.dashboard') }}">&#12480;&#12483;&#12471;&#12517;&#12508;&#12540;&#12489;</a>
     </div>
   </div>
