@@ -9,14 +9,7 @@
 <body>
 @php require resource_path('views/admin_v2/payroll/partials/page_state_runtime.php'); @endphp
 <div class="wrap">
-<header class="head">
-<h1 class="head-title">TCPG SYSTEM &#32102;&#19982;&#35336;&#31639;</h1>
-<nav class="head-nav">
-<a class="btn" href="{{ route('admin.attendance.index', ['month' => date('Y-m', strtotime($selectedMonth . '-01 -1 month')), 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">&#21220;&#24608;&#31649;&#29702;</a>
-<a class="btn" href="{{ route('admin.payroll.index', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId, 'staff_id' => $selectedStaffId]) }}">&#36062;&#19982;&#35336;&#31639;</a>
-<a class="btn" href="{{ route('admin.dashboard') }}">&#12480;&#12483;&#12471;&#12517;&#12508;&#12540;&#12489;</a>
-</nav>
-</header>
+@include('admin_v2.payroll.partials.header')
 <section class="panel">
 @include('admin_v2.payroll.partials.filters')
 @include('admin_v2.payroll.partials.create_inline')

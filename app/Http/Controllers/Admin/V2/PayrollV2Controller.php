@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
+use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
+use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
@@ -39,6 +41,8 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2ShahoService $shahoService,
         private readonly PayrollV2ResidentService $residentService,
         private readonly PayrollV2AllowanceLabelService $allowanceLabelService,
+        private readonly AttendanceV2ListSummaryService $attendanceListSummaryService,
+        private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
         private readonly PayrollV2UpdateService $updateService,
         private readonly PayrollV2RecalculateService $recalculateService,
         private readonly PayrollV2EmploymentInsuranceService $employmentInsuranceService,
@@ -54,6 +58,9 @@ class PayrollV2Controller extends Controller
         $selectedMonth = $this->monthService->monthFromPaymentDate($selectedPaymentDate);
 
         [$year, $month] = array_map('intval', explode('-', $selectedMonth));
+        [$attendanceYear, $attendanceMonth] = $month === 1
+            ? [$year - 1, 12]
+            : [$year, $month - 1];
 
         $companyOptions = $this->companyService->companies();
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -90,6 +97,26 @@ class PayrollV2Controller extends Controller
             $residentMap,
             ''
         );
+
+        $attendanceSourceMap = $this->attendanceListSummaryService->summaryMap($attendanceYear, $attendanceMonth);
+        $attendanceConfirmedMap = $this->confirmedStateService->mapByStaffIds(array_column($rows, 'staff_id'), $attendanceYear, $attendanceMonth);
+        $rows = array_map(function (array $row) use ($attendanceSourceMap): array {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            $row['attendance_source'] = $attendanceSourceMap[$staffId] ?? [];
+            $referenceCalc = $this->overtimeDeductionService->referenceBases(
+                (array) ($row['summary'] ?? []),
+                (string) ($row['company_name'] ?? '')
+            );
+            $row['reference_calc'] = $referenceCalc;
+            return $row;
+            return $row;
+        }, $rows);
+        $rows = array_map(function (array $row) use ($attendanceConfirmedMap): array {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            $row['summary'] = (array) ($row['summary'] ?? []);
+            $row['summary']['attendance_checked'] = ((bool) ($attendanceConfirmedMap[$staffId] ?? false)) ? 1 : 0;
+            return $row;
+        }, $rows);
 
         $allowanceEntries = $this->allowanceLabelService->entries();
         $labelOverrides = $this->allowanceLabelService->labelMap();

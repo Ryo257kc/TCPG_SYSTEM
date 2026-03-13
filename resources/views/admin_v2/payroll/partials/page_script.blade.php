@@ -19,6 +19,7 @@
   var selectedCompanyId = @json((string) ($selectedCompanyId ?? ''));
   var isAttendanceConfirmed = @json(((int)($summary['attendance_checked'] ?? 0)) === 1);
   var isPayrollConfirmed = @json(((int)($summary['edit_lock'] ?? 0)) === 1);
+  var attendanceConfirmNote = document.getElementById('attendance-confirm-note');
   var attendanceReflectBtn = document.getElementById('attendance-reflect-btn');
   var confirmBtn = document.getElementById('confirm-btn');
   var recalcBtn = document.getElementById('recalc-btn');
@@ -112,6 +113,10 @@
   var openPayrollCreateInline = function(){
     if (payrollCreateInline) payrollCreateInline.hidden = false;
   };
+
+  if (attendanceConfirmNote && isAttendanceConfirmed) {
+    attendanceConfirmNote.hidden = true;
+  }
 
   var resetPayrollCreateCandidates = function(){
     if (!payrollCreateList || !payrollCreateEmpty) return;

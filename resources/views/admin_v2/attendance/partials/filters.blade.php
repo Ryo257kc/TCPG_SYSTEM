@@ -1,0 +1,23 @@
+<form method="GET" class="filters">
+    <label for="month">&#23550;&#35937;&#26376;</label>
+    <input id="month" name="month" type="month" value="{{ $selectedMonth }}">
+
+    <label for="company_id">&#20250;&#31038;</label>
+    <select id="company_id" name="company_id">
+        <option value="">&#20840;&#31038;</option>
+        @foreach ($companyOptions as $company)
+            <option value="{{ $company }}" @selected($selectedCompanyId === $company)>{{ $company }}</option>
+        @endforeach
+    </select>
+
+    <label for="staff_id">&#21517;&#21069;</label>
+    <select id="staff_id" name="staff_id">
+        <option value=""></option>
+        @foreach ($staffRows as $staff)
+            <option value="{{ $staff['staff_id'] }}" @selected($selectedStaffId === $staff['staff_id'])>{{ $staff['staff_id'] }} {{ $staff['staff_name'] }}</option>
+        @endforeach
+    </select>
+
+    <button type="submit">&#34920;&#31034;</button>
+    <button type="button" id="shift-create-btn">&#12471;&#12501;&#12488;&#20316;&#25104;</button>
+</form>

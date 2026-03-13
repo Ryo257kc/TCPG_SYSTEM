@@ -1,5 +1,12 @@
 @foreach($rightA as $title=>$items)
-@php $source = $title === $baseInfoTitle ? $baseInfoView : $summary; @endphp
+@php
+$source = $summary;
+if ($title === $baseInfoTitle) {
+    $source = $baseInfoView;
+} elseif ($title === $referenceTitle) {
+    $source = array_merge($summary, $referenceView ?? []);
+}
+@endphp
 <section class="card readonly-card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
 @foreach($items as $it) @php
 [$k,$m]=$it;

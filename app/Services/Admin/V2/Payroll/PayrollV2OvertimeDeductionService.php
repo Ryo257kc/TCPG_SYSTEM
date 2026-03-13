@@ -118,6 +118,17 @@ class PayrollV2OvertimeDeductionService
         return $updated;
     }
 
+    /** @param array<string,mixed> $summary @return array{warimasi_base:float,koujyo_base:float} */
+    public function referenceBases(array $summary, ?string $companyName = null): array
+    {
+        [$warimasiBase, $koujyoBase] = $this->baseSums($summary, trim((string) $companyName));
+
+        return [
+            'warimasi_base' => $warimasiBase,
+            'koujyo_base' => $koujyoBase,
+        ];
+    }
+
     /** @param array<string,mixed> $summary @return array{0:float,1:float} */
     private function baseSums(array $summary, string $companyName): array
     {

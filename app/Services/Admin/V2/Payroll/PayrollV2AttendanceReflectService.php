@@ -71,9 +71,6 @@ class PayrollV2AttendanceReflectService
             'days_closed' => 'days_closed',
             'time_closed' => 'time_closed',
             'work_kiso_num' => 'work_kiso_num',
-            'attendance_checked' => 'attendance_checked',
-            'attendance_checked_at' => 'attendance_checked_at',
-            'attendance_checked_by' => 'attendance_checked_by',
         ];
     }
 

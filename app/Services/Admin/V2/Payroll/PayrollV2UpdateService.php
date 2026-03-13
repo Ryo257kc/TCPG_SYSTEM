@@ -2,11 +2,17 @@
 
 namespace App\Services\Admin\V2\Payroll;
 
+use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class PayrollV2UpdateService
 {
+    public function __construct(
+        private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
+    ) {
+    }
+
     /** @param array<string,mixed> $values */
     public function save(string $staffId, int $year, int $month, array $values, ?string $companyName = null): int
     {
@@ -72,35 +78,6 @@ class PayrollV2UpdateService
             ->update($derived);
     }
 
-    public function markAttendanceChecked(string $staffId, int $year, int $month, string $checkedBy): int
-    {
-        return $this->setAttendanceChecked($staffId, $year, $month, true, $checkedBy);
-    }
-
-    public function setAttendanceChecked(string $staffId, int $year, int $month, bool $checked, string $checkedBy): int
-    {
-        $staffId = trim($staffId);
-        if ($staffId === '' || $year < 2000 || $month < 1 || $month > 12) {
-            return 0;
-        }
-
-        $row = $this->targetRow($staffId, $year, $month);
-        if (!$row || !isset($row->kyuyo_sho_no)) {
-            return 0;
-        }
-
-        $payload = [
-            'attendance_checked' => $checked ? 1 : 0,
-            'attendance_checked_at' => $checked ? now() : null,
-            'attendance_checked_by' => $checked ? trim($checkedBy) : null,
-        ];
-
-        return DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
-            ->update($payload);
-    }
-
     public function isAttendanceChecked(string $staffId, int $year, int $month): bool
     {
         $staffId = trim($staffId);
@@ -108,16 +85,13 @@ class PayrollV2UpdateService
             return false;
         }
 
-        $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
-            ->whereRaw('YEAR([supply_month]) = ?', [$year])
-            ->whereRaw('MONTH([supply_month]) = ?', [$month])
-            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
-            ->orderByDesc('kyuyo_sho_no')
-            ->first(['attendance_checked']);
+        [$attendanceYear, $attendanceMonth] = $month <= 1
+            ? [$year - 1, 12]
+            : [$year, $month - 1];
 
-        return ((int) ($row->attendance_checked ?? 0)) === 1;
+        $map = $this->confirmedStateService->mapByStaffIds([$staffId], $attendanceYear, $attendanceMonth);
+
+        return (bool) ($map[$staffId] ?? false);
     }
 
     public function setPayrollConfirmed(string $staffId, int $year, int $month, bool $confirmed): int
@@ -144,23 +118,29 @@ class PayrollV2UpdateService
     private function sanitizePayload(array $values): array
     {
         $allowed = array_flip($this->updatableColumns());
+        $aliases = $this->columnAliases();
         $textColumns = ['kyuyo_memo'];
         $out = [];
 
         foreach ($values as $key => $raw) {
             $k = trim((string) $key);
-            if ($k === '' || !isset($allowed[$k])) {
+            if ($k === '') {
                 continue;
             }
 
-            if (in_array($k, $textColumns, true)) {
-                $out[$k] = trim((string) $raw);
+            $column = $aliases[$k] ?? $k;
+            if (!isset($allowed[$column])) {
+                continue;
+            }
+
+            if (in_array($column, $textColumns, true)) {
+                $out[$column] = trim((string) $raw);
                 continue;
             }
 
             $v = trim((string) $raw);
             if ($v === '') {
-                $out[$k] = null;
+                $out[$column] = null;
                 continue;
             }
 
@@ -169,10 +149,20 @@ class PayrollV2UpdateService
                 continue;
             }
 
-            $out[$k] = str_contains($v, '.') ? (float) $v : (int) $v;
+            $out[$column] = str_contains($v, '.') ? (float) $v : (int) $v;
         }
 
         return $out;
+    }
+
+    /** @return array<string,string> */
+    private function columnAliases(): array
+    {
+        return [
+            'work_holiday_num' => 'work_horiday_num',
+            'holiday_true' => 'horiday_true',
+            'holiday_true_num' => 'horiday_true_num',
+        ];
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
@@ -368,9 +358,6 @@ class PayrollV2UpdateService
             'kyuyo_staff_id',
             'supply_month',
             'bonus',
-            'attendance_checked',
-            'attendance_checked_at',
-            'attendance_checked_by',
             'link',
         ];
 

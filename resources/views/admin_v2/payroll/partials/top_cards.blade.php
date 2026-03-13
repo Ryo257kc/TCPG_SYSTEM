@@ -9,20 +9,28 @@
           $cardPaymentDate = $ts !== false ? date('Y/m/d', $ts) : ((preg_split('/[ T]/', $raw)[0] ?? $raw));
       }
   }
-  $attendanceChecked = ((int) ($cardSummary['attendance_checked'] ?? 0)) === 1;
+  $payrollConfirmed = ((int) ($cardSummary['edit_lock'] ?? 0)) === 1;
+  $attendanceConfirmed = ((int) ($cardSummary['attendance_checked'] ?? 0)) === 1;
 @endphp
-<section class="card"><div class="k">&#23550;&#35937;&#32773;</div><div class="v name-value">{{ $selectedRow['staff_id'] }} {{ $selectedRow['staff_name'] }}</div></section>
-<section class="card"><div class="k">&#25903;&#32102;&#26085;</div><div class="v">{{ $cardPaymentDate }}</div></section>
-<section class="card"><div class="k">&#38599;&#29992;&#21306;&#20998;</div><div class="v">{{ $selectedRow['division'] !== '' ? $selectedRow['division'] : 'N/A' }}</div></section>
-<section class="card"><div class="k">&#20250;&#31038; / &#24215;&#33303;</div><div class="v">{{ $selectedRow['company_name'] }}<br>{{ $selectedRow['store_name'] }}</div></section>
+<section class="card"><div class="k">対象者</div><div class="v name-value">{{ $selectedRow['staff_id'] }} {{ $selectedRow['staff_name'] }}</div></section>
+<section class="card"><div class="k">会社名</div><div class="v name-value">{{ $selectedRow['company_name'] }}</div></section>
+<section class="card"><div class="k">店舗名</div><div class="v name-value">{{ $selectedRow['store_name'] }}</div></section>
+<section class="card"><div class="k">支給日</div><div class="v">{{ $cardPaymentDate }}</div></section>
+<section class="card"><div class="k">雇用区分</div><div class="v">{{ $selectedRow['division'] !== '' ? $selectedRow['division'] : 'N/A' }}</div></section>
 <section class="card">
-  <div class="k">&#32102;&#19982;&#30906;&#23450;&#29366;&#24907;</div>
-  @if ($attendanceChecked)
+  <div class="k">給与確定状態</div>
+  @if ($payrollConfirmed)
     <div class="card-status-actions">
-      <button class="btn primary" type="button" id="confirm-btn">&#30906;&#23450;</button>
+      <button class="btn primary" type="button" id="confirm-btn">解除</button>
     </div>
   @else
-    <div class="card-status-note">&#21220;&#24608;&#26410;&#30906;&#23450;</div>
+    @if ($attendanceConfirmed)
+    <div class="card-status-actions">
+      <button class="btn primary" type="button" id="confirm-btn">確定</button>
+    </div>
+    @else
+    <div class="card-status-note" id="attendance-confirm-note">勤怠確定後に給与確定できます</div>
+    @endif
   @endif
 </section>
 </div>

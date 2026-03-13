@@ -1,6 +1,8 @@
 <?php
 $selectedRow = collect($rows)->firstWhere('staff_id', $selectedStaffId) ?: (count($rows) > 0 ? $rows[0] : null);
 $summary = (array) ($selectedRow['summary'] ?? []);
+$attendanceSource = (array) ($selectedRow['attendance_source'] ?? []);
+$referenceCalc = (array) ($selectedRow['reference_calc'] ?? []);
 $summaryPrev = (array) ($selectedRow['summary_prev'] ?? []);
 $kihon = (array) ($selectedRow['kihon'] ?? []);
 $staffMaster = (array) ($selectedRow['staff_master'] ?? []);
@@ -56,6 +58,17 @@ $deltaFrom=function(string $k,int $d=0) use(&$summary,$summaryPrev):string{
     $sign = $diff > 0 ? '+' : '';
     return '(' . $sign . number_format($diff, $d) . ')';
 };
+$attendanceValueFrom=function(string $k,int $d=0) use($attendanceSource,$nFrom):string{
+    $aliases = [
+        'work_time_num' => 'holiday_work_time',
+        'late_time' => 'late_early_time',
+    ];
+    $sourceKey = $aliases[$k] ?? $k;
+    if (!array_key_exists($sourceKey, $attendanceSource)) {
+        return '';
+    }
+    return $nFrom($attendanceSource, $sourceKey, $d);
+};
 $paymentDate = '-';
 if (!empty($summary['supply_month'])) {
     $paymentRaw = trim((string) $summary['supply_month']);
@@ -74,6 +87,7 @@ $labels=[
 'kenpo'=>'&#20581;&#24247;&#20445;&#38522;&#26009;','kaigo'=>'&#20171;&#35703;&#20445;&#38522;&#26009;','kounen'=>'&#21402;&#29983;&#24180;&#37329;&#20445;&#38522;&#26009;','koyou'=>'&#38599;&#29992;&#20445;&#38522;&#26009;','income_tax'=>'&#25152;&#24471;&#31246;','resident_tax'=>'&#20303;&#27665;&#31246;','rent_cost'=>'&#23478;&#36035;&#20195;','adjustment_cost'=>'&#35519;&#25972;&#25511;&#38500;','syaho_sum'=>'&#31038;&#20445;&#21512;&#35336;','deduction_sum'=>'&#25511;&#38500;&#21512;&#35336;','syaho_deduction_sum'=>'&#31038;&#20445;&#25511;&#38500;&#24460;&#35336;','koyou_office'=>'&#38599;&#29992;&#20445;&#38522;(&#20107;&#26989;&#25152;)','jidou_office'=>'&#20816;&#31461;&#25163;&#24403;(&#20107;&#26989;&#25152;)','rousai_office'=>'&#21172;&#28797;&#20445;&#38522;(&#20107;&#26989;&#25152;)',
 'adjustment_year_end'=>'&#24180;&#26411;&#35519;&#25972;','koujyo_1'=>'&#23450;&#38989;&#28187;&#31246;&#38989;','cost_liquidation'=>'&#31435;&#26367;&#28165;&#31639;','company_advance_cost'=>'&#20250;&#31038;&#31435;&#26367;&#36027;&#29992;','fuyo_sum'=>'&#25206;&#39178;&#20154;&#25968;','work_kiso_num'=>'&#20986;&#21220;&#22522;&#30990;&#26085;&#25968;','tax_table'=>'&#31246;&#38989;&#34920;','set_work_time'=>'&#25152;&#23450;&#21172;&#20685;&#26178;&#38291;(&#26085;)','month_set_work_time'=>'&#25152;&#23450;&#21172;&#20685;&#26178;&#38291;(&#26376;)','day_set_work_time'=>'&#25152;&#23450;&#21172;&#20685;&#26178;&#38291;(&#36913;)','yukyu_month'=>'&#26377;&#20241;&#21152;&#31639;&#26376;','social_join'=>'&#31038;&#20445;&#21152;&#20837;','employment_join'=>'&#38599;&#20445;&#21152;&#20837;','memo'=>'&#12513;&#12514;','kyuyo_memo'=>'&#26126;&#32048;&#20633;&#32771;','transfer_amount_calc'=>'&#25391;&#36796;&#38989;',
 'hourly_wage'=>'&#26178;&#32102;','hourly_wage_adjusted'=>'&#26178;&#32102;(&#35519;&#25972;&#24460;)','monthly_salary'=>'&#26376;&#32102;','hourly_pay'=>'&#26178;&#32102;','hourly_salary'=>'&#26178;&#32102;(&#35519;&#25972;&#24460;)','executive_remu'=>'&#24441;&#21729;&#22577;&#37228;','position_allow'=>'&#24441;&#32887;&#25163;&#24403;','duties_allow'=>'&#32887;&#21209;&#25163;&#24403;','qualification_allow'=>'&#36039;&#26684;&#25163;&#24403;','claim_allow'=>'&#35531;&#27714;&#25163;&#24403;','traffic_pay'=>'&#35506;&#31246;&#36890;&#21220;&#36027;','adjustment_add'=>'&#35519;&#25972;&#25163;&#24403;','rent_subsidies'=>'&#23478;&#26063;&#25163;&#24403;','rent_pay'=>'&#38750;&#35506;&#31246;&#36890;&#21220;&#36027;','adjustment_pay'=>'&#27424;&#21220;&#25511;&#38500;','fixed_overtime'=>'&#22266;&#23450;&#27531;&#26989;&#25163;&#24403;','kotei_sum'=>'&#22266;&#23450;&#21512;&#35336;','yakuin_sum'=>'&#24441;&#21729;&#21512;&#35336;','not_syaho'=>'&#31038;&#20445;&#23550;&#35937;&#22806;','not_rouho'=>'&#21172;&#20445;&#23550;&#35937;&#22806;','not_supply'=>'&#25903;&#32102;&#23550;&#35937;&#22806;','transfer_balance'=>'&#25391;&#36796;&#27531;&#38989;','rouho_target_sum'=>'&#21172;&#20445;&#23550;&#35937;&#21512;&#35336;','syaho_target_sum'=>'&#31038;&#20445;&#23550;&#35937;&#21512;&#35336;','kenpo_monthly_amo'=>'&#20581;&#20445;&#27161;&#28310;&#22577;&#37228;&#26376;&#38989;','kounen_monthly_amo'=>'&#21402;&#24180;&#27161;&#28310;&#22577;&#37228;&#26376;&#38989;','kenpo_toukyu'=>'&#20581;&#20445;&#31561;&#32026;','kounen_toukyu'=>'&#21402;&#24180;&#31561;&#32026;',
+'warimasi_base'=>'割増基礎','koujyo_base'=>'控除基礎',
 ];
 if (!empty($labelOverrides) && is_array($labelOverrides)) {
     $labels = array_merge($labels, $labelOverrides);
@@ -127,12 +141,17 @@ $baseInfoView = [
 ];
 $rightA=[
     $baseInfoTitle => [['fuyo_sum',0],['tax_table',-1],['set_work_time',2],['day_set_work_time',2],['month_set_work_time',2],['yukyu_month',0],['social_join',0],['employment_join',0],['memo',-1]],
-    $referenceTitle => [['kotei_sum',0],['yakuin_sum',0],['not_syaho',0],['not_rouho',0],['not_supply',0],['rouho_target_sum',0],['syaho_target_sum',0],['syaho_deduction_sum',0]]
+    $referenceTitle => [['kotei_sum',0],['yakuin_sum',0],['warimasi_base',0],['koujyo_base',0],['not_syaho',0],['not_rouho',0],['not_supply',0],['rouho_target_sum',0],['syaho_target_sum',0],['syaho_deduction_sum',0]]
 ];
 $rightB=[
     $masterTitle => [['monthly_salary',0],['hourly_pay',0],['hourly_salary',0],['executive_remu',0],['position_allow',0],['duties_allow',0],['qualification_allow',0],['claim_allow',0],['traffic_pay',0],['adjustment_add',0],['rent_subsidies',0],['rent_pay',0],['adjustment_pay',0],['fixed_overtime',0]],
     $shahoTitle => [['kenpo',0],['kaigo',0],['kounen',0],['kenpo_monthly_amo',0],['kounen_monthly_amo',0],['kenpo_toukyu',0],['kounen_toukyu',0]],
     $residentTitle => [['resident_tax',0]]
+];
+
+$referenceView = [
+    'warimasi_base' => $referenceCalc['warimasi_base'] ?? null,
+    'koujyo_base' => $referenceCalc['koujyo_base'] ?? null,
 ];
 
 $allowanceEntries = is_array($allowanceEntries ?? null) ? $allowanceEntries : [];

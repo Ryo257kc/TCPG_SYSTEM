@@ -56,9 +56,6 @@ class PayrollV2CreateService
                     'kyuyo_staff_id' => $staffId,
                     'supply_month' => $supplyMonth,
                     'bonus' => 0,
-                    'attendance_checked' => 0,
-                    'attendance_checked_at' => null,
-                    'attendance_checked_by' => null,
                     'edit_lock' => 0,
                 ]);
 
