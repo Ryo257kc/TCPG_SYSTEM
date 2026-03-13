@@ -197,6 +197,10 @@ class CalendarV2Service
                 continue;
             }
 
+            if (($existing['work_holiday'] ?? null) !== null && ($existing['work_holiday'] ?? null) !== self::WORK_HOLIDAY_PUBLIC) {
+                continue;
+            }
+
             $updates = [];
             if (($existing['public_holiday'] ?? null) !== $name) {
                 $updates['public_holiday'] = $name;
@@ -227,11 +231,6 @@ class CalendarV2Service
             }
 
             if (($existing['work_holiday'] ?? null) !== null && ($existing['work_holiday'] ?? null) !== self::WORK_HOLIDAY_PUBLIC) {
-                DB::connection('sqlsrv')
-                    ->table('dbo.mx_calendar')
-                    ->whereRaw('CONVERT(date, calendar_day) = ?', [$date])
-                    ->update(['public_holiday' => null]);
-                $updated++;
                 continue;
             }
 
