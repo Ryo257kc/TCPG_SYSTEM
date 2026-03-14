@@ -309,23 +309,20 @@ class PayrollV2UpdateService
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_companies')
-            ->select('company_id', 'company_code')
+            ->select('company_id')
             ->whereRaw('LTRIM(RTRIM(company_name)) = ?', [$name])
             ->get();
 
         $candidates = [];
         foreach ($rows as $row) {
-            foreach (['company_id', 'company_code'] as $col) {
-                $value = trim((string) ($row->{$col} ?? ''));
-                if ($value !== '') {
-                    $candidates[$value] = true;
-                }
+            $value = trim((string) ($row->company_id ?? ''));
+            if ($value !== '') {
+                $candidates[$value] = true;
             }
         }
 
         return array_keys($candidates);
     }
-
     private function num(mixed $v): float
     {
         if ($v === null) {

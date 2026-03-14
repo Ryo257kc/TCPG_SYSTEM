@@ -20,13 +20,13 @@ class AllowanceV2Service
     public function list(string $officeName): array
     {
         $companyOptions = DB::connection('sqlsrv')->table('dbo.mx_companies')
-            ->select('company_code', 'company_name')
-            ->whereNotNull('company_code')
-            ->whereRaw("LTRIM(RTRIM(company_code)) <> ''")
-            ->orderBy('company_code')
+            ->select('company_id', 'company_name')
+            ->whereNotNull('company_id')
+            ->whereRaw("LTRIM(RTRIM(company_id)) <> ''")
+            ->orderBy('company_id')
             ->get()
             ->map(fn ($r) => [
-                'company_code' => (string) ($r->company_code ?? ''),
+                'company_id' => (string) ($r->company_id ?? ''),
                 'company_name' => (string) ($r->company_name ?? ''),
             ])
             ->values()

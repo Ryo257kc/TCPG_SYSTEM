@@ -7,8 +7,8 @@
   <select name="office_name">
     <option value="">全社</option>
     @foreach($companyOptions as $c)
-      <option value="{{ $c['company_code'] }}" @selected($selectedOfficeName === $c['company_code'])>
-        {{ $c['company_code'] }} {{ $c['company_name'] }}
+      <option value="{{ $c['company_id'] }}" @selected($selectedOfficeName === $c['company_id'])>
+        {{ $c['company_name'] }}
       </option>
     @endforeach
   </select>

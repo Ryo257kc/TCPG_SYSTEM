@@ -149,8 +149,9 @@ class PayrollV2RecalculateService
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs as s')
             ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
             ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['st.company_name']);
+            ->first(['c.company_name']);
 
         return trim((string) ($row->company_name ?? ''));
     }

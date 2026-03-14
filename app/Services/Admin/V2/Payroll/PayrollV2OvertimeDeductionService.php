@@ -41,8 +41,9 @@ class PayrollV2OvertimeDeductionService
             ->first(['staff_division', 'year_working_time']);
 
         $division = trim((string) ($staff->staff_division ?? ''));
-        if (mb_strpos($division, '業務委託') !== false) {
-            $payload = $this->buildPayload(0, 0, 0, 0, 0, $summary, $companyName);
+        $isOfficer = mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡') !== false || mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡鬮ｯ諛ｶ・ｽ・｣郢晢ｽｻ繝ｻ・ｱ鬯ｯ・ｩ雋翫ｑ・ｽ・ｽ繝ｻ・ｬ') !== false;
+
+        if ($isOfficer) {
             $updated = (int) DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
@@ -69,8 +70,8 @@ class PayrollV2OvertimeDeductionService
         $absenceDays = $this->num($summary['absence_num'] ?? 0);
 
         $isHourly =
-            mb_strpos($division, 'パート') !== false
-            || mb_strpos($division, 'アルバイト') !== false
+            str_contains($division, hex2bin('E38391E383BCE38388'))
+            || str_contains($division, hex2bin('E382A2E383ABE38390E382A4E38388'))
             || ($hourlyRate > 0 && $monthlySalary <= 0);
 
         $overtimeAmount = 0.0;
@@ -243,11 +244,11 @@ class PayrollV2OvertimeDeductionService
         }
 
         return [
-            'overtime' => $byName['残業手当'] ?? 'allowance_amo_8',
-            'night' => $byName['深夜残業手当'] ?? 'allowance_amo_9',
-            'holiday' => $byName['休日出勤手当'] ?? 'allowance_amo_7',
-            'late' => $byName['遅早控除'] ?? 'late_deduction',
-            'absence' => $byName['欠勤控除'] ?? 'absence_deduction',
+            'overtime' => $byName[hex2bin('E699AEE9809AE6AE8BE6A5AD')] ?? 'allowance_amo_8',
+            'night' => $byName[hex2bin('E6B7B1E5A49CE6AE8BE6A5AD')] ?? 'allowance_amo_9',
+            'holiday' => $byName[hex2bin('E4BC91E697A5E58BA4E58B99')] ?? 'allowance_amo_7',
+            'late' => $byName[hex2bin('E98185E697A9E68EA7E999A4')] ?? 'late_deduction',
+            'absence' => $byName[hex2bin('E6ACA0E58BA4E68EA7E999A4')] ?? 'absence_deduction',
         ];
     }
 
@@ -261,8 +262,9 @@ class PayrollV2OvertimeDeductionService
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs as s')
             ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
             ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['st.company_name']);
+            ->first(['c.company_name']);
 
         return trim((string) ($row->company_name ?? ''));
     }
@@ -277,23 +279,20 @@ class PayrollV2OvertimeDeductionService
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_companies')
-            ->select('company_id', 'company_code')
+            ->select('company_id')
             ->whereRaw('LTRIM(RTRIM(company_name)) = ?', [$name])
             ->get();
 
         $candidates = [];
         foreach ($rows as $row) {
-            foreach (['company_id', 'company_code'] as $col) {
-                $value = trim((string) ($row->{$col} ?? ''));
-                if ($value !== '') {
-                    $candidates[$value] = true;
-                }
+            $value = trim((string) ($row->company_id ?? ''));
+            if ($value !== '') {
+                $candidates[$value] = true;
             }
         }
 
         return array_keys($candidates);
     }
-
     private function num(mixed $v): float
     {
         if ($v === null) {

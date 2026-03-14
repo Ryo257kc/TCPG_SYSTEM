@@ -14,18 +14,19 @@ class PayrollV2StaffService
         $query = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs as s')
             ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
             ->select([
                 's.staff_id',
                 's.staff_name',
                 's.staff_division',
                 'st.store_name',
-                'st.company_name',
+                'c.company_name',
             ])
             ->whereNotNull('s.staff_id')
             ->whereRaw('LTRIM(RTRIM(s.staff_id)) <> ?', ['']);
 
         if ($company !== '') {
-            $query->where('st.company_name', $company);
+            $query->where('c.company_name', $company);
         }
 
         return $query

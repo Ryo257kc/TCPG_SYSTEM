@@ -10,7 +10,7 @@ class AttendanceV2CompanyService
     public function companies(): array
     {
         return DB::connection('sqlsrv')
-            ->table('dbo.mx_stores')
+            ->table('dbo.mx_companies')
             ->whereNotNull('company_name')
             ->whereRaw('LTRIM(RTRIM(company_name)) <> ?', [''])
             ->distinct()

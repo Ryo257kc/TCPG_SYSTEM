@@ -36,13 +36,14 @@ class PayrollV2CreateCandidatesService
         $query = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs as s')
             ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
             ->select([
                 's.staff_id',
                 's.staff_name',
                 's.staff_division',
                 's.tai_date',
                 'st.store_name',
-                'st.company_name',
+                'c.company_name',
             ])
             ->whereNotNull('s.staff_id')
             ->whereRaw('LTRIM(RTRIM(s.staff_id)) <> ?', [''])
@@ -56,7 +57,7 @@ class PayrollV2CreateCandidatesService
 
         $companyName = trim($companyName);
         if ($companyName !== '') {
-            $query->whereRaw("LTRIM(RTRIM(ISNULL(st.company_name, ''))) = ?", [$companyName]);
+            $query->whereRaw("LTRIM(RTRIM(ISNULL(c.company_name, ''))) = ?", [$companyName]);
         }
 
         $existingMap = $this->existingStaffMapByPaymentDate($paymentDate);
