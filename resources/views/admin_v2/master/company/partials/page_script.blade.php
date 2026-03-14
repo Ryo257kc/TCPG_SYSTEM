@@ -27,4 +27,10 @@ function toggleCurrentRateMode(cardId, mode) {
 function toggleCurrentRateEdit(cardId, editing) {
   toggleCurrentRateMode(cardId, editing ? 'editing' : '');
 }
+
+function toggleMayorRowEdit(rowId, editing) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.classList.toggle('editing', editing);
+}
 </script>

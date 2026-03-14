@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin\V2\Master;
 
 use App\Http\Controllers\Controller;
+use App\Services\Admin\V2\Master\CompanyV2MayorService;
 use App\Services\Admin\V2\Master\CompanyV2RouhoService;
 use App\Services\Admin\V2\Master\CompanyV2Service;
 use App\Services\Admin\V2\Master\CompanyV2ShahoService;
@@ -16,6 +17,7 @@ class CompanyV2Controller extends Controller
         private readonly CompanyV2Service $service,
         private readonly CompanyV2ShahoService $shahoService,
         private readonly CompanyV2RouhoService $rouhoService,
+        private readonly CompanyV2MayorService $mayorService,
     ) {
     }
 
@@ -46,9 +48,11 @@ class CompanyV2Controller extends Controller
 
         $shaho = ['latest' => null, 'rows' => []];
         $rouho = ['latest' => null, 'rows' => []];
+        $mayor = ['latest' => null, 'rows' => []];
         if ($selectedCompanyId !== '') {
             $shaho = $this->shahoService->listByCompanyId($selectedCompanyId);
             $rouho = $this->rouhoService->listByCompanyId($selectedCompanyId);
+            $mayor = $this->mayorService->listByCompanyId($selectedCompanyId);
         }
 
         return view('admin_v2.master.company.index', [
@@ -61,6 +65,8 @@ class CompanyV2Controller extends Controller
             'syahoRows' => $shaho['rows'],
             'selectedRouhoRow' => $rouho['latest'],
             'rouhoRows' => $rouho['rows'],
+            'selectedMayorRow' => $mayor['latest'],
+            'mayorRows' => $mayor['rows'],
             'rowCount' => count($rows),
             'source' => 'mx_companies',
         ]);
@@ -247,5 +253,72 @@ class CompanyV2Controller extends Controller
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'rouho',
         ])->with('status', '労働保険を削除しました。');
+    }
+    public function storeMayor(Request $request): RedirectResponse
+    {
+        $v = $request->validate([
+            'company_id' => ['required', 'string', 'max:50'],
+            'q' => ['nullable', 'string', 'max:200'],
+            'mayor' => ['nullable', 'string', 'max:200'],
+            'specified_num' => ['nullable', 'string', 'max:100'],
+            'city_cord' => ['nullable', 'string', 'max:100'],
+            'city_hall_post' => ['nullable', 'string', 'max:100'],
+            'city_hall_add' => ['nullable', 'string', 'max:255'],
+            'city_hall' => ['nullable', 'string', 'max:200'],
+            'city_hall_department' => ['nullable', 'string', 'max:200'],
+            'city_hall_tel' => ['nullable', 'string', 'max:100'],
+            'tax_office' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $this->mayorService->create($v);
+
+        return redirect()->route('admin.master.company', [
+            'q' => (string) ($v['q'] ?? ''),
+            'company_id' => (string) ($v['company_id'] ?? ''),
+            'tab' => 'mayor',
+        ])->with('status', '住民税情報を追加しました。');
+    }
+
+    public function updateMayor(Request $request): RedirectResponse
+    {
+        $v = $request->validate([
+            'company_id' => ['required', 'string', 'max:50'],
+            'mayor_no' => ['required', 'string', 'max:50'],
+            'q' => ['nullable', 'string', 'max:200'],
+            'mayor' => ['nullable', 'string', 'max:200'],
+            'specified_num' => ['nullable', 'string', 'max:100'],
+            'city_cord' => ['nullable', 'string', 'max:100'],
+            'city_hall_post' => ['nullable', 'string', 'max:100'],
+            'city_hall_add' => ['nullable', 'string', 'max:255'],
+            'city_hall' => ['nullable', 'string', 'max:200'],
+            'city_hall_department' => ['nullable', 'string', 'max:200'],
+            'city_hall_tel' => ['nullable', 'string', 'max:100'],
+            'tax_office' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $this->mayorService->update($v);
+
+        return redirect()->route('admin.master.company', [
+            'q' => (string) ($v['q'] ?? ''),
+            'company_id' => (string) ($v['company_id'] ?? ''),
+            'tab' => 'mayor',
+        ])->with('status', '住民税情報を更新しました。');
+    }
+
+    public function deleteMayor(Request $request): RedirectResponse
+    {
+        $v = $request->validate([
+            'company_id' => ['required', 'string', 'max:50'],
+            'mayor_no' => ['required', 'string', 'max:50'],
+            'q' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $this->mayorService->delete((string) $v['company_id'], (string) $v['mayor_no']);
+
+        return redirect()->route('admin.master.company', [
+            'q' => (string) ($v['q'] ?? ''),
+            'company_id' => (string) ($v['company_id'] ?? ''),
+            'tab' => 'mayor',
+        ])->with('status', '住民税情報を削除しました。');
     }
 }

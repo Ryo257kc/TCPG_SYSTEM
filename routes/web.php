@@ -32,6 +32,9 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/company/rouho', [CompanyV2Controller::class, 'storeRouho'])->name('admin.master.company.rouho.store');
         Route::post('/master/company/rouho/update', [CompanyV2Controller::class, 'updateRouho'])->name('admin.master.company.rouho.update');
         Route::post('/master/company/rouho/delete', [CompanyV2Controller::class, 'deleteRouho'])->name('admin.master.company.rouho.delete');
+        Route::post('/master/company/mayor', [CompanyV2Controller::class, 'storeMayor'])->name('admin.master.company.mayor.store');
+        Route::post('/master/company/mayor/update', [CompanyV2Controller::class, 'updateMayor'])->name('admin.master.company.mayor.update');
+        Route::post('/master/company/mayor/delete', [CompanyV2Controller::class, 'deleteMayor'])->name('admin.master.company.mayor.delete');
         Route::get('/master/staff', [StaffV2Controller::class, 'index'])->name('admin.master.staff');
         Route::get('/master/store', [StoreV2Controller::class, 'index'])->name('admin.master.store');
         Route::post('/master/store/update', [StoreV2Controller::class, 'update'])->name('admin.master.store.update');

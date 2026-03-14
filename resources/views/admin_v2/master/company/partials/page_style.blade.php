@@ -65,6 +65,7 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .rate-table{width:100%;border-collapse:collapse;min-width:980px}
 .rate-table th,.rate-table td{padding:8px 10px;border-bottom:1px solid #e5edf8;font-size:13px;text-align:left;white-space:nowrap}
 .rate-table th{background:#f5f8fd;color:#46658b;font-weight:700}
+.rate-table .action-cell{white-space:nowrap}
 .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .detail-field{display:flex;flex-direction:column;gap:6px}
 .detail-field span{font-size:13px;color:#46658b;font-weight:600}
@@ -81,5 +82,10 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .btn-secondary{display:inline-flex;padding:6px 10px;border:1px solid #b7ccef;border-radius:8px;background:#f5f8fd;color:#1f4f8f;text-decoration:none;font-weight:700;cursor:pointer}
 .btn-danger-soft{border-color:#efc3c3;background:#fff5f5;color:#9f2f2f}
 .company-empty{padding:18px;color:#5b708f}
+.mayor-row-edit{display:none;background:#fbfdff}
+.mayor-row.editing + .mayor-row-edit{display:table-row}
+.mayor-row-edit td{background:#fbfdff}
+.mayor-inline-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.mayor-inline-grid .detail-field-wide{grid-column:1 / -1}
 @media (max-width: 980px){.company-layout{grid-template-columns:1fr}.company-list{max-height:none}.detail-grid{grid-template-columns:1fr}.current-rate-summary{grid-template-columns:1fr}.current-rate-meta-grid{grid-template-columns:1fr}.detail-actions-spread{flex-direction:column;align-items:stretch}.detail-actions-right{justify-content:stretch}.detail-actions-right button{flex:1}}
 </style>
