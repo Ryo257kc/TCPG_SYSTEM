@@ -7,6 +7,33 @@ use Illuminate\Support\Facades\Schema;
 
 class CompanyV2Service
 {
+    /** @return list<string> */
+    private function optionalColumns(): array
+    {
+        return [
+            'company_name_kana',
+            'company_address',
+            'office_number',
+            'tel',
+            'fax',
+            'ceo_title',
+            'ceo_name_kana',
+            'ceo_name',
+            'health_office_code',
+            'pension_office_code',
+            'corporate_number',
+            'insurer_number',
+            'insurer_name',
+            'insurer_address',
+            'employment_office_number',
+            'labor_insurance_number',
+            'labor_install_category',
+            'labor_install_date',
+            'labor_office_category',
+            'labor_industry_category',
+        ];
+    }
+
     public function hasColumn(string $column): bool
     {
         try {
@@ -20,7 +47,7 @@ class CompanyV2Service
     public function list(string $keyword): array
     {
         $selects = ['company_id', 'company_name'];
-        foreach (['legacy_store_no', 'company_code', 'company_name_kana', 'company_address', 'office_number', 'phone', 'fax'] as $col) {
+        foreach ($this->optionalColumns() as $col) {
             if ($this->hasColumn($col)) {
                 $selects[] = $col;
             }
@@ -30,23 +57,23 @@ class CompanyV2Service
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword): void {
                 $q->where('company_name', 'like', '%' . $keyword . '%')
-                    ->orWhere('company_code', 'like', '%' . $keyword . '%')
                     ->orWhere('office_number', 'like', '%' . $keyword . '%');
             });
         }
 
         $rows = $query->get()->map(function ($r): array {
-            return [
+            $row = [
                 'company_id' => (string) ($r->company_id ?? ''),
-                'legacy_store_no' => (string) ($r->legacy_store_no ?? ''),
-                'company_code' => (string) ($r->company_code ?? ''),
                 'company_name' => (string) ($r->company_name ?? ''),
-                'company_name_kana' => (string) ($r->company_name_kana ?? ''),
-                'company_address' => (string) ($r->company_address ?? ''),
-                'office_number' => (string) ($r->office_number ?? ''),
-                'phone' => (string) ($r->phone ?? ''),
-                'fax' => (string) ($r->fax ?? ''),
             ];
+
+            foreach ($this->optionalColumns() as $col) {
+                $row[$col] = (string) ($r->{$col} ?? '');
+            }
+
+            $row['phone'] = $row['tel'] !== '' ? $row['tel'] : '';
+
+            return $row;
         })->all();
 
         return ['rows' => $rows];
@@ -55,10 +82,18 @@ class CompanyV2Service
     public function update(array $v): void
     {
         $payload = ['company_name' => trim((string) ($v['company_name'] ?? ''))];
-        foreach (['company_code', 'company_name_kana', 'company_address', 'office_number', 'phone', 'fax'] as $col) {
-            if ($this->hasColumn($col)) {
-                $payload[$col] = trim((string) ($v[$col] ?? ''));
+
+        foreach ($this->optionalColumns() as $col) {
+            if (!$this->hasColumn($col)) {
+                continue;
             }
+
+            if ($col === 'tel') {
+                $payload[$col] = trim((string) ($v['phone'] ?? ''));
+                continue;
+            }
+
+            $payload[$col] = trim((string) ($v[$col] ?? ''));
         }
 
         DB::connection('sqlsrv')->table('dbo.mx_companies')

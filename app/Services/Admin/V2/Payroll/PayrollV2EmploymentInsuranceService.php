@@ -3,6 +3,7 @@
 namespace App\Services\Admin\V2\Payroll;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PayrollV2EmploymentInsuranceService
 {
@@ -28,15 +29,30 @@ class PayrollV2EmploymentInsuranceService
         }
 
         $firstDay = sprintf('%04d-%02d-01 00:00:00', $year, $month);
-        $rouho = $conn->table('dbo.mx_rouho')
+        $staff = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
+            ->first(['staff_division', 'koyou', 'section']);
+
+        $companyId = $this->resolveCompanyId($staffId);
+
+        $rouhoQuery = $conn->table('dbo.mx_rouho')
             ->whereNotNull('rou_apply_date')
-            ->where('rou_apply_date', '<=', $firstDay)
+            ->where('rou_apply_date', '<=', $firstDay);
+        if ($companyId !== '' && $this->hasPayrollColumn('mx_rouho', 'office_no')) {
+            $rouhoQuery->whereRaw('LTRIM(RTRIM(CAST(office_no AS nvarchar(50)))) = ?', [$companyId]);
+        }
+        $rouho = $rouhoQuery
             ->orderByDesc('rou_apply_date')
             ->first();
 
-        $syaho = $conn->table('dbo.mx_syaho')
+        $syahoQuery = $conn->table('dbo.mx_syaho')
             ->whereNotNull('jidou_apply_date')
-            ->where('jidou_apply_date', '<=', $firstDay)
+            ->where('jidou_apply_date', '<=', $firstDay);
+        if ($companyId !== '' && $this->hasPayrollColumn('mx_syaho', 'office_no')) {
+            $syahoQuery->whereRaw('LTRIM(RTRIM(CAST(office_no AS nvarchar(50)))) = ?', [$companyId]);
+        }
+        $syaho = $syahoQuery
             ->orderByDesc('jidou_apply_date')
             ->first(['jidou_kyuyo']);
 
@@ -52,11 +68,6 @@ class PayrollV2EmploymentInsuranceService
         ]);
         $jidouRitu = (float) ($syaho->jidou_kyuyo ?? 0);
         $target = (float) ($current->rouho_target_sum ?? 0);
-
-        $staff = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs')
-            ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
-            ->first(['staff_division', 'koyou', 'section']);
 
         $staffShahoRows = $conn->table('dbo.mx_staff_shou')
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
@@ -117,6 +128,27 @@ class PayrollV2EmploymentInsuranceService
         $fraction = $raw - $floor;
 
         return $fraction <= 0.5 ? $floor : (int) round($raw, 0, PHP_ROUND_HALF_UP);
+    }
+
+    private function hasPayrollColumn(string $table, string $column): bool
+    {
+        try {
+            return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column)
+                || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function resolveCompanyId(string $staffId): string
+    {
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs as s')
+            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
+            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
+            ->first(['st.company_id']);
+
+        return trim((string) ($row->company_id ?? ''));
     }
 
     /**
