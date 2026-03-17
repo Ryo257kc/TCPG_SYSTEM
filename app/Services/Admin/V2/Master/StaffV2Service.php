@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Schema;
 
 class StaffV2Service
 {
+    /** @var array<string, string>|null */
+    private ?array $submissionMayorMap = null;
+
     public function list(string $keyword, string $employmentFilter = 'active'): array
     {
         $query = DB::connection('sqlsrv')->table('dbo.mx_staffs as ms')
@@ -90,6 +93,7 @@ class StaffV2Service
         foreach ($columns as $column) {
             $detail[$column] = $this->normalizeValue($row->{$column} ?? null);
         }
+        $detail['submission'] = $this->resolveSubmissionLabel($detail['submission'] ?? '');
         $detail['employment_status'] = $this->normalizeValue($row->employment ?? null);
         $detail['_store_name'] = $this->normalizeValue($row->_store_name ?? null);
         $detail['_company_name'] = $this->normalizeValue($row->_company_name ?? null);
@@ -246,6 +250,59 @@ class StaffV2Service
         }
 
         return $normalized;
+    }
+
+    private function resolveSubmissionLabel(string $value): string
+    {
+        $normalized = $this->normalizeMayorKey($value);
+        if ($normalized === '') {
+            return $value;
+        }
+
+        $map = $this->submissionMayorMap();
+        return $map[$normalized] ?? $value;
+    }
+
+    /** @return array<string, string> */
+    private function submissionMayorMap(): array
+    {
+        if ($this->submissionMayorMap !== null) {
+            return $this->submissionMayorMap;
+        }
+
+        $rows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_mayor')
+            ->select(['mayor_no', 'mayor'])
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $key = $this->normalizeMayorKey((string) ($row->mayor_no ?? ''));
+            $label = trim((string) ($row->mayor ?? ''));
+            if ($key === '' || $label === '' || isset($map[$key])) {
+                continue;
+            }
+
+            $map[$key] = $label;
+        }
+
+        $this->submissionMayorMap = $map;
+
+        return $this->submissionMayorMap;
+    }
+
+    private function normalizeMayorKey(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (is_numeric($trimmed)) {
+            return (string) ((int) $trimmed);
+        }
+
+        return $trimmed;
     }
 
     private function formatJapaneseDate(\DateTimeInterface $date): string

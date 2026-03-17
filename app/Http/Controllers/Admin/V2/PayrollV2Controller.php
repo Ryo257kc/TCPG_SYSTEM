@@ -25,6 +25,7 @@ use App\Services\Admin\V2\Payroll\PayrollV2SummaryService;
 use App\Services\Admin\V2\Payroll\PayrollV2UpdateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PayrollV2Controller extends Controller
@@ -55,50 +56,20 @@ class PayrollV2Controller extends Controller
 
     public function index(Request $request): View
     {
-        $availablePaymentDates = $this->monthService->availablePaymentDates();
-        $selectedPaymentDate = $this->monthService->normalizePaymentDate((string) $request->query('payment_date', ''), $availablePaymentDates);
-        $selectedMonth = $this->monthService->monthFromPaymentDate($selectedPaymentDate);
+        $pageData = $this->buildPageData($request);
+        $availablePaymentDates = $pageData['availablePaymentDates'];
+        $selectedPaymentDate = $pageData['selectedPaymentDate'];
+        $selectedMonth = $pageData['selectedMonth'];
+        $companyOptions = $pageData['companyOptions'];
+        $selectedCompanyId = $pageData['selectedCompanyId'];
+        $selectedStaffId = $pageData['selectedStaffId'];
+        $staffRows = $pageData['staffRows'];
+        $rows = $pageData['rows'];
 
         [$year, $month] = array_map('intval', explode('-', $selectedMonth));
         [$attendanceYear, $attendanceMonth] = $month === 1
             ? [$year - 1, 12]
             : [$year, $month - 1];
-
-        $companyOptions = $this->companyService->companies();
-        $selectedCompanyId = trim((string) $request->query('company_id', ''));
-        $selectedStaffId = trim((string) $request->query('staff_id', ''));
-
-        if ($selectedCompanyId !== '' && !in_array($selectedCompanyId, $companyOptions, true)) {
-            $selectedCompanyId = '';
-        }
-
-        $staffRows = $this->staffService->staffs($selectedCompanyId);
-        $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate);
-        $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate);
-        $kihonMap = $this->kihonService->map($year, $month);
-        $staffMasterMap = $this->staffMasterService->map();
-        $shahoMap = $this->shahoService->map($year, $month);
-        $residentMap = $this->residentService->map($year, $month);
-
-        $staffRows = array_values(array_filter(
-            $staffRows,
-            static fn (array $staff): bool => isset($summaryMap[$staff['staff_id']])
-        ));
-
-        if ($selectedStaffId !== '' && !in_array($selectedStaffId, array_column($staffRows, 'staff_id'), true)) {
-            $selectedStaffId = '';
-        }
-
-        $rows = $this->summaryService->mergeRows(
-            $staffRows,
-            $summaryMap,
-            $previousSummaryMap,
-            $kihonMap,
-            $staffMasterMap,
-            $shahoMap,
-            $residentMap,
-            ''
-        );
 
         $attendanceSourceMap = $this->attendanceListSummaryService->summaryMap($attendanceYear, $attendanceMonth);
         $attendanceConfirmedMap = $this->confirmedStateService->mapByStaffIds(array_column($rows, 'staff_id'), $attendanceYear, $attendanceMonth);
@@ -134,6 +105,148 @@ class PayrollV2Controller extends Controller
             'rows' => $rows,
             'allowanceEntries' => $allowanceEntries,
             'labelOverrides' => $labelOverrides,
+        ]);
+    }
+
+    public function transferList(Request $request): View
+    {
+        $pageData = $this->buildPageData($request);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+        $rows = (array) $pageData['rows'];
+        $mayorMetaMap = $this->mayorMetaMap();
+
+        $transferRows = [];
+        foreach ($rows as $row) {
+            $summary = (array) ($row['summary'] ?? []);
+            $staffMaster = (array) ($row['staff_master'] ?? []);
+
+            $bankName = trim((string) ($staffMaster['bank_name_1'] ?? ''));
+            $bankBranch = trim((string) ($staffMaster['bank_branch_1'] ?? ''));
+            $accountNo = trim((string) ($staffMaster['account_num'] ?? ''));
+
+            if ($bankName === '' && trim((string) ($staffMaster['bank_name_2'] ?? '')) !== '') {
+                $bankName = trim((string) ($staffMaster['bank_name_2'] ?? ''));
+                $bankBranch = trim((string) ($staffMaster['bank_branch_2'] ?? ''));
+                $accountNo = trim((string) ($staffMaster['account_num2'] ?? ''));
+            }
+
+            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
+                - $this->num($summary['deduction_sum'] ?? 0)
+                - $this->num($summary['transfer_balance'] ?? 0);
+
+            $transferRows[] = [
+                'company_name' => trim((string) ($row['company_name'] ?? '')),
+                'division' => trim((string) ($row['division'] ?? '')),
+                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
+                'staff_name_furi' => trim((string) ($staffMaster['staff_name_furi'] ?? '')),
+                'bank_name' => $bankName,
+                'bank_branch' => $bankBranch,
+                'account_no' => $accountNo,
+                'transfer_amount' => $transferAmount,
+                'city' => $this->resolveMunicipalityLabel(
+                    trim((string) ($staffMaster['submission'] ?? '')),
+                    trim((string) ($staffMaster['city'] ?? '')),
+                    $mayorMetaMap
+                ),
+                'specified_num' => $this->resolveSpecifiedNum(
+                    trim((string) ($staffMaster['submission'] ?? '')),
+                    $mayorMetaMap
+                ),
+                'submission' => trim((string) ($staffMaster['submission'] ?? '')),
+                'resident_tax' => $this->num($summary['resident_tax'] ?? 0),
+                'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
+                'income_tax' => $this->num($summary['income_tax'] ?? 0),
+                'transfer_purpose' => trim((string) ($staffMaster['transfer_purpose'] ?? '')),
+            ];
+        }
+
+        usort($transferRows, static function (array $a, array $b): int {
+            return [$a['company_name'], $a['transfer_purpose'], $a['bank_name'], $a['bank_branch'], $a['staff_name_furi'], $a['staff_name']]
+                <=> [$b['company_name'], $b['transfer_purpose'], $b['bank_name'], $b['bank_branch'], $b['staff_name_furi'], $b['staff_name']];
+        });
+
+        $groupedCompanies = [];
+        $grandTransfer = 0.0;
+        $grandResidentTax = 0.0;
+        $grandTaxation = 0.0;
+        $grandIncomeTax = 0.0;
+
+        foreach ($transferRows as $row) {
+            $companyKey = $row['company_name'] !== '' ? $row['company_name'] : '未設定';
+            $bankKey = $row['bank_name'] !== '' ? $row['bank_name'] : '未設定';
+
+            if (!isset($groupedCompanies[$companyKey])) {
+                $groupedCompanies[$companyKey] = [
+                    'company_name' => $companyKey,
+                    'groups' => [],
+                    'city_totals' => [],
+                    'transfer_total' => 0.0,
+                    'resident_tax_total' => 0.0,
+                    'taxation_total' => 0.0,
+                    'income_tax_total' => 0.0,
+                    'row_count' => 0,
+                    'non_outsource_count' => 0,
+                ];
+            }
+
+            if (!isset($groupedCompanies[$companyKey]['groups'][$bankKey])) {
+                $groupedCompanies[$companyKey]['groups'][$bankKey] = [
+                    'bank_name' => $bankKey,
+                    'rows' => [],
+                    'transfer_total' => 0.0,
+                    'resident_tax_total' => 0.0,
+                    'taxation_total' => 0.0,
+                    'income_tax_total' => 0.0,
+                ];
+            }
+
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['rows'][] = $row;
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['transfer_total'] += $row['transfer_amount'];
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['resident_tax_total'] += $row['resident_tax'];
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['taxation_total'] += $row['taxation_sum'];
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['income_tax_total'] += $row['income_tax'];
+            $cityKey = trim((string) ($row['city'] ?? ''));
+            if ($cityKey !== '' && $cityKey !== '-') {
+                if (!isset($groupedCompanies[$companyKey]['city_totals'][$cityKey])) {
+                    $groupedCompanies[$companyKey]['city_totals'][$cityKey] = [
+                        'city' => $cityKey,
+                        'specified_num' => trim((string) ($row['specified_num'] ?? '')),
+                        'row_count' => 0,
+                        'resident_tax_total' => 0.0,
+                    ];
+                }
+                $groupedCompanies[$companyKey]['city_totals'][$cityKey]['row_count']++;
+                $groupedCompanies[$companyKey]['city_totals'][$cityKey]['resident_tax_total'] += $row['resident_tax'];
+            }
+            $groupedCompanies[$companyKey]['transfer_total'] += $row['transfer_amount'];
+            $groupedCompanies[$companyKey]['resident_tax_total'] += $row['resident_tax'];
+            $groupedCompanies[$companyKey]['taxation_total'] += $row['taxation_sum'];
+            $groupedCompanies[$companyKey]['income_tax_total'] += $row['income_tax'];
+            $groupedCompanies[$companyKey]['row_count']++;
+            if ($row['division'] !== '業務委託') {
+                $groupedCompanies[$companyKey]['non_outsource_count']++;
+            }
+            $grandTransfer += $row['transfer_amount'];
+            $grandResidentTax += $row['resident_tax'];
+            $grandTaxation += $row['taxation_sum'];
+            $grandIncomeTax += $row['income_tax'];
+        }
+
+        return view('admin_v2.payroll.transfer_list_clean', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedCompanyId' => $selectedCompanyId,
+            'groupedCompanies' => array_map(static function (array $company): array {
+                $company['groups'] = array_values($company['groups']);
+                $company['city_totals'] = array_values($company['city_totals']);
+                return $company;
+            }, array_values($groupedCompanies)),
+            'grandTransfer' => $grandTransfer,
+            'grandResidentTax' => $grandResidentTax,
+            'grandTaxation' => $grandTaxation,
+            'grandIncomeTax' => $grandIncomeTax,
+            'rowCount' => count($transferRows),
+            'companyLabel' => $this->resolveCompanyLabel($rows),
         ]);
     }
 
@@ -369,5 +482,156 @@ class PayrollV2Controller extends Controller
             'updated' => (int) $updated,
             'checked' => $checked,
         ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function buildPageData(Request $request): array
+    {
+        $availablePaymentDates = $this->monthService->availablePaymentDates();
+        $selectedPaymentDate = $this->monthService->normalizePaymentDate((string) $request->query('payment_date', ''), $availablePaymentDates);
+        $selectedMonth = $this->monthService->monthFromPaymentDate($selectedPaymentDate);
+
+        [$year, $month] = array_map('intval', explode('-', $selectedMonth));
+        $companyOptions = $this->companyService->companies();
+        $selectedCompanyId = trim((string) $request->query('company_id', ''));
+        $selectedStaffId = trim((string) $request->query('staff_id', ''));
+
+        if ($selectedCompanyId !== '' && !in_array($selectedCompanyId, $companyOptions, true)) {
+            $selectedCompanyId = '';
+        }
+
+        $staffRows = $this->staffService->staffs($selectedCompanyId);
+        $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate);
+        $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate);
+        $kihonMap = $this->kihonService->map($year, $month);
+        $staffMasterMap = $this->staffMasterService->map();
+        $shahoMap = $this->shahoService->map($year, $month);
+        $residentMap = $this->residentService->map($year, $month);
+
+        $staffRows = array_values(array_filter(
+            $staffRows,
+            static fn (array $staff): bool => isset($summaryMap[$staff['staff_id']])
+        ));
+
+        if ($selectedStaffId !== '' && !in_array($selectedStaffId, array_column($staffRows, 'staff_id'), true)) {
+            $selectedStaffId = '';
+        }
+
+        $rows = $this->summaryService->mergeRows(
+            $staffRows,
+            $summaryMap,
+            $previousSummaryMap,
+            $kihonMap,
+            $staffMasterMap,
+            $shahoMap,
+            $residentMap,
+            ''
+        );
+
+        return [
+            'availablePaymentDates' => $availablePaymentDates,
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedMonth' => $selectedMonth,
+            'companyOptions' => $companyOptions,
+            'selectedCompanyId' => $selectedCompanyId,
+            'selectedStaffId' => $selectedStaffId,
+            'staffRows' => $staffRows,
+            'rows' => $rows,
+        ];
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+    private function resolveCompanyLabel(array $rows): string
+    {
+        $companies = array_values(array_unique(array_filter(array_map(
+            static fn (array $row): string => trim((string) ($row['company_name'] ?? '')),
+            $rows
+        ), static fn (string $value): bool => $value !== '')));
+
+        if ($companies === []) {
+            return '';
+        }
+
+        return count($companies) === 1 ? $companies[0] : implode(' / ', $companies);
+    }
+
+    private function num(mixed $value): float
+    {
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    /** @return array<string, array{mayor:string,specified_num:string}> */
+    private function mayorMetaMap(): array
+    {
+        $rows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_mayor')
+            ->select(['mayor_no', 'mayor', 'specified_num'])
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $mayorName = trim((string) ($row->mayor ?? ''));
+            $mayorNo = $this->normalizeMunicipalityKey((string) ($row->mayor_no ?? ''));
+            if ($mayorName === '' || $mayorNo === '') {
+                continue;
+            }
+
+            if (!isset($map[$mayorNo])) {
+                $map[$mayorNo] = [
+                    'mayor' => $mayorName,
+                    'specified_num' => trim((string) ($row->specified_num ?? '')),
+                ];
+            }
+        }
+
+        return $map;
+    }
+
+    /** @param array<string, array{mayor:string,specified_num:string}> $mayorMetaMap */
+    private function resolveMunicipalityLabel(string $submission, string $city, array $mayorMetaMap): string
+    {
+        foreach ([$submission, $city] as $candidate) {
+            $key = trim($candidate);
+            if ($key === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeMunicipalityKey($key);
+            if ($normalized !== '' && isset($mayorMetaMap[$normalized])) {
+                return $mayorMetaMap[$normalized]['mayor'];
+            }
+
+            if (preg_match('/[ぁ-んァ-ヶ一-龠]/u', $key) === 1) {
+                return $key;
+            }
+        }
+
+        return '-';
+    }
+
+    /** @param array<string, array{mayor:string,specified_num:string}> $mayorMetaMap */
+    private function resolveSpecifiedNum(string $submission, array $mayorMetaMap): string
+    {
+        $normalized = $this->normalizeMunicipalityKey($submission);
+        if ($normalized === '' || !isset($mayorMetaMap[$normalized])) {
+            return '';
+        }
+
+        return $mayorMetaMap[$normalized]['specified_num'];
+    }
+
+    private function normalizeMunicipalityKey(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (is_numeric($trimmed)) {
+            $normalized = ltrim((string) ((int) $trimmed), '0');
+            return $normalized === '' ? '0' : $normalized;
+        }
+
+        return $trimmed;
     }
 }

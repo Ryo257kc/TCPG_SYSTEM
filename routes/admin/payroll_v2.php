@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/payroll', [PayrollV2Controller::class, 'index'])->name('admin.payroll.index');
 Route::get('/payroll-v2', [PayrollV2Controller::class, 'index'])->name('admin.payroll-v2.index');
+Route::get('/payroll/transfer-list', [PayrollV2Controller::class, 'transferList'])->name('admin.payroll.transfer-list');
 Route::post('/payroll/update', [PayrollV2Controller::class, 'update'])->name('admin.payroll.update');
 Route::post('/payroll/attendance-reflect', [PayrollV2Controller::class, 'reflectAttendance'])->name('admin.payroll.attendance-reflect');
 Route::post('/payroll/recalculate', [PayrollV2Controller::class, 'recalculate'])->name('admin.payroll.recalculate');
