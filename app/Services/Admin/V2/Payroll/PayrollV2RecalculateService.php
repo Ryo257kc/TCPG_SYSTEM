@@ -26,6 +26,7 @@ class PayrollV2RecalculateService
         }
 
         $companyName = $this->normalizeCompanyName($staffId, $companyName);
+        $birthday = $this->loadBirthday($staffId);
 
         $kihon = $this->kihonService->map($year, $month)[$staffId] ?? [];
         $shaho = $this->shahoService->map($year, $month)[$staffId] ?? [];
@@ -35,7 +36,7 @@ class PayrollV2RecalculateService
         $payload = array_merge(
             $payload,
             $this->kihonToSummary((array) $kihon),
-            $this->shahoToSummary((array) $shaho),
+            $this->shahoToSummary((array) $shaho, $birthday, $year, $month),
             $this->residentToSummary((array) $resident)
         );
 
@@ -122,11 +123,16 @@ class PayrollV2RecalculateService
     }
 
     /** @param array<string,mixed> $shaho @return array<string,int|float> */
-    private function shahoToSummary(array $shaho): array
+    private function shahoToSummary(array $shaho, ?\DateTimeImmutable $birthday, int $year, int $month): array
     {
+        $kaigo = $this->num($shaho['kaigo_amo'] ?? 0);
+        if (!$this->shouldApplyKaigo($birthday, $year, $month)) {
+            $kaigo = 0;
+        }
+
         return [
             'kenpo' => $this->num($shaho['kenpo_amo'] ?? 0),
-            'kaigo' => $this->num($shaho['kaigo_amo'] ?? 0),
+            'kaigo' => $kaigo,
             'kounen' => $this->num($shaho['kounen_amo'] ?? 0),
         ];
     }
@@ -154,6 +160,51 @@ class PayrollV2RecalculateService
             ->first(['c.company_name']);
 
         return trim((string) ($row->company_name ?? ''));
+    }
+
+    private function loadBirthday(string $staffId): ?\DateTimeImmutable
+    {
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->first(['birthday']);
+
+        return $this->toDate($row->birthday ?? null);
+    }
+
+    private function shouldApplyKaigo(?\DateTimeImmutable $birthday, int $year, int $month): bool
+    {
+        if ($birthday === null) {
+            return false;
+        }
+
+        $start = $birthday->modify('+40 years')->modify('-1 day');
+        $targetMonthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month));
+
+        return $targetMonthStart >= $start->modify('first day of this month')->setTime(0, 0);
+    }
+
+    private function toDate(mixed $value): ?\DateTimeImmutable
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return \DateTimeImmutable::createFromInterface($value);
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        $s = trim((string) $value);
+        if ($s === '') {
+            return null;
+        }
+
+        $ts = strtotime($s);
+        if ($ts === false) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable())->setTimestamp($ts);
     }
 
     private function num(mixed $v): float

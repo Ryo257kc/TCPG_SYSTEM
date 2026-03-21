@@ -259,6 +259,27 @@
     });
   }
 
+  var reportType = document.getElementById('report_type');
+  var transferListUrl = @json(route('admin.payroll.transfer-list'));
+  var wageLedgerUrl = @json(route('admin.payroll.wage-ledger'));
+
+  if (reportType) {
+    reportType.addEventListener('change', function(){
+      var value = reportType.value;
+      if (!value) return;
+
+      var baseUrl = value === 'transfer-list' ? transferListUrl : wageLedgerUrl;
+      var params = new URLSearchParams();
+      if (selectedCompanyId) params.set('company_id', selectedCompanyId);
+      if (document.getElementById('payment_date') && document.getElementById('payment_date').value) {
+        params.set('payment_date', document.getElementById('payment_date').value);
+      }
+
+      window.open(baseUrl + '?' + params.toString(), '_blank', 'noopener');
+      reportType.value = '';
+    });
+  }
+
   if (payrollCreateSubmitBtn) {
     payrollCreateSubmitBtn.addEventListener('click', function(){
       var ids = Array.prototype.slice.call(document.querySelectorAll('.payroll-create-check:checked')).map(function(check){
