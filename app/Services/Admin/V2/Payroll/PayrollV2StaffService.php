@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2StaffService
 {
     /**
-     * @return list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string}>
+     * @return list<array{staff_id:string,staff_name:string,division:string,store_code:string,store_name:string,company_name:string}>
      */
     public function staffs(string $company): array
     {
@@ -19,6 +19,7 @@ class PayrollV2StaffService
                 's.staff_id',
                 's.staff_name',
                 's.staff_division',
+                'st.store_code',
                 'st.store_name',
                 'c.company_name',
             ])
@@ -36,6 +37,7 @@ class PayrollV2StaffService
                 'staff_id' => trim((string) ($r->staff_id ?? '')),
                 'staff_name' => trim((string) ($r->staff_name ?? '')),
                 'division' => trim((string) ($r->staff_division ?? '')),
+                'store_code' => trim((string) ($r->store_code ?? '')),
                 'store_name' => trim((string) ($r->store_name ?? '')),
                 'company_name' => trim((string) ($r->company_name ?? '')),
             ])

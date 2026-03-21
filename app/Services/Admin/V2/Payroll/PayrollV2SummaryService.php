@@ -89,14 +89,14 @@ class PayrollV2SummaryService
     }
 
     /**
-     * @param list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string}> $staffRows
+     * @param list<array{staff_id:string,staff_name:string,division:string,store_code:string,store_name:string,company_name:string}> $staffRows
      * @param array<string, array<string, mixed>> $summaryMap
      * @param array<string, array<string, mixed>> $previousSummaryMap
      * @param array<string, array<string, mixed>> $kihonMap
      * @param array<string, array<string, mixed>> $staffMasterMap
      * @param array<string, array<string, mixed>> $shahoMap
      * @param array<string, array<string, mixed>> $residentMap
-     * @return list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string,summary:array<string, mixed>,summary_prev:array<string, mixed>,kihon:array<string, mixed>,staff_master:array<string, mixed>,shaho:array<string, mixed>,resident:array<string, mixed>}>
+     * @return list<array{staff_id:string,staff_name:string,division:string,store_code:string,store_name:string,company_name:string,summary:array<string, mixed>,summary_prev:array<string, mixed>,kihon:array<string, mixed>,staff_master:array<string, mixed>,shaho:array<string, mixed>,resident:array<string, mixed>}>
      */
     public function mergeRows(
         array $staffRows,
@@ -118,6 +118,7 @@ class PayrollV2SummaryService
                 'staff_id' => $staff['staff_id'],
                 'staff_name' => $staff['staff_name'],
                 'division' => $staff['division'],
+                'store_code' => $staff['store_code'] ?? '',
                 'store_name' => $staff['store_name'],
                 'company_name' => $staff['company_name'],
                 'summary' => $summaryMap[$staff['staff_id']] ?? [],
