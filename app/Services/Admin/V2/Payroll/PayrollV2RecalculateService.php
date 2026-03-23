@@ -11,6 +11,7 @@ class PayrollV2RecalculateService
         private readonly PayrollV2ShahoService $shahoService,
         private readonly PayrollV2ResidentService $residentService,
         private readonly PayrollV2AllowanceLabelService $allowanceLabelService,
+        private readonly PayrollV2FuyoService $fuyoService,
         private readonly PayrollV2UpdateService $updateService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
         private readonly PayrollV2EmploymentInsuranceService $employmentInsuranceService,
@@ -27,6 +28,7 @@ class PayrollV2RecalculateService
 
         $companyName = $this->normalizeCompanyName($staffId, $companyName);
         $birthday = $this->loadBirthday($staffId);
+        $paymentDate = $this->loadPaymentDate($staffId, $year, $month);
 
         $kihon = $this->kihonService->map($year, $month)[$staffId] ?? [];
         $shaho = $this->shahoService->map($year, $month)[$staffId] ?? [];
@@ -37,7 +39,8 @@ class PayrollV2RecalculateService
             $payload,
             $this->kihonToSummary((array) $kihon),
             $this->shahoToSummary((array) $shaho, $birthday, $year, $month),
-            $this->residentToSummary((array) $resident)
+            $this->residentToSummary((array) $resident),
+            ['fuyo_sum' => $this->fuyoService->resolveByPaymentDate($staffId, $paymentDate)],
         );
 
         $updated = 0;
@@ -170,6 +173,25 @@ class PayrollV2RecalculateService
             ->first(['birthday']);
 
         return $this->toDate($row->birthday ?? null);
+    }
+
+    private function loadPaymentDate(string $staffId, int $year, int $month): string
+    {
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 0)
+            ->whereRaw('YEAR([supply_month]) = ?', [$year])
+            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+            ->orderByDesc('kyuyo_sho_no')
+            ->first(['supply_month']);
+
+        $value = $this->toDate($row->supply_month ?? null);
+        if ($value === null) {
+            return sprintf('%04d-%02d-01', $year, $month);
+        }
+
+        return $value->format('Y-m-d');
     }
 
     private function shouldApplyKaigo(?\DateTimeImmutable $birthday, int $year, int $month): bool

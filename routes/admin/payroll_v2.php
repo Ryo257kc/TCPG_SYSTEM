@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/payroll', [PayrollV2Controller::class, 'index'])->name('admin.payroll.index');
 Route::get('/payroll-v2', [PayrollV2Controller::class, 'index'])->name('admin.payroll-v2.index');
+Route::get('/bonus', [PayrollV2Controller::class, 'bonusIndex'])->name('admin.bonus.index');
 Route::get('/payroll/transfer-list', [PayrollV2Controller::class, 'transferList'])->name('admin.payroll.transfer-list');
 Route::get('/payroll/wage-ledger', [PayrollV2Controller::class, 'wageLedger'])->name('admin.payroll.wage-ledger');
 Route::post('/payroll/update', [PayrollV2Controller::class, 'update'])->name('admin.payroll.update');
@@ -17,3 +18,8 @@ Route::post('/payroll/confirm', [PayrollV2Controller::class, 'confirm'])->name('
 Route::get('/payroll/create-candidates', [PayrollV2Controller::class, 'createCandidates'])->name('admin.payroll.create-candidates');
 Route::post('/payroll/create', [PayrollV2Controller::class, 'create'])->name('admin.payroll.create');
 Route::post('/payroll/delete', [PayrollV2Controller::class, 'delete'])->name('admin.payroll.delete');
+Route::get('/bonus/create-candidates', [PayrollV2Controller::class, 'bonusCreateCandidates'])->name('admin.bonus.create-candidates');
+Route::post('/bonus/create', [PayrollV2Controller::class, 'bonusCreate'])->name('admin.bonus.create');
+Route::post('/bonus/delete', [PayrollV2Controller::class, 'bonusDelete'])->name('admin.bonus.delete');
+Route::post('/bonus/update', [PayrollV2Controller::class, 'bonusUpdate'])->name('admin.bonus.update');
+Route::post('/bonus/recalculate', [PayrollV2Controller::class, 'bonusRecalculate'])->name('admin.bonus.recalculate');

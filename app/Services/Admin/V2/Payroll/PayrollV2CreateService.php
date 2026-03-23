@@ -9,6 +9,7 @@ class PayrollV2CreateService
     public function __construct(
         private readonly PayrollV2CreateCandidatesService $createCandidatesService,
         private readonly PayrollV2RecalculateService $recalculateService,
+        private readonly PayrollV2FuyoService $fuyoService,
     ) {
     }
 
@@ -16,7 +17,7 @@ class PayrollV2CreateService
      * @param list<string> $staffIds
      * @return array{created:int,skipped:int,created_ids:list<string>,skipped_ids:list<string>}
      */
-    public function create(int $year, int $month, array $staffIds, string $companyName = '', string $paymentDate = ''): array
+    public function create(int $year, int $month, array $staffIds, string $companyName = '', string $paymentDate = '', bool $bonus = false): array
     {
         $result = [
             'created' => 0,
@@ -44,7 +45,7 @@ class PayrollV2CreateService
         $supplyMonth = $paymentDate . ' 00:00:00';
 
         foreach ($staffIds as $staffId) {
-            if ($this->exists($staffId, $paymentDate)) {
+            if ($this->exists($staffId, $paymentDate, $bonus)) {
                 $result['skipped']++;
                 $result['skipped_ids'][] = $staffId;
                 continue;
@@ -55,11 +56,14 @@ class PayrollV2CreateService
                 ->insert([
                     'kyuyo_staff_id' => $staffId,
                     'supply_month' => $supplyMonth,
-                    'bonus' => 0,
+                    'bonus' => $bonus ? 1 : 0,
                     'edit_lock' => 0,
+                    'fuyo_sum' => $this->fuyoService->resolveByPaymentDate($staffId, $paymentDate),
                 ]);
 
-            $this->recalculateService->recalculate($staffId, $targetYear, $targetMonth, $companyName);
+            if (!$bonus) {
+                $this->recalculateService->recalculate($staffId, $targetYear, $targetMonth, $companyName);
+            }
 
             $result['created']++;
             $result['created_ids'][] = $staffId;
@@ -68,11 +72,11 @@ class PayrollV2CreateService
         return $result;
     }
 
-    private function exists(string $staffId, string $paymentDate): bool
+    private function exists(string $staffId, string $paymentDate, bool $bonus = false): bool
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
             ->exists();

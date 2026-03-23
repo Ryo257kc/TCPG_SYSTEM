@@ -7,11 +7,14 @@ use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2AttendanceReflectService;
+use App\Services\Admin\V2\Payroll\PayrollV2BonusIncomeTaxCalcService;
+use App\Services\Admin\V2\Payroll\PayrollV2BonusSocialInsuranceService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
 use App\Services\Admin\V2\Payroll\PayrollV2DeleteService;
 use App\Services\Admin\V2\Payroll\PayrollV2EmploymentInsuranceService;
+use App\Services\Admin\V2\Payroll\PayrollV2FuyoService;
 use App\Services\Admin\V2\Payroll\PayrollV2IncomeTaxService;
 use App\Services\Admin\V2\Payroll\PayrollV2KihonService;
 use App\Services\Admin\V2\Payroll\PayrollV2MonthService;
@@ -33,6 +36,8 @@ class PayrollV2Controller extends Controller
     public function __construct(
         private readonly PayrollV2MonthService $monthService,
         private readonly PayrollV2CompanyService $companyService,
+        private readonly PayrollV2BonusIncomeTaxCalcService $bonusIncomeTaxCalcService,
+        private readonly PayrollV2BonusSocialInsuranceService $bonusSocialInsuranceService,
         private readonly PayrollV2CreateCandidatesService $createCandidatesService,
         private readonly PayrollV2CreateService $createService,
         private readonly PayrollV2DeleteService $deleteService,
@@ -49,6 +54,7 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2UpdateService $updateService,
         private readonly PayrollV2RecalculateService $recalculateService,
         private readonly PayrollV2EmploymentInsuranceService $employmentInsuranceService,
+        private readonly PayrollV2FuyoService $fuyoService,
         private readonly PayrollV2IncomeTaxService $incomeTaxService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
     ) {
@@ -56,7 +62,7 @@ class PayrollV2Controller extends Controller
 
     public function index(Request $request): View
     {
-        $pageData = $this->buildPageData($request);
+        $pageData = $this->buildPageData($request, false);
         $availablePaymentDates = $pageData['availablePaymentDates'];
         $selectedPaymentDate = $pageData['selectedPaymentDate'];
         $selectedMonth = $pageData['selectedMonth'];
@@ -108,9 +114,33 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function bonusIndex(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, true);
+        $availablePaymentDates = $pageData['availablePaymentDates'];
+        $selectedPaymentDate = $pageData['selectedPaymentDate'];
+        $selectedMonth = $pageData['selectedMonth'];
+        $companyOptions = $pageData['companyOptions'];
+        $selectedCompanyId = $pageData['selectedCompanyId'];
+        $selectedStaffId = $pageData['selectedStaffId'];
+        $staffRows = $pageData['staffRows'];
+        $rows = $this->attachBonusCalc((array) $pageData['rows'], $selectedPaymentDate);
+
+        return view('admin_v2.payroll.bonus_clean', [
+            'availablePaymentDates' => $availablePaymentDates,
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedMonth' => $selectedMonth,
+            'companyOptions' => $companyOptions,
+            'selectedCompanyId' => $selectedCompanyId,
+            'selectedStaffId' => $selectedStaffId,
+            'staffRows' => $staffRows,
+            'rows' => $rows,
+        ]);
+    }
+
     public function transferList(Request $request): View
     {
-        $pageData = $this->buildPageData($request);
+        $pageData = $this->buildPageData($request, false);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $selectedCompanyId = (string) $pageData['selectedCompanyId'];
         $rows = (array) $pageData['rows'];
@@ -258,7 +288,7 @@ class PayrollV2Controller extends Controller
 
     public function wageLedger(Request $request): View
     {
-        $pageData = $this->buildPageData($request);
+        $pageData = $this->buildPageData($request, false);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $selectedCompanyId = (string) $pageData['selectedCompanyId'];
         $rows = (array) $pageData['rows'];
@@ -400,6 +430,29 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function bonusUpdate(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:20'],
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'values' => ['required', 'array'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $updated = $this->updateBonusSummary(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            (array) $v['values']
+        );
+
+        return response()->json([
+            'ok' => true,
+            'updated' => $updated,
+        ]);
+    }
+
     public function recalculate(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -414,6 +467,53 @@ class PayrollV2Controller extends Controller
             $year,
             $month,
             (string) ($v['company_id'] ?? '')
+        );
+
+        return response()->json([
+            'ok' => true,
+            'updated' => $updated,
+        ]);
+    }
+
+    public function bonusRecalculate(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:20'],
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $paymentDate = trim((string) ($v['payment_date'] ?? ''));
+        if ($paymentDate === '') {
+            $paymentDate = sprintf('%04d-%02d-01', $year, $month);
+        }
+
+        $updated = 0;
+        $updated += (int) $this->updateBonusSummary(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            ['fuyo_sum' => $this->fuyoService->resolveByPaymentDate((string) $v['staff_id'], $paymentDate)]
+        );
+        $updated += (int) $this->employmentInsuranceService->recalculateBonus(
+            (string) $v['staff_id'],
+            $paymentDate
+        );
+        $updated += (int) $this->bonusSocialInsuranceService->recalculate(
+            (string) $v['staff_id'],
+            $paymentDate
+        );
+        $updated += (int) $this->bonusIncomeTaxCalcService->recalculate(
+            (string) $v['staff_id'],
+            $paymentDate
+        );
+        $updated += (int) $this->updateBonusSummary(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            []
         );
 
         return response()->json([
@@ -513,7 +613,33 @@ class PayrollV2Controller extends Controller
             $year,
             $month,
             (string) ($v['company_id'] ?? ''),
-            (string) ($v['payment_date'] ?? '')
+            (string) ($v['payment_date'] ?? ''),
+            false
+        );
+
+        return response()->json([
+            'ok' => true,
+            'candidates' => $payload['candidates'],
+            'suggested_payment_date' => $payload['suggested_payment_date'],
+            'payment_date_options' => $payload['payment_date_options'],
+        ]);
+    }
+
+    public function bonusCreateCandidates(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $payload = $this->createCandidatesService->payload(
+            $year,
+            $month,
+            (string) ($v['company_id'] ?? ''),
+            (string) ($v['payment_date'] ?? ''),
+            true
         );
 
         return response()->json([
@@ -540,7 +666,44 @@ class PayrollV2Controller extends Controller
             $month,
             array_map('strval', (array) $v['staff_ids']),
             (string) ($v['company_id'] ?? ''),
-            (string) ($v['payment_date'] ?? '')
+            (string) ($v['payment_date'] ?? ''),
+            false
+        );
+
+        if ($result['created'] === 0 && $result['skipped'] === 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => '対象者がありません。表示条件を確認してください。',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'created' => $result['created'],
+            'skipped' => $result['skipped'],
+            'created_ids' => $result['created_ids'],
+            'skipped_ids' => $result['skipped_ids'],
+        ]);
+    }
+
+    public function bonusCreate(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
+            'staff_ids' => ['required', 'array', 'min:1'],
+            'staff_ids.*' => ['required', 'string', 'max:20'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $result = $this->createService->create(
+            $year,
+            $month,
+            array_map('strval', (array) $v['staff_ids']),
+            (string) ($v['company_id'] ?? ''),
+            (string) ($v['payment_date'] ?? ''),
+            true
         );
 
         if ($result['created'] === 0 && $result['skipped'] === 0) {
@@ -569,7 +732,38 @@ class PayrollV2Controller extends Controller
 
         $result = $this->deleteService->delete(
             array_map('strval', (array) $v['staff_ids']),
-            (string) $v['payment_date']
+            (string) $v['payment_date'],
+            false
+        );
+
+        if ($result['deleted'] === 0 && $result['skipped'] === 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => '対象者がありません。表示条件を確認してください。',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'deleted' => $result['deleted'],
+            'skipped' => $result['skipped'],
+            'deleted_ids' => $result['deleted_ids'],
+            'skipped_ids' => $result['skipped_ids'],
+        ]);
+    }
+
+    public function bonusDelete(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'payment_date' => ['required', 'date_format:Y-m-d'],
+            'staff_ids' => ['required', 'array', 'min:1'],
+            'staff_ids.*' => ['required', 'string', 'max:20'],
+        ]);
+
+        $result = $this->deleteService->delete(
+            array_map('strval', (array) $v['staff_ids']),
+            (string) $v['payment_date'],
+            true
         );
 
         if ($result['deleted'] === 0 && $result['skipped'] === 0) {
@@ -617,9 +811,9 @@ class PayrollV2Controller extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function buildPageData(Request $request): array
+    private function buildPageData(Request $request, bool $bonus = false): array
     {
-        $availablePaymentDates = $this->monthService->availablePaymentDates();
+        $availablePaymentDates = $this->monthService->availablePaymentDates($bonus);
         $selectedPaymentDate = $this->monthService->normalizePaymentDate((string) $request->query('payment_date', ''), $availablePaymentDates);
         $selectedMonth = $this->monthService->monthFromPaymentDate($selectedPaymentDate);
 
@@ -633,8 +827,8 @@ class PayrollV2Controller extends Controller
         }
 
         $staffRows = $this->staffService->staffs($selectedCompanyId);
-        $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate);
-        $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate);
+        $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate, $bonus);
+        $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate, $bonus);
         $kihonMap = $this->kihonService->map($year, $month);
         $staffMasterMap = $this->staffMasterService->map();
         $shahoMap = $this->shahoService->map($year, $month);
@@ -703,6 +897,228 @@ class PayrollV2Controller extends Controller
 
         $text = str_replace([',', ' '], '', $text);
         return is_numeric($text) ? (float) $text : 0.0;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    private function attachBonusCalc(array $rows, string $selectedPaymentDate): array
+    {
+        if ($rows === [] || $selectedPaymentDate === '') {
+            return $rows;
+        }
+
+        $staffIds = array_values(array_filter(array_map(
+            static fn (array $row): string => trim((string) ($row['staff_id'] ?? '')),
+            $rows
+        ), static fn (string $id): bool => $id !== ''));
+
+        if ($staffIds === []) {
+            return $rows;
+        }
+
+        $selectedTs = strtotime($selectedPaymentDate);
+        if ($selectedTs === false) {
+            return $rows;
+        }
+
+        $sameMonthStart = date('Y-m-01', $selectedTs);
+        $sameMonthEnd = date('Y-m-t', $selectedTs);
+        $fiscalStart = ((int) date('n', $selectedTs) >= 4)
+            ? date('Y-04-01', $selectedTs)
+            : date('Y-04-01', strtotime('-1 year', $selectedTs));
+
+        $historyRows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->select(['kyuyo_staff_id', 'supply_month', 'bonus_amo'])
+            ->where('bonus', 1)
+            ->whereIn('kyuyo_staff_id', $staffIds)
+            ->whereNotNull('supply_month')
+            ->whereRaw('CONVERT(date, [supply_month]) >= ?', [$fiscalStart])
+            ->whereRaw('CONVERT(date, [supply_month]) <= ?', [$sameMonthEnd])
+            ->get();
+
+        $historyMap = [];
+        foreach ($historyRows as $historyRow) {
+            $staffId = trim((string) ($historyRow->kyuyo_staff_id ?? ''));
+            $paymentDate = trim((string) ($historyRow->supply_month ?? ''));
+            if ($staffId === '' || $paymentDate === '') {
+                continue;
+            }
+
+            $paymentTs = strtotime($paymentDate);
+            if ($paymentTs === false) {
+                continue;
+            }
+
+            $gross = $this->num($historyRow->bonus_amo ?? 0);
+            $standard = floor($gross / 1000) * 1000;
+
+            $historyMap[$staffId][] = [
+                'date' => date('Y-m-d', $paymentTs),
+                'gross' => $gross,
+                'standard' => $standard,
+            ];
+        }
+
+        foreach ($rows as &$row) {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            $summary = (array) ($row['summary'] ?? []);
+            $currentGross = $this->num($summary['bonus_amo'] ?? 0);
+            $currentStandard = floor($currentGross / 1000) * 1000;
+
+            $sameMonthPrior = 0.0;
+            $sameMonthOtherGross = 0.0;
+            $fiscalPrior = 0.0;
+
+            foreach (($historyMap[$staffId] ?? []) as $history) {
+                $historyDate = (string) ($history['date'] ?? '');
+                $historyGross = $this->num($history['gross'] ?? 0);
+                $historyStandard = $this->num($history['standard'] ?? 0);
+
+                if ($historyDate < $selectedPaymentDate) {
+                    $fiscalPrior += $historyStandard;
+                }
+
+                if ($historyDate >= $sameMonthStart && $historyDate < $selectedPaymentDate) {
+                    $sameMonthOtherGross += $historyGross;
+                    $sameMonthPrior += $historyStandard;
+                }
+            }
+
+            $kenpoCapRemainingBefore = max(5730000 - $fiscalPrior, 0);
+            $kenpoTargetStandard = min($currentStandard, $kenpoCapRemainingBefore);
+            $fiscalAfter = $fiscalPrior + $currentStandard;
+
+            $kounenCapRemainingBefore = max(1500000 - $sameMonthPrior, 0);
+            $kounenTargetStandard = min($currentStandard, $kounenCapRemainingBefore);
+            $sameMonthAfter = $sameMonthPrior + $currentStandard;
+
+            $row['bonus_calc'] = [
+                'bonus_gross_amount' => $currentGross,
+                'bonus_standard_amount' => $currentStandard,
+                'same_month_other_bonus' => $sameMonthOtherGross,
+                'same_month_standard_before' => $sameMonthPrior,
+                'same_month_standard_after' => $sameMonthAfter,
+                'kenpo_fiscal_standard_before' => $fiscalPrior,
+                'kenpo_fiscal_standard_after' => $fiscalAfter,
+                'kenpo_target_standard' => $kenpoTargetStandard,
+                'kounen_target_standard' => $kounenTargetStandard,
+                'kenpo_cap_hit' => $kenpoTargetStandard < $currentStandard ? 1 : 0,
+                'kounen_cap_hit' => $kounenTargetStandard < $currentStandard ? 1 : 0,
+            ];
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /** @param array<string,mixed> $values */
+    private function updateBonusSummary(string $staffId, int $year, int $month, array $values): int
+    {
+        $row = $this->loadBonusSummaryRow($staffId, $year, $month);
+        if ($row === null) {
+            return 0;
+        }
+
+        $current = (array) $row;
+        $payload = $this->sanitizeBonusValues($values);
+        $merged = array_merge($current, $payload);
+
+        $bonusAmount = $this->num($merged['bonus_amo'] ?? 0);
+        $taxationSum = max(0.0, round($bonusAmount, 0));
+        $notTaxationSum = 0.0;
+        $supplySum = $taxationSum + $notTaxationSum;
+        $rouhoTargetSum = $taxationSum;
+        $syahoSum = $this->num($merged['kenpo'] ?? 0)
+            + $this->num($merged['kaigo'] ?? 0)
+            + $this->num($merged['kounen'] ?? 0)
+            + $this->num($merged['koyou'] ?? 0);
+        $deductionSum = $syahoSum
+            + $this->num($merged['income_tax'] ?? 0)
+            + $this->num($merged['resident_tax'] ?? 0)
+            + $this->num($merged['rent_cost'] ?? 0)
+            + $this->num($merged['adjustment_cost'] ?? 0)
+            + $this->num($merged['koujyo_1'] ?? 0);
+
+        $payload['taxation_sum'] = (int) $taxationSum;
+        $payload['not_taxation_sum'] = (int) $notTaxationSum;
+        $payload['supply_sum'] = (int) $supplySum;
+        $payload['rouho_target_sum'] = (int) $rouhoTargetSum;
+        $payload['syaho_sum'] = (int) round($syahoSum, 0);
+        $payload['deduction_sum'] = (int) round($deductionSum, 0);
+        $payload['syaho_deduction_sum'] = (int) round(max(0.0, $taxationSum - $syahoSum), 0);
+
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
+            ->update($payload);
+    }
+
+    private function loadBonusSummaryRow(string $staffId, int $year, int $month): ?object
+    {
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 1)
+            ->whereRaw('YEAR([supply_month]) = ?', [$year])
+            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [trim($staffId)])
+            ->orderByDesc('kyuyo_sho_no')
+            ->first();
+    }
+
+    /** @param array<string,mixed> $values @return array<string,mixed> */
+    private function sanitizeBonusValues(array $values): array
+    {
+        $numericColumns = [
+            'bonus_amo',
+            'kenpo',
+            'kaigo',
+            'kounen',
+            'koyou',
+            'income_tax',
+            'resident_tax',
+            'rent_cost',
+            'adjustment_cost',
+            'koujyo_1',
+            'transfer_balance',
+            'fuyo_sum',
+            'rouho_target_sum',
+        ];
+        $textColumns = ['kyuyo_memo'];
+        $payload = [];
+
+        foreach ($values as $key => $raw) {
+            $column = trim((string) $key);
+            if ($column === '') {
+                continue;
+            }
+
+            if (in_array($column, $textColumns, true)) {
+                $payload[$column] = trim((string) $raw);
+                continue;
+            }
+
+            if (!in_array($column, $numericColumns, true)) {
+                continue;
+            }
+
+            $value = trim((string) $raw);
+            if ($value === '') {
+                $payload[$column] = null;
+                continue;
+            }
+
+            $value = str_replace([',', ' '], '', $value);
+            if (!is_numeric($value)) {
+                continue;
+            }
+
+            $payload[$column] = str_contains($value, '.') ? (float) $value : (int) $value;
+        }
+
+        return $payload;
     }
 
     /** @return array<string, array{mayor:string,specified_num:string}> */
