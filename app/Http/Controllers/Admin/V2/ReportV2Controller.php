@@ -255,12 +255,22 @@ class ReportV2Controller extends Controller
             $selectedCompany = '';
         }
 
+        $detailMonth = trim((string) $request->query('detail_month', ''));
+        $detailBucket = trim((string) $request->query('detail_bucket', ''));
+        $detailKind = trim((string) $request->query('detail_kind', 'regular'));
+
         return view('admin_v2.report.labor_insurance_clean_v2', [
             'availableYears' => $availableYears,
             'selectedYear' => $selectedYear,
             'companyOptions' => $companyOptions,
             'selectedCompany' => $selectedCompany,
-            'report' => $this->laborInsuranceService->build($selectedYear, $selectedCompany),
+            'report' => $this->laborInsuranceService->build(
+                $selectedYear,
+                $selectedCompany,
+                $detailMonth,
+                $detailBucket,
+                $detailKind,
+            ),
         ]);
     }
 }

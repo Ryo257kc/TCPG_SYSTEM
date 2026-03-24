@@ -12,8 +12,9 @@
     @include('admin_v2.report.partials.labor_insurance_header_clean')
     @include('admin_v2.report.partials.labor_insurance_filters')
     @include('admin_v2.report.partials.labor_insurance_summary_clean')
-    @include('admin_v2.report.partials.labor_insurance_table_v2')
+    @include('admin_v2.report.partials.labor_insurance_table_v3')
     @include('admin_v2.report.partials.labor_insurance_formula_note_clean')
+    @include('admin_v2.report.partials.labor_insurance_popup_script')
 </div>
 </body>
 </html>

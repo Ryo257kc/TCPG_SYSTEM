@@ -58,10 +58,18 @@ class ReportV2LaborInsuranceService
      *   filters: array<string,mixed>,
      *   monthly_rows: list<array<string,mixed>>,
      *   yearly_totals: array<string,float|int>,
-     *   report_totals: array<string,float|int>
+     *   report_totals: array<string,float|int>,
+     *   detail: array<string,mixed>|null,
+     *   detail_map: array<string,array<string,mixed>>
      * }
      */
-    public function build(int $fiscalYear, string $companyName = ''): array
+    public function build(
+        int $fiscalYear,
+        string $companyName = '',
+        string $detailMonth = '',
+        string $detailBucket = '',
+        string $detailKind = 'regular',
+    ): array
     {
         $payrollRows = $this->basePayrollQuery($fiscalYear)
             ->select([
@@ -95,6 +103,7 @@ class ReportV2LaborInsuranceService
             ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
             ->select([
                 's.staff_id',
+                's.staff_name',
                 's.staff_division',
                 'st.store_name',
                 'c.company_name',
@@ -113,6 +122,7 @@ class ReportV2LaborInsuranceService
             }
 
             $staffMap[$staffId] = [
+                'staff_name' => trim((string) ($staffRow->staff_name ?? '')),
                 'staff_division' => trim((string) ($staffRow->staff_division ?? '')),
                 'company_name' => trim((string) ($staffRow->company_name ?? '')),
                 'store_name' => trim((string) ($staffRow->store_name ?? '')),
@@ -121,6 +131,7 @@ class ReportV2LaborInsuranceService
 
         $monthlyBuckets = [];
         $bonusBuckets = [];
+        $detailBuckets = [];
         foreach ($this->fiscalMonths($fiscalYear) as $monthKey => $label) {
             $monthlyBuckets[$monthKey] = $this->emptyBucket($label, false, $monthKey);
         }
@@ -164,20 +175,65 @@ class ReportV2LaborInsuranceService
                 $bucket['left_regular_ids'][$staffId] = true;
                 $bucket['right_regular_amount'] += $amount;
                 $bucket['right_regular_ids'][$staffId] = true;
+                $this->pushDetail(
+                    $detailBuckets,
+                    $monthKey,
+                    $isBonus,
+                    'left_regular',
+                    $staffId,
+                    $staffMap[$staffId],
+                    $amount
+                );
+                $this->pushDetail(
+                    $detailBuckets,
+                    $monthKey,
+                    $isBonus,
+                    'right_regular',
+                    $staffId,
+                    $staffMap[$staffId],
+                    $amount
+                );
             }
 
             if ($isExecutiveWorker) {
                 $bucket['left_executive_amount'] += $amount;
                 $bucket['left_executive_ids'][$staffId] = true;
+                $this->pushDetail(
+                    $detailBuckets,
+                    $monthKey,
+                    $isBonus,
+                    'left_executive',
+                    $staffId,
+                    $staffMap[$staffId],
+                    $amount
+                );
                 if ($employmentInsurance) {
                     $bucket['right_executive_amount'] += $amount;
                     $bucket['right_executive_ids'][$staffId] = true;
+                    $this->pushDetail(
+                        $detailBuckets,
+                        $monthKey,
+                        $isBonus,
+                        'right_executive',
+                        $staffId,
+                        $staffMap[$staffId],
+                        $amount
+                    );
                 }
             }
 
             if ($isTemporary) {
                 $bucket['left_temporary_amount'] += $amount;
                 $bucket['left_temporary_ids'][$staffId] = true;
+                $this->pushDetail(
+                    $detailBuckets,
+                    $monthKey,
+                    $isBonus,
+                    'left_temporary',
+                    $staffId,
+                    $staffMap[$staffId],
+                    $amount
+                );
             }
 
             $bucket['left_total_amount'] =
@@ -244,18 +300,34 @@ class ReportV2LaborInsuranceService
             ];
         });
 
-        $reportTotals = [
-            'workers_total' => (int) (
-                $yearlyTotals['left_regular_count']
-                + $yearlyTotals['left_executive_count']
-                + $yearlyTotals['left_temporary_count']
+        $countableRows = array_values(array_filter(
+            $monthlyRows,
+            static fn (array $row): bool => empty($row['is_bonus'])
+        ));
+
+        $workersSourceTotal = array_sum(array_map(
+            static fn (array $row): int => (int) (
+                ($row['left_regular_count'] ?? 0)
+                + ($row['left_executive_count'] ?? 0)
+                + ($row['left_temporary_count'] ?? 0)
             ),
+            $countableRows
+        ));
+        $employmentWorkersSourceTotal = array_sum(array_map(
+            static fn (array $row): int => (int) (
+                ($row['right_regular_count'] ?? 0)
+                + ($row['right_executive_count'] ?? 0)
+            ),
+            $countableRows
+        ));
+
+        $reportTotals = [
+            'workers_source_total' => $workersSourceTotal,
+            'workers_total' => $workersSourceTotal / 12,
             'wages_total' => (float) $yearlyTotals['left_total_amount'],
             'wages_total_truncated' => floor(((float) $yearlyTotals['left_total_amount']) / 1000) * 1000,
-            'employment_workers' => (int) (
-                $yearlyTotals['right_regular_count']
-                + $yearlyTotals['right_executive_count']
-            ),
+            'employment_workers_source_total' => $employmentWorkersSourceTotal,
+            'employment_workers' => $employmentWorkersSourceTotal / 12,
             'employment_wages_total' => (float) $yearlyTotals['right_total_amount'],
             'employment_wages_total_truncated' => floor(((float) $yearlyTotals['right_total_amount']) / 1000) * 1000,
         ];
@@ -269,6 +341,8 @@ class ReportV2LaborInsuranceService
             'monthly_rows' => $monthlyRows,
             'yearly_totals' => $yearlyTotals,
             'report_totals' => $reportTotals,
+            'detail' => $this->buildDetail($detailBuckets, $detailMonth, $detailBucket, $detailKind),
+            'detail_map' => $this->buildDetailMap($detailBuckets),
         ];
     }
 
@@ -416,11 +490,145 @@ class ReportV2LaborInsuranceService
     }
 
     /**
+     * @param array<string,array<string,mixed>> $detailBuckets
+     * @param array<string,string> $staff
+     */
+    private function pushDetail(
+        array &$detailBuckets,
+        string $monthKey,
+        bool $isBonus,
+        string $bucket,
+        string $staffId,
+        array $staff,
+        float $amount,
+    ): void {
+        $detailKey = implode('|', [$isBonus ? 'bonus' : 'regular', $monthKey, $bucket]);
+        if (!isset($detailBuckets[$detailKey])) {
+            $detailBuckets[$detailKey] = [
+                'kind' => $isBonus ? 'bonus' : 'regular',
+                'month_key' => $monthKey,
+                'bucket' => $bucket,
+                'rows' => [],
+            ];
+        }
+
+        if (!isset($detailBuckets[$detailKey]['rows'][$staffId])) {
+            $detailBuckets[$detailKey]['rows'][$staffId] = [
+                'staff_id' => $staffId,
+                'staff_name' => $staff['staff_name'] ?? '',
+                'staff_division' => $staff['staff_division'] ?? '',
+                'company_name' => $staff['company_name'] ?? '',
+                'store_name' => $staff['store_name'] ?? '',
+                'amount' => 0.0,
+            ];
+        }
+
+        $detailBuckets[$detailKey]['rows'][$staffId]['amount'] += $amount;
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $detailBuckets
+     * @return array<string,mixed>|null
+     */
+    private function buildDetail(
+        array $detailBuckets,
+        string $detailMonth,
+        string $detailBucket,
+        string $detailKind,
+    ): ?array {
+        $detailMonth = trim($detailMonth);
+        $detailBucket = trim($detailBucket);
+        $detailKind = $detailKind === 'bonus' ? 'bonus' : 'regular';
+
+        if ($detailMonth === '' || $detailBucket === '') {
+            return null;
+        }
+
+        $detailKey = implode('|', [$detailKind, $detailMonth, $detailBucket]);
+        if (!isset($detailBuckets[$detailKey])) {
+            return null;
+        }
+
+        $detail = $detailBuckets[$detailKey];
+        $rows = array_values($detail['rows']);
+        usort($rows, static function (array $a, array $b): int {
+            return [$a['staff_name'], $a['staff_id']] <=> [$b['staff_name'], $b['staff_id']];
+        });
+
+        return [
+            'month_key' => $detailMonth,
+            'kind' => $detailKind,
+            'bucket' => $detailBucket,
+            'label' => $this->detailLabel($detailMonth, $detailBucket, $detailKind),
+            'rows' => $rows,
+            'total_amount' => array_sum(array_map(static fn (array $row): float => (float) $row['amount'], $rows)),
+            'total_count' => count($rows),
+        ];
+    }
+
+    private function detailLabel(string $monthKey, string $detailBucket, string $detailKind): string
+    {
+        [$year, $month] = array_pad(explode('-', $monthKey), 2, '');
+        $prefix = $detailKind === 'bonus' ? '賞与' : '';
+        $bucketLabels = [
+            'left_regular' => '(1) 常用労働者',
+            'left_executive' => '(2) 兼務役員',
+            'left_temporary' => '(3) 臨時労働者',
+            'right_regular' => '(5) 常用労働者',
+            'right_executive' => '(6) 兼務役員',
+        ];
+
+        return sprintf(
+            '%s%s年%s月 %s の対象者',
+            $prefix,
+            $year,
+            (int) $month,
+            $bucketLabels[$detailBucket] ?? $detailBucket
+        );
+    }
+
+    /**
+     * @param array<string,array<string,mixed>> $detailBuckets
+     * @return array<string,array<string,mixed>>
+     */
+    private function buildDetailMap(array $detailBuckets): array
+    {
+        $detailMap = [];
+        foreach ($detailBuckets as $detailKey => $detail) {
+            [$kind, $monthKey, $bucket] = array_pad(explode('|', (string) $detailKey, 3), 3, '');
+            $rows = array_values($detail['rows'] ?? []);
+            usort($rows, static function (array $a, array $b): int {
+                return [$a['staff_name'], $a['staff_id']] <=> [$b['staff_name'], $b['staff_id']];
+            });
+
+            $detailMap[$detailKey] = [
+                'month_key' => $monthKey,
+                'kind' => $kind,
+                'bucket' => $bucket,
+                'label' => $this->detailLabel($monthKey, $bucket, $kind === 'bonus' ? 'bonus' : 'regular'),
+                'rows' => array_map(static function (array $row): array {
+                    return [
+                        'staff_id' => (string) ($row['staff_id'] ?? ''),
+                        'staff_name' => (string) ($row['staff_name'] ?? ''),
+                        'amount' => (float) ($row['amount'] ?? 0),
+                    ];
+                }, $rows),
+                'total_amount' => array_sum(array_map(static fn (array $row): float => (float) $row['amount'], $rows)),
+                'total_count' => count($rows),
+            ];
+        }
+
+        return $detailMap;
+    }
+
+    /**
      * @return array{
      *   filters: array<string,mixed>,
      *   monthly_rows: list<array<string,mixed>>,
      *   yearly_totals: array<string,float|int>,
-     *   report_totals: array<string,float|int>
+     *   report_totals: array<string,float|int>,
+     *   detail: array<string,mixed>|null,
+     *   detail_map: array<string,array<string,mixed>>
      * }
      */
     private function emptyResult(int $fiscalYear, string $companyName): array
@@ -434,13 +642,17 @@ class ReportV2LaborInsuranceService
             'monthly_rows' => [],
             'yearly_totals' => $this->emptyTotals(),
             'report_totals' => [
+                'workers_source_total' => 0,
                 'workers_total' => 0,
                 'wages_total' => 0.0,
                 'wages_total_truncated' => 0.0,
+                'employment_workers_source_total' => 0,
                 'employment_workers' => 0,
                 'employment_wages_total' => 0.0,
                 'employment_wages_total_truncated' => 0.0,
             ],
+            'detail' => null,
+            'detail_map' => [],
         ];
     }
 }

@@ -26,6 +26,8 @@
     .labor-table td { text-align: right; font-variant-numeric: tabular-nums; }
     .cell-pair { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; white-space: nowrap; }
     .amount { font-weight: 700; }
+    .amount-link { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; background: transparent; border: 0; padding: 0; font: inherit; cursor: pointer; }
+    .amount-link:hover { color: #173f7a; }
     .count { color: var(--muted); font-size: 11px; }
     .total-cell { background: #f8fbff !important; color: var(--primary); }
     .total-cell .amount { color: var(--primary); }
@@ -38,6 +40,25 @@
     .transfer-card dl div { display: flex; justify-content: space-between; gap: 16px; }
     .transfer-card dt { color: var(--muted); font-size: 12px; }
     .transfer-card dd { margin: 0; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+    .formula-inline { margin-left: 10px; font-size: 11px; font-weight: 500; color: var(--muted); }
+    .detail-panel { margin-top: 16px; padding: 16px; }
+    .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+    .detail-head h2 { margin: 0; color: var(--primary); font-size: 18px; }
+    .detail-head p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .detail-table { min-width: 780px; }
+    .detail-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .amount-popover { position: absolute; z-index: 40; width: min(360px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 18px 48px rgba(12, 31, 63, 0.16); padding: 12px 14px; }
+    .amount-popover[hidden] { display: none; }
+    .amount-popover__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .amount-popover__title { color: var(--primary); font-size: 14px; line-height: 1.4; }
+    .amount-popover__close { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0; }
+    .amount-popover__meta { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .amount-popover__body { margin-top: 10px; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; }
+    .amount-popover__row { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #eef3f9; padding-top: 6px; }
+    .amount-popover__row:first-child { border-top: 0; padding-top: 0; }
+    .amount-popover__name { color: var(--text); font-size: 13px; }
+    .amount-popover__amount { color: var(--primary); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amount-popover__empty { color: var(--muted); font-size: 12px; }
     .formula-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .formula-card { border: 1px solid var(--line); border-radius: 12px; background: #fbfdff; padding: 14px 16px; }
     .formula-card h3 { margin: 0 0 10px; color: var(--primary); font-size: 15px; }
