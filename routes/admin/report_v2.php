@@ -9,3 +9,5 @@ Route::get('/reports/santei/csv', [ReportV2Controller::class, 'santeiCsv'])->nam
 Route::get('/reports/bonus-payment', [ReportV2Controller::class, 'bonusPaymentIndex'])->name('admin.report.bonus-payment.index');
 Route::get('/reports/bonus-payment/csv', [ReportV2Controller::class, 'bonusPaymentCsv'])->name('admin.report.bonus-payment.csv');
 Route::get('/reports/labor-insurance', [ReportV2Controller::class, 'laborInsuranceIndex'])->name('admin.report.labor-insurance.index');
+Route::get('/reports/labor-insurance/print', [ReportV2Controller::class, 'laborInsurancePrint'])->name('admin.report.labor-insurance.print');
+Route::get('/reports/labor-insurance/excel', [ReportV2Controller::class, 'laborInsuranceExcel'])->name('admin.report.labor-insurance.excel');

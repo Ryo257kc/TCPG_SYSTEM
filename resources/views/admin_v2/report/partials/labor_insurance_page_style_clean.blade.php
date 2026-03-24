@@ -1,6 +1,6 @@
 <style>
     .filter-panel { padding: 16px 18px; margin-bottom: 14px; }
-    .report-filter-grid { display: grid; grid-template-columns: 180px minmax(280px, 1fr) auto; gap: 14px; align-items: end; }
+    .report-filter-grid { display: grid; grid-template-columns: 180px minmax(220px, 320px) auto; gap: 14px; align-items: end; }
     .field { display: grid; gap: 6px; }
     .field span { font-size: 12px; color: var(--muted); font-weight: 600; }
     .field select { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: #fff; color: var(--text); }

@@ -10,7 +10,7 @@
 <body>
 <div class="page-shell">
     @include('admin_v2.report.partials.labor_insurance_header_clean')
-    @include('admin_v2.report.partials.labor_insurance_filters')
+    @include('admin_v2.report.partials.labor_insurance_filters_v3')
     @include('admin_v2.report.partials.labor_insurance_summary_clean')
     @include('admin_v2.report.partials.labor_insurance_table_v3')
     @include('admin_v2.report.partials.labor_insurance_formula_note_clean')

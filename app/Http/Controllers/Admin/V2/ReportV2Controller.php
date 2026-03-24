@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Report\ReportV2BonusPaymentCsvCleanService;
 use App\Services\Admin\V2\Report\ReportV2BonusPaymentService;
+use App\Services\Admin\V2\Report\ReportV2LaborInsuranceExcelService;
 use App\Services\Admin\V2\Report\ReportV2LaborInsuranceService;
 use App\Services\Admin\V2\Report\ReportV2SanteiCsvService;
 use App\Services\Admin\V2\Report\ReportV2SanteiService;
@@ -19,6 +20,7 @@ class ReportV2Controller extends Controller
         private readonly ReportV2BonusPaymentService $bonusPaymentService,
         private readonly ReportV2BonusPaymentCsvCleanService $bonusPaymentCsvService,
         private readonly ReportV2LaborInsuranceService $laborInsuranceService,
+        private readonly ReportV2LaborInsuranceExcelService $laborInsuranceExcelService,
     ) {
     }
 
@@ -272,5 +274,55 @@ class ReportV2Controller extends Controller
                 $detailKind,
             ),
         ]);
+    }
+
+    public function laborInsurancePrint(Request $request): View
+    {
+        $availableYears = $this->laborInsuranceService->availableYears();
+        $selectedYear = (int) $request->query('year', $availableYears[0] ?? date('Y'));
+        if ($availableYears !== [] && !in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $availableYears[0];
+        }
+
+        $companyOptions = $this->laborInsuranceService->companyOptions($selectedYear);
+        $selectedCompany = trim((string) $request->query('company', ''));
+        if ($selectedCompany !== '' && !in_array($selectedCompany, $companyOptions, true)) {
+            $selectedCompany = '';
+        }
+
+        return view('admin_v2.report.labor_insurance_print_v6', [
+            'selectedYear' => $selectedYear,
+            'selectedCompany' => $selectedCompany,
+            'report' => $this->laborInsuranceService->build($selectedYear, $selectedCompany),
+        ]);
+    }
+
+    public function laborInsuranceExcel(Request $request)
+    {
+        $availableYears = $this->laborInsuranceService->availableYears();
+        $selectedYear = (int) $request->query('year', $availableYears[0] ?? date('Y'));
+        if ($availableYears !== [] && !in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $availableYears[0];
+        }
+
+        $companyOptions = $this->laborInsuranceService->companyOptions($selectedYear);
+        $selectedCompany = trim((string) $request->query('company', ''));
+        abort_if($selectedCompany === '' || !in_array($selectedCompany, $companyOptions, true), 404);
+
+        $file = $this->laborInsuranceExcelService->build($selectedYear, $selectedCompany);
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        return response()->download(
+            $file['path'],
+            $file['download_name'],
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+            ]
+        )->deleteFileAfterSend(true);
     }
 }

@@ -56,6 +56,8 @@ class ReportV2LaborInsuranceService
     /**
      * @return array{
      *   filters: array<string,mixed>,
+     *   company_meta: array<string,mixed>,
+     *   executive_worker_summary: list<array<string,string>>,
      *   monthly_rows: list<array<string,mixed>>,
      *   yearly_totals: array<string,float|int>,
      *   report_totals: array<string,float|int>,
@@ -115,6 +117,7 @@ class ReportV2LaborInsuranceService
         }
 
         $staffMap = [];
+        $companyIds = [];
         foreach ($staffQuery->get() as $staffRow) {
             $staffId = trim((string) ($staffRow->staff_id ?? ''));
             if ($staffId === '') {
@@ -129,9 +132,12 @@ class ReportV2LaborInsuranceService
             ];
         }
 
+        $companyMeta = $this->companyMeta($companyName);
+
         $monthlyBuckets = [];
         $bonusBuckets = [];
         $detailBuckets = [];
+        $executiveWorkerSummary = [];
         foreach ($this->fiscalMonths($fiscalYear) as $monthKey => $label) {
             $monthlyBuckets[$monthKey] = $this->emptyBucket($label, false, $monthKey);
         }
@@ -198,6 +204,15 @@ class ReportV2LaborInsuranceService
             if ($isExecutiveWorker) {
                 $bucket['left_executive_amount'] += $amount;
                 $bucket['left_executive_ids'][$staffId] = true;
+                if (!isset($executiveWorkerSummary[$staffId])) {
+                    $executiveWorkerSummary[$staffId] = [
+                        'staff_name' => $staffMap[$staffId]['staff_name'] ?? '',
+                        'role_label' => '取締役',
+                        'employment_label' => $employmentInsurance ? '有' : '無',
+                    ];
+                } elseif ($employmentInsurance) {
+                    $executiveWorkerSummary[$staffId]['employment_label'] = '有';
+                }
                 $this->pushDetail(
                     $detailBuckets,
                     $monthKey,
@@ -338,6 +353,8 @@ class ReportV2LaborInsuranceService
                 'company_name' => $companyName,
                 'period_label' => sprintf('%d/04/01 - %d/03/31', $fiscalYear, $fiscalYear + 1),
             ],
+            'company_meta' => $companyMeta,
+            'executive_worker_summary' => array_values($executiveWorkerSummary),
             'monthly_rows' => $monthlyRows,
             'yearly_totals' => $yearlyTotals,
             'report_totals' => $reportTotals,
@@ -489,6 +506,71 @@ class ReportV2LaborInsuranceService
         return is_numeric($value) ? (float) $value : 0.0;
     }
 
+    /** @return array<string,mixed> */
+    private function companyMeta(string $companyName): array
+    {
+        if (trim($companyName) === '') {
+            return [
+                'company_name' => '',
+                'company_address' => '',
+                'office_number' => '',
+                'tel' => '',
+                'labor_install_category' => '',
+                'labor_insurance_number' => '',
+                'labor_parts' => [
+                    'prefecture' => '',
+                    'jurisdiction' => '',
+                    'office' => '',
+                    'base' => '',
+                    'branch' => '',
+                ],
+            ];
+        }
+
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_companies as c')
+            ->leftJoin('dbo.mx_stores as st', 'st.company_id', '=', 'c.company_id')
+            ->select([
+                'c.company_name',
+                'c.company_address',
+                'c.office_number',
+                'c.tel',
+                'c.labor_insurance_number',
+                'c.labor_install_category',
+            ])
+            ->where('c.company_name', $companyName)
+            ->first();
+
+        $laborInsuranceNumber = trim((string) ($row->labor_insurance_number ?? ''));
+
+        return [
+            'company_name' => trim((string) ($row->company_name ?? '')),
+            'company_address' => trim((string) ($row->company_address ?? '')),
+            'office_number' => trim((string) ($row->office_number ?? '')),
+            'tel' => trim((string) ($row->tel ?? '')),
+            'labor_install_category' => trim((string) ($row->labor_install_category ?? '')),
+            'labor_insurance_number' => $laborInsuranceNumber,
+            'labor_parts' => $this->parseLaborInsuranceNumber($laborInsuranceNumber),
+        ];
+    }
+
+    /** @return array{prefecture:string,jurisdiction:string,office:string,base:string,branch:string} */
+    private function parseLaborInsuranceNumber(string $value): array
+    {
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        if (strlen($digits) < 14) {
+            $digits = str_pad($digits, 14, '0', STR_PAD_LEFT);
+        }
+
+        return [
+            'prefecture' => substr($digits, 0, 2) ?: '',
+            'jurisdiction' => substr($digits, 2, 1) ?: '',
+            'office' => substr($digits, 3, 2) ?: '',
+            'base' => substr($digits, 5, 6) ?: '',
+            'branch' => substr($digits, 11, 3) ?: '',
+        ];
+    }
+
     /**
      * @param array<string,array<string,mixed>> $detailBuckets
      * @param array<string,string> $staff
@@ -624,6 +706,8 @@ class ReportV2LaborInsuranceService
     /**
      * @return array{
      *   filters: array<string,mixed>,
+     *   company_meta: array<string,mixed>,
+     *   executive_worker_summary: list<array<string,string>>,
      *   monthly_rows: list<array<string,mixed>>,
      *   yearly_totals: array<string,float|int>,
      *   report_totals: array<string,float|int>,
@@ -639,6 +723,8 @@ class ReportV2LaborInsuranceService
                 'company_name' => $companyName,
                 'period_label' => sprintf('%d/04/01 - %d/03/31', $fiscalYear, $fiscalYear + 1),
             ],
+            'company_meta' => $this->companyMeta($companyName),
+            'executive_worker_summary' => [],
             'monthly_rows' => [],
             'yearly_totals' => $this->emptyTotals(),
             'report_totals' => [
