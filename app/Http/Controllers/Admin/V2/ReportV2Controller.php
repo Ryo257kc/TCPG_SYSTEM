@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Report\ReportV2BonusPaymentCsvCleanService;
 use App\Services\Admin\V2\Report\ReportV2BonusPaymentService;
+use App\Services\Admin\V2\Report\ReportV2LaborInsuranceService;
 use App\Services\Admin\V2\Report\ReportV2SanteiCsvService;
 use App\Services\Admin\V2\Report\ReportV2SanteiService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class ReportV2Controller extends Controller
         private readonly ReportV2SanteiCsvService $santeiCsvService,
         private readonly ReportV2BonusPaymentService $bonusPaymentService,
         private readonly ReportV2BonusPaymentCsvCleanService $bonusPaymentCsvService,
+        private readonly ReportV2LaborInsuranceService $laborInsuranceService,
     ) {
     }
 
@@ -44,7 +46,9 @@ class ReportV2Controller extends Controller
                     [
                         'title' => '社保負担一覧',
                         'description' => '事業主負担と個人負担を確認する一覧です。',
-                        'status' => 'planned',
+                        'status' => 'available',
+                        'url' => route('admin.report.labor-insurance.index'),
+                        'action' => '髢九￥',
                     ],
                     [
                         'title' => 'ベースアップ一覧',
@@ -235,5 +239,28 @@ class ReportV2Controller extends Controller
                 'Pragma' => 'no-cache',
             ]
         );
+    }
+
+    public function laborInsuranceIndex(Request $request): View
+    {
+        $availableYears = $this->laborInsuranceService->availableYears();
+        $selectedYear = (int) $request->query('year', $availableYears[0] ?? date('Y'));
+        if ($availableYears !== [] && !in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $availableYears[0];
+        }
+
+        $companyOptions = $this->laborInsuranceService->companyOptions($selectedYear);
+        $selectedCompany = trim((string) $request->query('company', ''));
+        if ($selectedCompany !== '' && !in_array($selectedCompany, $companyOptions, true)) {
+            $selectedCompany = '';
+        }
+
+        return view('admin_v2.report.labor_insurance_clean_v2', [
+            'availableYears' => $availableYears,
+            'selectedYear' => $selectedYear,
+            'companyOptions' => $companyOptions,
+            'selectedCompany' => $selectedCompany,
+            'report' => $this->laborInsuranceService->build($selectedYear, $selectedCompany),
+        ]);
     }
 }

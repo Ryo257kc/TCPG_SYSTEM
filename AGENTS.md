@@ -36,3 +36,9 @@
 - Read-only access is allowed for `C:\Users\ryo25\OneDrive\dev\samples`.
 - Never write, modify, move, or delete anything in that sample folder.
 - Do not browse any other external folders.
+
+## 10) No Unlabeled Approximation In UI
+- Never show provisional, approximate, assumed, fallback, or verification-only numbers in the UI unless the user explicitly approves that exact display.
+- If a number is not confirmed as the real output value, do not render it as a normal value.
+- If temporary verification text is explicitly requested, label it clearly as `仮`, `概算`, or `確認用`.
+- Do not mix confirmed values and unconfirmed formula output in the same UI field.
