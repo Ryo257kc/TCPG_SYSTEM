@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
+use App\Services\Admin\V2\Report\ReportV2BonusPaymentCsvCleanService;
+use App\Services\Admin\V2\Report\ReportV2BonusPaymentService;
 use App\Services\Admin\V2\Report\ReportV2SanteiCsvService;
 use App\Services\Admin\V2\Report\ReportV2SanteiService;
 use Illuminate\Http\Request;
@@ -13,6 +15,8 @@ class ReportV2Controller extends Controller
     public function __construct(
         private readonly ReportV2SanteiService $santeiService,
         private readonly ReportV2SanteiCsvService $santeiCsvService,
+        private readonly ReportV2BonusPaymentService $bonusPaymentService,
+        private readonly ReportV2BonusPaymentCsvCleanService $bonusPaymentCsvService,
     ) {
     }
 
@@ -61,9 +65,11 @@ class ReportV2Controller extends Controller
                         'action' => '開く',
                     ],
                     [
-                        'title' => '算定基礎 CSV',
-                        'description' => '電子申請用の算定基礎 CSV を出力します。',
-                        'status' => 'planned',
+                        'title' => '賞与支払届一覧',
+                        'description' => '賞与支払届の対象者と賞与額を会社ごとに確認する一覧です。',
+                        'status' => 'available',
+                        'url' => route('admin.report.bonus-payment.index'),
+                        'action' => '開く',
                     ],
                     [
                         'title' => '賞与支払届 CSV',
@@ -136,6 +142,80 @@ class ReportV2Controller extends Controller
         abort_if($selectedCompany === '' || !in_array($selectedCompany, $companyOptions, true), 404);
 
         $csv = $this->santeiCsvService->build($selectedYear, $selectedCompany, date('Ymd'));
+        abort_if($csv === '', 404);
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        $bytes = mb_convert_encoding($csv, 'SJIS-win', 'UTF-8');
+
+        return response()->streamDownload(
+            static function () use ($bytes): void {
+                echo $bytes;
+            },
+            'SHFD0006.CSV',
+            [
+                'Content-Type' => 'text/csv; charset=Shift_JIS',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+            ]
+        );
+    }
+
+    public function bonusPaymentIndex(Request $request): View
+    {
+        $availableYears = $this->bonusPaymentService->availableYears();
+        $selectedYear = (int) $request->query('year', $availableYears[0] ?? date('Y'));
+        if ($availableYears !== [] && !in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $availableYears[0];
+        }
+
+        $companyOptions = $this->bonusPaymentService->companyOptions($selectedYear);
+        $selectedCompany = trim((string) $request->query('company', ''));
+        if ($selectedCompany !== '' && !in_array($selectedCompany, $companyOptions, true)) {
+            $selectedCompany = '';
+        }
+
+        $paymentMonthOptions = $this->bonusPaymentService->paymentMonthOptions($selectedYear, $selectedCompany);
+        $selectedPaymentMonth = trim((string) $request->query('payment_month', ''));
+        if ($selectedPaymentMonth !== '' && !in_array($selectedPaymentMonth, $paymentMonthOptions, true)) {
+            $selectedPaymentMonth = '';
+        }
+
+        return view('admin_v2.report.bonus_payment_clean', [
+            'availableYears' => $availableYears,
+            'selectedYear' => $selectedYear,
+            'companyOptions' => $companyOptions,
+            'selectedCompany' => $selectedCompany,
+            'paymentMonthOptions' => $paymentMonthOptions,
+            'selectedPaymentMonth' => $selectedPaymentMonth,
+            'rows' => $this->bonusPaymentService->rows($selectedYear, $selectedCompany, $selectedPaymentMonth),
+        ]);
+    }
+
+    public function bonusPaymentCsv(Request $request)
+    {
+        $availableYears = $this->bonusPaymentService->availableYears();
+        $selectedYear = (int) $request->query('year', $availableYears[0] ?? date('Y'));
+        if ($availableYears !== [] && !in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $availableYears[0];
+        }
+
+        $companyOptions = $this->bonusPaymentService->companyOptions($selectedYear);
+        $selectedCompany = trim((string) $request->query('company', ''));
+        abort_if($selectedCompany === '' || !in_array($selectedCompany, $companyOptions, true), 404);
+
+        $paymentMonthOptions = $this->bonusPaymentService->paymentMonthOptions($selectedYear, $selectedCompany);
+        $selectedPaymentMonth = trim((string) $request->query('payment_month', ''));
+        abort_if($selectedPaymentMonth === '' || !in_array($selectedPaymentMonth, $paymentMonthOptions, true), 404);
+
+        $csv = $this->bonusPaymentCsvService->build(
+            $selectedYear,
+            $selectedCompany,
+            $selectedPaymentMonth,
+            date('Ymd'),
+        );
         abort_if($csv === '', 404);
 
         while (ob_get_level() > 0) {
