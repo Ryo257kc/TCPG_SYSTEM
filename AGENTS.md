@@ -25,3 +25,14 @@
 - Keep `index.blade.php` as layout shell + `@include` calls only (no large HTML blocks).
 - Do not use regex/find-replace bulk edits for Blade/HTML structure changes.
 - For layout changes, edit block-by-block and verify after each step.
+
+## 8) No External File Access
+- Never read, inspect, search, or open files/folders outside this project unless the user explicitly names the exact path and explicitly asks for that exact file to be checked.
+- Never proactively browse outside-project folders.
+- Never write, modify, move, or delete anything outside this project.
+- If external file contents are needed, prefer user-pasted content over direct file access.
+
+## 9) Approved External Sample Folder
+- Read-only access is allowed for `C:\Users\ryo25\OneDrive\dev\samples`.
+- Never write, modify, move, or delete anything in that sample folder.
+- Do not browse any other external folders.

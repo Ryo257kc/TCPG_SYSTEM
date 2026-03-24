@@ -14,6 +14,10 @@ class DashboardV2MenuService
                 ['key' => 'attendance-manage', 'label' => '勤怠管理', 'url' => '/admin/attendance'],
                 ['key' => 'salary-detail', 'label' => '給与計算', 'url' => '/admin/payroll'],
                 ['key' => 'bonus-detail', 'label' => '賞与計算', 'url' => '/admin/bonus'],
+                ['key' => 'paid-leave-manage', 'label' => '有休管理', 'url' => '/admin/paid-leave'],
+            ],
+            '帳票' => [
+                ['key' => 'report-center', 'label' => '帳票一覧', 'url' => '/admin/reports'],
             ],
             'マスタ' => [
                 ['key' => 'master-company', 'label' => '会社マスタ', 'url' => '/admin/master/company'],
@@ -35,6 +39,8 @@ class DashboardV2MenuService
             'attendance-manage' => ['title' => '勤怠管理', 'description' => '勤怠管理ページへ移動します。'],
             'salary-detail' => ['title' => '給与計算', 'description' => '給与計算ページへ移動します。'],
             'bonus-detail' => ['title' => '賞与計算', 'description' => '賞与計算ページへ移動します。'],
+            'paid-leave-manage' => ['title' => '有休管理', 'description' => '有休の取得・使用・消滅履歴と残数を確認するページです。'],
+            'report-center' => ['title' => '帳票一覧', 'description' => '帳票一覧ページへ移動します。'],
             'master-company' => ['title' => '会社マスタ', 'description' => '会社マスタページへ移動します。'],
             'master-staff' => ['title' => 'スタッフマスタ', 'description' => 'スタッフマスタページへ移動します。'],
             'master-store' => ['title' => '店舗マスタ', 'description' => '店舗マスタページへ移動します。'],
