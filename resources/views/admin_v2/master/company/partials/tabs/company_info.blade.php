@@ -48,6 +48,10 @@
           <span>設立日</span>
           <div class="company-display-value {{ $selectedRow['established_date'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['established_date'] !== '' ? $selectedRow['established_date'] : '---' }}</div>
         </div>
+        <div class="detail-field">
+          <span>締日</span>
+          <div class="company-display-value {{ $selectedRow['closing_day'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['closing_day'] !== '' ? $selectedRow['closing_day'] : '---' }}</div>
+        </div>
       </div>
     </div>
 
@@ -103,6 +107,10 @@
         <label class="detail-field">
           <span>設立日</span>
           <input type="date" name="established_date" value="{{ $selectedRow['established_date'] }}">
+        </label>
+        <label class="detail-field">
+          <span>締日</span>
+          <input type="text" name="closing_day" value="{{ $selectedRow['closing_day'] }}">
         </label>
       </div>
     </div>

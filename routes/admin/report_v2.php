@@ -11,3 +11,4 @@ Route::get('/reports/bonus-payment/csv', [ReportV2Controller::class, 'bonusPayme
 Route::get('/reports/labor-insurance', [ReportV2Controller::class, 'laborInsuranceIndex'])->name('admin.report.labor-insurance.index');
 Route::get('/reports/labor-insurance/print', [ReportV2Controller::class, 'laborInsurancePrint'])->name('admin.report.labor-insurance.print');
 Route::get('/reports/labor-insurance/excel', [ReportV2Controller::class, 'laborInsuranceExcel'])->name('admin.report.labor-insurance.excel');
+Route::get('/reports/rishoku', [ReportV2Controller::class, 'rishokuIndex'])->name('admin.report.rishoku.index');

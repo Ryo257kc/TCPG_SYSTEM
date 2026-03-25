@@ -14,5 +14,6 @@
         @include('admin_v2.master.staff.partials.content')
     </div>
 </div>
+@include('admin_v2.master.staff.partials.page_script')
 </body>
 </html>

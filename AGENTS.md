@@ -42,3 +42,9 @@
 - If a number is not confirmed as the real output value, do not render it as a normal value.
 - If temporary verification text is explicitly requested, label it clearly as `仮`, `概算`, or `確認用`.
 - Do not mix confirmed values and unconfirmed formula output in the same UI field.
+
+## 11) No Fallback For Missing Data
+- Do not use fallback values in UI or business logic as a substitute for missing source data.
+- Use only confirmed data values from the actual source tables/fields.
+- If required data is missing, leave it blank or surface the true error and investigate the root cause.
+- Do not introduce fallback logic unless the user explicitly approves that exact fallback.

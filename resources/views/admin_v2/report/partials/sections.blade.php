@@ -37,6 +37,19 @@
                         </div>
                     </article>
                 @endforeach
+
+                @if ($loop->index === 1)
+                    <article class="report-card is-available">
+                        <div class="report-card-top">
+                            <h3>離職票確認</h3>
+                            <span class="badge badge-ready">利用可</span>
+                        </div>
+                        <p class="report-desc">離職日基準の月別期間と基礎日数・賃金額を確認する入力補助画面です。</p>
+                        <div class="report-actions">
+                            <a class="btn btn-primary" href="{{ route('admin.report.rishoku.index') }}">開く</a>
+                        </div>
+                    </article>
+                @endif
             </div>
         </section>
     @endforeach

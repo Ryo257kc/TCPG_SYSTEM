@@ -102,8 +102,25 @@
       $selectedRow['address2'] ?? '',
       $selectedRow['building'] ?? '',
   ], fn ($value) => trim((string) $value) !== '')));
+
+  $staffDivisionOptions = [
+      '役員',
+      '兼務役員',
+      '正社員',
+      'パート',
+      'アルバイト',
+      '業務委託',
+  ];
 @endphp
 
+<form method="post" action="{{ route('admin.master.staff.update') }}" class="staff-info-form" id="staff-info-form">
+  @csrf
+  <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+  <input type="hidden" name="q" value="{{ $keyword }}">
+  <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
+  <input type="hidden" name="tab" value="staff">
+
+<div class="staff-info-view">
 <div class="staff-info-sections">
   <section class="info-block">
     <div class="info-block-title">名前</div>
@@ -535,6 +552,7 @@
     <div class="detail-grid">
       @foreach($selectedRow as $field => $value)
         @continue(in_array($field, $usedFields, true))
+        @continue(str_starts_with($field, '_raw_'))
         <label class="detail-field">
           <span>{{ $fieldLabels[$field] ?? $field }}</span>
           <div class="detail-value {{ $value === '' ? 'detail-value-empty' : '' }}">{{ $value !== '' ? $value : '---' }}</div>
@@ -543,3 +561,158 @@
     </div>
   </section>
 </div>
+  <div class="detail-actions">
+    <button type="button" class="btn-secondary" onclick="toggleStaffInfoEdit(true)">編集</button>
+  </div>
+</div>
+
+<div class="staff-info-edit" hidden>
+  <div class="staff-edit-grid">
+    <div class="detail-section detail-field-wide"><span>スタッフ情報を編集</span></div>
+
+    <label class="detail-field">
+      <span>フリガナ</span>
+      <input type="text" name="staff_name_furi" value="{{ $selectedRow['staff_name_furi'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>氏名</span>
+      <input type="text" name="staff_name" value="{{ $selectedRow['staff_name'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>スタッフID</span>
+      <div class="staff-display-value">{{ $selectedRow['staff_id'] !== '' ? $selectedRow['staff_id'] : '---' }}</div>
+    </label>
+    <label class="detail-field">
+      <span>スタッフコード</span>
+      <div class="staff-display-value">{{ ($selectedRow['staff_code'] ?? '') !== '' ? $selectedRow['staff_code'] : '---' }}</div>
+    </label>
+
+    <label class="detail-field">
+      <span>マイナンバー</span>
+      <input type="text" name="my_number" value="{{ $selectedRow['my_number'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>表示名</span>
+      <input type="text" name="display_name_ja" value="{{ $selectedRow['display_name_ja'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>会社</span>
+      <div class="staff-display-value">{{ ($selectedRow['_company_name'] ?? '') !== '' ? $selectedRow['_company_name'] : '---' }}</div>
+    </label>
+    <label class="detail-field">
+      <span>店舗</span>
+      <select name="section">
+        <option value=""></option>
+        @foreach(($storeOptions ?? []) as $store)
+          <option value="{{ $store['store_code'] }}" @selected(($selectedRow['section'] ?? '') === $store['store_code'])>{{ $store['store_name'] !== '' ? $store['store_name'] : $store['store_code'] }}</option>
+        @endforeach
+      </select>
+    </label>
+
+    <label class="detail-field">
+      <span>雇用区分</span>
+      <select name="staff_division">
+        <option value=""></option>
+        @foreach($staffDivisionOptions as $option)
+          <option value="{{ $option }}" @selected(($selectedRow['staff_division'] ?? '') === $option)>{{ $option }}</option>
+        @endforeach
+      </select>
+    </label>
+    <label class="detail-field">
+      <span>雇用形態</span>
+      <input type="text" name="employment" value="{{ $selectedRow['employment'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>入社日</span>
+      <input type="date" name="nyu_date" value="{{ $selectedRow['_raw_nyu_date'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>退社日</span>
+      <input type="date" name="tai_date" value="{{ $selectedRow['_raw_tai_date'] ?? '' }}">
+    </label>
+
+    <label class="detail-field detail-field-wide">
+      <span>住所フリガナ</span>
+      <input type="text" name="address_furi" value="{{ $selectedRow['address_furi'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>郵便番号</span>
+      <input type="text" name="post_num" value="{{ $selectedRow['post_num'] ?? '' }}">
+    </label>
+    <label class="detail-field detail-field-wide">
+      <span>住所</span>
+      <input type="text" name="address" value="{{ $selectedRow['address'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>住所1</span>
+      <input type="text" name="address1" value="{{ $selectedRow['address1'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>住所2</span>
+      <input type="text" name="address2" value="{{ $selectedRow['address2'] ?? '' }}">
+    </label>
+    <label class="detail-field detail-field-wide">
+      <span>建物名</span>
+      <input type="text" name="building" value="{{ $selectedRow['building'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>自宅電話</span>
+      <input type="text" name="home_tel" value="{{ $selectedRow['home_tel'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>携帯番号</span>
+      <input type="text" name="mobile_tel" value="{{ $selectedRow['mobile_tel'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>社会保険番号</span>
+      <input type="text" name="syaho_num" value="{{ $selectedRow['syaho_num'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>雇用保険番号</span>
+      <input type="text" name="koyou_num" value="{{ $selectedRow['koyou_num'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>整理番号</span>
+      <input type="text" name="syaho_seiri_num" value="{{ $selectedRow['syaho_seiri_num'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>基礎年金番号</span>
+      <input type="text" name="kiso_nenkin_num" value="{{ $selectedRow['kiso_nenkin_num'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>社会保険加入日</span>
+      <input type="date" name="syaho_date" value="{{ $selectedRow['_raw_syaho_date'] ?? '' }}">
+    </label>
+    <label class="detail-field">
+      <span>雇用保険加入日</span>
+      <input type="date" name="koyou_date" value="{{ $selectedRow['_raw_koyou_date'] ?? '' }}">
+    </label>
+
+    <label class="detail-field">
+      <span>社会保険</span>
+      <div class="checkbox-line"><input type="checkbox" name="syaho" value="1" @checked((string)($selectedRow['syaho'] ?? '') !== '' && !in_array(mb_strtolower((string)($selectedRow['syaho'] ?? '')), ['0','false','no','off','なし','無','null'], true))> 加入</div>
+    </label>
+    <label class="detail-field">
+      <span>雇用保険</span>
+      <div class="checkbox-line"><input type="checkbox" name="koyou" value="1" @checked((string)($selectedRow['koyou'] ?? '') !== '' && !in_array(mb_strtolower((string)($selectedRow['koyou'] ?? '')), ['0','false','no','off','なし','無','null'], true))> 加入</div>
+    </label>
+
+    <label class="detail-field detail-field-wide">
+      <span>メモ</span>
+      <textarea name="memo">{{ $selectedRow['memo'] ?? '' }}</textarea>
+    </label>
+  </div>
+
+  <div class="detail-actions">
+    <button type="submit">保存</button>
+    <button type="button" class="btn-secondary" onclick="toggleStaffInfoEdit(false)">取消</button>
+  </div>
+</div>
+</form>

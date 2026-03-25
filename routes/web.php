@@ -23,6 +23,8 @@ Route::prefix('admin')->group(function (): void {
 
         require __DIR__ . '/admin/attendance_v2.php';
         require __DIR__ . '/admin/payroll_v2.php';
+        require __DIR__ . '/admin/paid_leave_v2.php';
+        require __DIR__ . '/admin/report_v2.php';
 
         Route::get('/master/company', [CompanyV2Controller::class, 'index'])->name('admin.master.company');
         Route::post('/master/company/update', [CompanyV2Controller::class, 'update'])->name('admin.master.company.update');
@@ -36,6 +38,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/company/mayor/update', [CompanyV2Controller::class, 'updateMayor'])->name('admin.master.company.mayor.update');
         Route::post('/master/company/mayor/delete', [CompanyV2Controller::class, 'deleteMayor'])->name('admin.master.company.mayor.delete');
         Route::get('/master/staff', [StaffV2Controller::class, 'index'])->name('admin.master.staff');
+        Route::post('/master/staff/update', [StaffV2Controller::class, 'update'])->name('admin.master.staff.update');
         Route::get('/master/store', [StoreV2Controller::class, 'index'])->name('admin.master.store');
         Route::post('/master/store/update', [StoreV2Controller::class, 'update'])->name('admin.master.store.update');
         Route::get('/master/allowance', [AllowanceV2Controller::class, 'index'])->name('admin.master.allowance');

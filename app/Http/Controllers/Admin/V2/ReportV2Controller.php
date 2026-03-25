@@ -7,6 +7,7 @@ use App\Services\Admin\V2\Report\ReportV2BonusPaymentCsvCleanService;
 use App\Services\Admin\V2\Report\ReportV2BonusPaymentService;
 use App\Services\Admin\V2\Report\ReportV2LaborInsuranceExcelService;
 use App\Services\Admin\V2\Report\ReportV2LaborInsuranceService;
+use App\Services\Admin\V2\Report\ReportV2RishokuServiceV3;
 use App\Services\Admin\V2\Report\ReportV2SanteiCsvService;
 use App\Services\Admin\V2\Report\ReportV2SanteiService;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class ReportV2Controller extends Controller
         private readonly ReportV2BonusPaymentCsvCleanService $bonusPaymentCsvService,
         private readonly ReportV2LaborInsuranceService $laborInsuranceService,
         private readonly ReportV2LaborInsuranceExcelService $laborInsuranceExcelService,
+        private readonly ReportV2RishokuServiceV3 $rishokuService,
     ) {
     }
 
@@ -324,5 +326,35 @@ class ReportV2Controller extends Controller
                 'Pragma' => 'no-cache',
             ]
         )->deleteFileAfterSend(true);
+    }
+
+    public function rishokuIndex(Request $request): View
+    {
+        $selectedCompany = trim((string) $request->query('company', ''));
+        $selectedStaffId = trim((string) $request->query('staff', ''));
+        $selectedMonths = (int) $request->query('months', 36);
+        if (!in_array($selectedMonths, [24, 36, 48], true)) {
+            $selectedMonths = 36;
+        }
+
+        $companyOptions = $this->rishokuService->companyOptions();
+        if ($selectedCompany !== '' && !in_array($selectedCompany, $companyOptions, true)) {
+            $selectedCompany = '';
+        }
+
+        $staffOptions = $this->rishokuService->staffOptions($selectedCompany);
+        $staffIds = array_map(static fn (array $row): string => $row['staff_id'], $staffOptions);
+        if ($selectedStaffId !== '' && !in_array($selectedStaffId, $staffIds, true)) {
+            $selectedStaffId = '';
+        }
+
+        return view('admin_v2.report.rishoku_clean', [
+            'companyOptions' => $companyOptions,
+            'selectedCompany' => $selectedCompany,
+            'staffOptions' => $staffOptions,
+            'selectedStaffId' => $selectedStaffId,
+            'selectedMonths' => $selectedMonths,
+            'report' => $this->rishokuService->build($selectedStaffId, $selectedCompany, $selectedMonths),
+        ]);
     }
 }

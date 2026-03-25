@@ -10,6 +10,9 @@ class StaffV2Service
     /** @var array<string, string>|null */
     private ?array $submissionMayorMap = null;
 
+    /** @var array<string, bool> */
+    private array $columnExistsCache = [];
+
     public function list(string $keyword, string $employmentFilter = 'active'): array
     {
         $query = DB::connection('sqlsrv')->table('dbo.mx_staffs as ms')
@@ -91,7 +94,9 @@ class StaffV2Service
 
         $detail = [];
         foreach ($columns as $column) {
-            $detail[$column] = $this->normalizeValue($row->{$column} ?? null);
+            $rawValue = $row->{$column} ?? null;
+            $detail[$column] = $this->normalizeValue($rawValue);
+            $detail['_raw_' . $column] = $this->rawValue($rawValue);
         }
         $detail['submission'] = $this->resolveSubmissionLabel($detail['submission'] ?? '');
         $detail['employment_status'] = $this->normalizeValue($row->employment ?? null);
@@ -100,6 +105,54 @@ class StaffV2Service
         $detail['_age'] = $this->calculateAgeLabel($row->birthday ?? null);
 
         return $detail;
+    }
+
+    /** @return list<array{store_code:string,store_name:string}> */
+    public function storeOptions(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_stores')
+            ->select(['store_code', 'store_name'])
+            ->orderBy('store_code')
+            ->get()
+            ->map(static fn ($row): array => [
+                'store_code' => trim((string) ($row->store_code ?? '')),
+                'store_name' => trim((string) ($row->store_name ?? '')),
+            ])
+            ->filter(static fn (array $row): bool => $row['store_code'] !== '')
+            ->values()
+            ->all();
+    }
+
+    public function update(array $values): void
+    {
+        $staffId = trim((string) ($values['staff_id'] ?? ''));
+        if ($staffId === '') {
+            return;
+        }
+
+        $payload = [];
+        foreach ($this->editableColumns() as $column) {
+            if (!$this->hasColumn($column)) {
+                continue;
+            }
+
+            if (in_array($column, ['syaho', 'koyou'], true)) {
+                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
+                continue;
+            }
+
+            $payload[$column] = $this->nullable($values[$column] ?? null);
+        }
+
+        if ($payload === []) {
+            return;
+        }
+
+        DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('staff_id', $staffId)
+            ->update($payload);
     }
 
     public function relatedRows(string $staffId, string $table, array $orderColumns = []): array
@@ -226,6 +279,54 @@ class StaffV2Service
         ];
     }
 
+    /** @return list<string> */
+    private function editableColumns(): array
+    {
+        return [
+            'staff_name_furi',
+            'staff_name',
+            'display_name_ja',
+            'section',
+            'staff_division',
+            'employment',
+            'nyu_date',
+            'tai_date',
+            'my_number',
+            'post_num',
+            'address_furi',
+            'address',
+            'address1',
+            'address2',
+            'building',
+            'home_tel',
+            'mobile_tel',
+            'syaho_num',
+            'koyou_num',
+            'syaho_seiri_num',
+            'kiso_nenkin_num',
+            'syaho',
+            'koyou',
+            'syaho_date',
+            'koyou_date',
+            'memo',
+        ];
+    }
+
+    private function hasColumn(string $column): bool
+    {
+        if (!array_key_exists($column, $this->columnExistsCache)) {
+            $this->columnExistsCache[$column] = Schema::connection('sqlsrv')->hasColumn('mx_staffs', $column);
+        }
+
+        return $this->columnExistsCache[$column];
+    }
+
+    private function nullable(mixed $value): ?string
+    {
+        $trimmed = trim((string) $value);
+        return $trimmed === '' ? null : $trimmed;
+    }
+
     private function normalizeValue(mixed $value): string
     {
         if ($value === null) {
@@ -247,6 +348,28 @@ class StaffV2Service
             } catch (\Throwable) {
                 return substr($normalized, 0, 10);
             }
+        }
+
+        return $normalized;
+    }
+
+    private function rawValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return '';
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $normalized) === 1) {
+            return substr($normalized, 0, 10);
         }
 
         return $normalized;

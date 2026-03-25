@@ -21,7 +21,6 @@
   };
 
   $syahoSeed = $selectedSyahoRow ?? [];
-  $defaultBasicPaymentDays = ($syahoSeed['basic_payment_days'] ?? '') !== '' ? $syahoSeed['basic_payment_days'] : '暦日基準';
 @endphp
 
 <form method="post" action="{{ route('admin.master.company.update') }}" class="company-detail-form company-info-form" id="syaho-company-form">
@@ -310,7 +309,7 @@
       <div class="current-rate-meta current-rate-meta-edit">
         <label class="detail-field">
           <span>支払基礎日数</span>
-          <input type="text" name="basic_payment_days" value="{{ $defaultBasicPaymentDays }}">
+          <input type="text" name="basic_payment_days" value="{{ $syahoSeed['basic_payment_days'] ?? '' }}" placeholder="暦日基準">
         </label>
       </div>
 

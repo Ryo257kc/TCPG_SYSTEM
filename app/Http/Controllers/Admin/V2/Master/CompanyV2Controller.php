@@ -80,6 +80,7 @@ class CompanyV2Controller extends Controller
             'postal_code' => ['nullable', 'string', 'max:100'],
             'company_address' => ['nullable', 'string', 'max:255'],
             'established_date' => ['nullable', 'date'],
+            'closing_day' => ['nullable', 'string', 'max:20'],
             'phone' => ['nullable', 'string', 'max:100'],
             'fax' => ['nullable', 'string', 'max:100'],
             'ceo_title' => ['nullable', 'string', 'max:100'],

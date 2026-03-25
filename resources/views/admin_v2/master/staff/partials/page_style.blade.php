@@ -44,6 +44,17 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .detail-value-bool-rights{display:inline-flex;align-items:center;justify-content:center;min-height:20px;width:20px;padding:0;font-size:15px;line-height:1;border:0;background:transparent;border-radius:0}
 .detail-value-textarea{min-height:128px;padding:4px 6px;border:1px solid #d3dff0;border-radius:4px;background:#f7f9fc;white-space:pre-wrap;align-content:flex-start;overflow:auto;line-height:1.1}
 .detail-value-empty{color:#8ca0ba}
+.staff-display-value{min-height:24px;padding:2px 0 3px;border:0;border-bottom:1px solid #d3dff0;border-radius:0;background:transparent;color:#1f2937;box-sizing:border-box;line-height:1.25;width:100%;font-size:13px}
+.staff-info-form .staff-info-edit{display:none !important}
+.staff-info-form.editing .staff-info-view{display:none !important}
+.staff-info-form.editing .staff-info-edit{display:block !important}
+.detail-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.btn-secondary{display:inline-flex;padding:6px 10px;border:1px solid #b7ccef;border-radius:8px;background:#f5f8fd;color:#1f4f8f;text-decoration:none;font-weight:700;cursor:pointer}
+.staff-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.staff-edit-grid .detail-field-wide{grid-column:1 / -1}
+.staff-edit-grid input,.staff-edit-grid select,.staff-edit-grid textarea{width:100%;padding:6px 8px;border:1px solid #d3dff0;border-radius:8px;box-sizing:border-box;font:inherit}
+.staff-edit-grid textarea{min-height:96px;resize:vertical}
+.checkbox-line{display:flex;align-items:center;gap:8px;min-height:36px}
 .staff-info-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .info-block{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #dbe6f5;border-radius:10px;background:#fbfdff}
 .info-block-wide{grid-column:1 / -1}

@@ -1,0 +1,110 @@
+<style>
+    .rishoku-filter-bar { margin-bottom: 8px; }
+    .rishoku-filter-grid { grid-template-columns: minmax(150px, 210px) minmax(0, 290px) 160px auto; gap: 8px; }
+    .rishoku-filter-grid-compact { align-items: end; }
+    .rishoku-filter-grid .field { display: grid; gap: 4px; }
+    .rishoku-filter-grid .field span { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .rishoku-filter-grid .field-inline { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; }
+    .rishoku-filter-grid .field-inline span { margin: 0; white-space: nowrap; }
+    .rishoku-filter-grid .field-inline-wide { grid-template-columns: 44px minmax(0, 1fr); }
+    .rishoku-filter-grid select { min-height: 34px; width: 100%; min-width: 0; }
+    .field-staff select { max-width: 100%; }
+    .field-months select { max-width: 100%; }
+    .rishoku-summary-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.55fr); gap: 12px; margin-bottom: 12px; align-items: start; }
+    .summary-panel { padding: 14px; }
+    .summary-panel-full { grid-column: 1 / -1; }
+    .summary-head h2 { margin: 0; color: var(--primary); font-size: 17px; }
+    .summary-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .summary-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 12px 0 0; }
+    .summary-list div { display: grid; gap: 2px; }
+    .summary-list dt { color: var(--muted); font-size: 12px; }
+    .summary-list dd { margin: 0; font-size: 17px; font-weight: 700; color: var(--primary); }
+    .compact-list dd { font-size: 15px; }
+    .summary-list-inline { grid-template-columns: 1fr; gap: 8px; }
+    .summary-list-inline div { grid-template-columns: 104px minmax(0, 1fr); align-items: baseline; gap: 10px; }
+    .summary-list-inline dt { font-size: 12px; white-space: nowrap; }
+    .summary-list-inline dd { font-size: 15px; min-width: 0; }
+    .summary-list-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+    .summary-list-wide div { grid-template-columns: 110px minmax(0, 1fr); }
+    .summary-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin-top: 12px; }
+    .summary-two-column .summary-list { margin-top: 0; }
+    .table-panel { padding: 10px 12px 12px; }
+    .table-head { margin-bottom: 8px; }
+    .table-head h2 { margin: 0; color: var(--primary); font-size: 17px; }
+    .table-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    .rishoku-table { min-width: 1120px; }
+    .rishoku-table .col-no { width: 42px; }
+    .rishoku-table .col-separation { width: 170px; }
+    .rishoku-table .col-payment { width: 96px; }
+    .rishoku-table .col-calendar { width: 56px; }
+    .rishoku-table .col-wage-period { width: 128px; }
+    .rishoku-table .col-basis { width: 62px; }
+    .rishoku-table .col-work-days { width: 62px; }
+    .rishoku-table .col-absence { width: 62px; }
+    .rishoku-table .col-paid-leave { width: 62px; }
+    .rishoku-table .col-hours { width: 64px; }
+    .rishoku-table .col-gross { width: 88px; }
+    .rishoku-table .col-eligibility { width: 84px; }
+    .rishoku-table-v4 { min-width: 1240px; }
+    .rishoku-table-v4 .col-k8-period { width: 176px; }
+    .rishoku-table-v4 .col-k8-days { width: 72px; }
+    .rishoku-table-v4 .col-k9-period { width: 144px; }
+    .rishoku-table-v4 .col-k10-days { width: 72px; }
+    .rishoku-table-v5 { min-width: 1380px; }
+    .rishoku-table-v5 .col-k8-period { width: 166px; }
+    .rishoku-table-v5 .col-k8-days { width: 64px; }
+    .rishoku-table-v5 .col-k9-period { width: 138px; }
+    .rishoku-table-v5 .col-k10-days { width: 64px; }
+    .rishoku-table-v5 .col-wage-a { width: 82px; }
+    .rishoku-table-v5 .col-wage-b { width: 82px; }
+    .rishoku-table-v5 .col-gross { width: 82px; }
+    .rishoku-table-v5 thead th { font-size: 11px; padding: 5px 5px; }
+    .rishoku-table-v5 td,
+    .rishoku-table-v5 tbody th { padding: 4px 5px; font-size: 12px; }
+    .rishoku-table-v6 { min-width: 1180px; }
+    .rishoku-table-v6 .col-k8-period { width: 118px; }
+    .rishoku-table-v6 .col-k8-days { width: 58px; }
+    .rishoku-table-v6 .col-payment { width: 84px; }
+    .rishoku-table-v6 .col-k10-period { width: 106px; }
+    .rishoku-table-v6 .col-k11-days { width: 58px; }
+    .rishoku-table-v6 .col-work-days { width: 56px; }
+    .rishoku-table-v6 .col-absence { width: 56px; }
+    .rishoku-table-v6 .col-paid-leave { width: 56px; }
+    .rishoku-table-v6 .col-hours { width: 60px; }
+    .rishoku-table-v6 .col-wage-a { width: 76px; }
+    .rishoku-table-v6 .col-wage-b { width: 76px; }
+    .rishoku-table-v6 .col-gross { width: 76px; }
+    .rishoku-table-v6 .col-eligibility { width: 74px; }
+    .rishoku-table-v6 thead th { font-size: 10px; padding: 4px 4px; }
+    .rishoku-table-v6 td,
+    .rishoku-table-v6 tbody th { padding: 3px 4px; font-size: 11px; }
+    .rishoku-table-v6 .head-no,
+    .rishoku-table-v6 .head-label { display: block; }
+    .rishoku-table-v6 .head-no { font-size: 10px; line-height: 1.05; margin-bottom: 1px; }
+    .rishoku-table-v6 .head-label { line-height: 1.1; }
+    .rishoku-table th,
+    .rishoku-table td { font-variant-numeric: tabular-nums; font-size: 13px; }
+    .rishoku-table thead th { font-size: 12px; padding: 6px 6px; line-height: 1.25; }
+    .rishoku-table tbody th { background: #fbfcfe; text-align: center; white-space: nowrap; font-size: 13px; padding: 6px 6px; }
+    .rishoku-table td { padding: 5px 6px; line-height: 1.2; white-space: nowrap; }
+    .rishoku-table td.num { text-align: right; }
+    .rishoku-table .eligibility-cell { text-align: center; }
+    .status-tag { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .status-tag.is-ok { background: #e8f7eb; color: #2e7d32; }
+    .status-tag.is-sub { background: #fff3db; color: #9a5a00; }
+    .status-tag.is-muted { background: #eef1f5; color: #637589; }
+    .is-empty-row td,
+    .is-empty-row th { background: #fffdf8; }
+    .is-before-join-row td,
+    .is-before-join-row th { background: #dfe4ea; color: #596577; }
+    @media (max-width: 980px) {
+        .rishoku-summary-grid { grid-template-columns: 1fr; }
+        .summary-panel-full { grid-column: auto; }
+        .summary-list-wide { grid-template-columns: 1fr; }
+        .summary-two-column { grid-template-columns: 1fr; }
+        .rishoku-filter-grid { grid-template-columns: 1fr; }
+        .field-staff select,
+        .field-months select { min-width: 0; width: 100%; }
+    }
+</style>
