@@ -76,37 +76,49 @@ class CompanyV2Controller extends Controller
     {
         $v = $request->validate([
             'company_id' => ['required', 'string', 'max:50'],
-            'company_name' => ['required', 'string', 'max:200'],
-            'company_name_kana' => ['nullable', 'string', 'max:200'],
+            'company_name' => ['nullable', 'string', 'max:200'],
+            'postal_code' => ['nullable', 'string', 'max:100'],
             'company_address' => ['nullable', 'string', 'max:255'],
-            'office_number' => ['nullable', 'string', 'max:100'],
+            'established_date' => ['nullable', 'date'],
             'phone' => ['nullable', 'string', 'max:100'],
             'fax' => ['nullable', 'string', 'max:100'],
             'ceo_title' => ['nullable', 'string', 'max:100'],
             'ceo_name_kana' => ['nullable', 'string', 'max:200'],
             'ceo_name' => ['nullable', 'string', 'max:200'],
+            'corporate_number' => ['nullable', 'string', 'max:100'],
             'health_office_code' => ['nullable', 'string', 'max:100'],
             'pension_office_code' => ['nullable', 'string', 'max:100'],
-            'corporate_number' => ['nullable', 'string', 'max:100'],
+            'office_number' => ['nullable', 'string', 'max:100'],
             'insurer_number' => ['nullable', 'string', 'max:100'],
-            'insurer_name' => ['nullable', 'string', 'max:255'],
-            'insurer_address' => ['nullable', 'string', 'max:255'],
+            'insurer_name' => ['nullable', 'string', 'max:200'],
             'employment_office_number' => ['nullable', 'string', 'max:100'],
+            'insurer_address' => ['nullable', 'string', 'max:255'],
             'labor_insurance_number' => ['nullable', 'string', 'max:100'],
             'labor_install_category' => ['nullable', 'string', 'max:100'],
-            'labor_install_date' => ['nullable', 'string', 'max:100'],
+            'labor_install_date' => ['nullable', 'date'],
             'labor_office_category' => ['nullable', 'string', 'max:100'],
             'labor_industry_category' => ['nullable', 'string', 'max:100'],
             'q' => ['nullable', 'string', 'max:200'],
+            'tab' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $this->service->update($v);
+        $tab = in_array((string) ($v['tab'] ?? 'company'), ['company', 'syaho', 'rouho'], true)
+            ? (string) ($v['tab'] ?? 'company')
+            : 'company';
+
+        if ($tab === 'company') {
+            $request->validate([
+                'company_name' => ['required', 'string', 'max:200'],
+            ]);
+        }
+
+        $this->service->update($v, $tab);
 
         return redirect()->route('admin.master.company', [
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
-            'tab' => 'company',
-        ])->with('status', '会社情報を更新しました。');
+            'tab' => $tab,
+        ]);
     }
 
     public function storeShaho(Request $request): RedirectResponse
@@ -135,7 +147,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'syaho',
-        ])->with('status', '社会保険を追加しました。');
+        ]);
     }
 
     public function updateShaho(Request $request): RedirectResponse
@@ -165,7 +177,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'syaho',
-        ])->with('status', '社会保険を更新しました。');
+        ]);
     }
 
     public function deleteShaho(Request $request): RedirectResponse
@@ -182,7 +194,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'syaho',
-        ])->with('status', '社会保険を削除しました。');
+        ]);
     }
 
     public function storeRouho(Request $request): RedirectResponse
@@ -208,7 +220,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'rouho',
-        ])->with('status', '労働保険を追加しました。');
+        ]);
     }
 
     public function updateRouho(Request $request): RedirectResponse
@@ -235,7 +247,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'rouho',
-        ])->with('status', '労働保険を更新しました。');
+        ]);
     }
 
     public function deleteRouho(Request $request): RedirectResponse
@@ -252,7 +264,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'rouho',
-        ])->with('status', '労働保険を削除しました。');
+        ]);
     }
     public function storeMayor(Request $request): RedirectResponse
     {
@@ -276,7 +288,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'mayor',
-        ])->with('status', '住民税情報を追加しました。');
+        ]);
     }
 
     public function updateMayor(Request $request): RedirectResponse
@@ -302,7 +314,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'mayor',
-        ])->with('status', '住民税情報を更新しました。');
+        ]);
     }
 
     public function deleteMayor(Request $request): RedirectResponse
@@ -319,6 +331,7 @@ class CompanyV2Controller extends Controller
             'q' => (string) ($v['q'] ?? ''),
             'company_id' => (string) ($v['company_id'] ?? ''),
             'tab' => 'mayor',
-        ])->with('status', '住民税情報を削除しました。');
+        ]);
     }
 }
+

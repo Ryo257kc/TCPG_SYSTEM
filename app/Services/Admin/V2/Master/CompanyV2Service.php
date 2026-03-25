@@ -8,11 +8,54 @@ use Illuminate\Support\Facades\Schema;
 class CompanyV2Service
 {
     /** @return list<string> */
+    private function companyInfoColumns(): array
+    {
+        return [
+            'postal_code',
+            'company_address',
+            'established_date',
+            'tel',
+            'fax',
+            'ceo_title',
+            'ceo_name_kana',
+            'ceo_name',
+            'corporate_number',
+        ];
+    }
+
+    /** @return list<string> */
+    private function socialInsuranceColumns(): array
+    {
+        return [
+            'health_office_code',
+            'pension_office_code',
+            'office_number',
+            'insurer_number',
+            'insurer_name',
+            'insurer_address',
+        ];
+    }
+
+    /** @return list<string> */
+    private function laborInsuranceColumns(): array
+    {
+        return [
+            'labor_insurance_number',
+            'labor_install_category',
+            'labor_install_date',
+            'labor_office_category',
+            'labor_industry_category',
+            'employment_office_number',
+        ];
+    }
+
+    /** @return list<string> */
     private function optionalColumns(): array
     {
         return [
-            'company_name_kana',
+            'postal_code',
             'company_address',
+            'established_date',
             'office_number',
             'tel',
             'fax',
@@ -32,6 +75,16 @@ class CompanyV2Service
             'labor_office_category',
             'labor_industry_category',
         ];
+    }
+
+    /** @return list<string> */
+    private function columnsForTab(string $tab): array
+    {
+        return match ($tab) {
+            'syaho' => $this->socialInsuranceColumns(),
+            'rouho' => $this->laborInsuranceColumns(),
+            default => $this->companyInfoColumns(),
+        };
     }
 
     public function hasColumn(string $column): bool
@@ -56,8 +109,7 @@ class CompanyV2Service
         $query = DB::connection('sqlsrv')->table('dbo.mx_companies')->select($selects)->orderBy('company_id');
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword): void {
-                $q->where('company_name', 'like', '%' . $keyword . '%')
-                    ->orWhere('office_number', 'like', '%' . $keyword . '%');
+                $q->where('company_name', 'like', '%' . $keyword . '%');
             });
         }
 
@@ -79,21 +131,29 @@ class CompanyV2Service
         return ['rows' => $rows];
     }
 
-    public function update(array $v): void
+    public function update(array $v, string $tab = 'company'): void
     {
         $payload = ['company_name' => trim((string) ($v['company_name'] ?? ''))];
 
-        foreach ($this->optionalColumns() as $col) {
+        if ($tab !== 'company') {
+            unset($payload['company_name']);
+        }
+
+        foreach ($this->columnsForTab($tab) as $col) {
             if (!$this->hasColumn($col)) {
                 continue;
             }
 
             if ($col === 'tel') {
-                $payload[$col] = trim((string) ($v['phone'] ?? ''));
+                if (array_key_exists('phone', $v)) {
+                    $payload[$col] = trim((string) ($v['phone'] ?? ''));
+                }
                 continue;
             }
 
-            $payload[$col] = trim((string) ($v[$col] ?? ''));
+            if (array_key_exists($col, $v)) {
+                $payload[$col] = trim((string) ($v[$col] ?? ''));
+            }
         }
 
         DB::connection('sqlsrv')->table('dbo.mx_companies')

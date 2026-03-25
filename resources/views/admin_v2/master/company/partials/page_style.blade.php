@@ -1,4 +1,4 @@
-<style>
+﻿<style>
 body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:#ecf2fb;margin:0;padding:18px;color:#1f2937}
 .page{max-width:1440px;margin:18px auto}
 .card{background:#fff;border:1px solid #d3dff0;border-radius:14px;padding:16px}
@@ -12,7 +12,9 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .filter-form button,.company-detail-form button{background:#1f4f8f;color:#fff;border-color:#1f4f8f}
 .meta{margin:10px 0 0;color:#46658b;font-size:13px}
 .status{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:#edf7ed;border:1px solid #c9e3c9;color:#25603b}
-.company-layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;margin-top:14px;align-items:start}
+.company-layout{display:flex;gap:16px;margin-top:14px;align-items:flex-start}
+.company-list-panel{flex:0 0 300px}
+.company-detail-panel{flex:1 1 auto;min-width:0}
 .company-list-panel,.company-detail-panel{border:1px solid #d3dff0;border-radius:14px;background:#fdfefe;overflow:hidden}
 .panel-title{padding:12px 14px;background:#f5f8fd;border-bottom:1px solid #d3dff0;color:#123c73;font-weight:700}
 .company-list{max-height:70vh;overflow:auto}
@@ -24,8 +26,11 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .company-list-name{font-weight:600}
 .company-list-sub{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:6px;font-size:12px;color:#5b708f}
 .company-detail-form{padding:14px}
-.company-detail-panel.editing .company-view{display:none}
-.company-detail-panel:not(.editing) .company-edit{display:none}
+.company-info-form .company-edit{display:none !important}
+.company-info-form.editing .company-view{display:none !important}
+.company-info-form.editing .company-edit{display:block !important}
+.company-info-form-rouho .company-view,
+.company-info-form-rouho .company-edit{padding-left:10px}
 .company-tab-bar{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid #d3dff0;background:#fbfdff}
 .company-tab{display:inline-flex;padding:7px 12px;border:1px solid #c9d7eb;border-radius:999px;background:#fff;color:#46658b;font-weight:700;cursor:pointer}
 .company-tab.is-active{background:#1f4f8f;border-color:#1f4f8f;color:#fff}
@@ -34,6 +39,7 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .company-tab-panel.is-active{display:block}
 .company-tab-readonly{padding:0}
 .current-rate-card{margin-top:18px;padding:14px;border:1px solid #d3dff0;border-radius:12px;background:#fff}
+.mayor-tax-card{margin-top:0;padding:8px 10px;border:none;border-radius:0;background:transparent}
 .current-rate-card .current-rate-edit{display:none}
 .current-rate-card .current-rate-create{display:none}
 .current-rate-card.editing .current-rate-view{display:none}
@@ -66,15 +72,21 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .rate-table th,.rate-table td{padding:8px 10px;border-bottom:1px solid #e5edf8;font-size:13px;text-align:left;white-space:nowrap}
 .rate-table th{background:#f5f8fd;color:#46658b;font-weight:700}
 .rate-table .action-cell{white-space:nowrap}
+.mayor-tax-table{min-width:0}
+.mayor-tax-table th,.mayor-tax-table td{padding:6px 8px;font-size:12px}
+.mayor-tax-table .action-cell{width:72px}
 .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .detail-field{display:flex;flex-direction:column;gap:6px}
 .detail-field span{font-size:13px;color:#46658b;font-weight:600}
 .detail-field-wide{grid-column:1 / -1}
+.company-person-stack{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+.company-person-stack .detail-field{grid-column:1}
 .detail-field input{width:100%}
 .detail-field input[disabled]{background:#f7f9fc;color:#6d7f97}
 .detail-section{padding:8px 10px;border:1px solid #c8d9f0;border-radius:10px;background:#eaf2ff;margin-top:6px}
 .detail-section span{display:block;font-size:13px;color:#123c73;font-weight:800;letter-spacing:.02em}
 .detail-value{min-height:36px;padding:8px 10px;border:1px solid #d3dff0;border-radius:8px;background:#f7f9fc;color:#1f2937;box-sizing:border-box}
+.company-display-value{min-height:24px;padding:2px 0 3px;border:0;border-bottom:1px solid #d3dff0;border-radius:0;background:transparent;color:#1f2937;box-sizing:border-box;line-height:1.25;width:100%;font-size:13px}
 .detail-value-empty{color:#8ca0ba}
 .detail-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .detail-actions-spread{justify-content:space-between;align-items:center}
@@ -87,5 +99,6 @@ body{font-family:"Segoe UI","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;backgr
 .mayor-row-edit td{background:#fbfdff}
 .mayor-inline-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .mayor-inline-grid .detail-field-wide{grid-column:1 / -1}
-@media (max-width: 980px){.company-layout{grid-template-columns:1fr}.company-list{max-height:none}.detail-grid{grid-template-columns:1fr}.current-rate-summary{grid-template-columns:1fr}.current-rate-meta-grid{grid-template-columns:1fr}.detail-actions-spread{flex-direction:column;align-items:stretch}.detail-actions-right{justify-content:stretch}.detail-actions-right button{flex:1}}
+@media (max-width: 720px){.company-layout{display:block}.company-list-panel{margin-bottom:16px;flex:none}.company-detail-panel{flex:none}.company-list{max-height:none}.detail-grid{grid-template-columns:1fr}.current-rate-summary{grid-template-columns:1fr}.current-rate-meta-grid{grid-template-columns:1fr}.detail-actions-spread{flex-direction:column;align-items:stretch}.detail-actions-right{justify-content:stretch}.detail-actions-right button{flex:1}}
 </style>
+

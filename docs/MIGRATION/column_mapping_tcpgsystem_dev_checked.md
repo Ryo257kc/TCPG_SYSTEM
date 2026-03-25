@@ -96,3 +96,8 @@
 
 - `mx_account_titles` は未使用で、列名が `legacy_t_*` になっているため作り直し候補
 - `mx_stores` と `mx_companies` の分割は、旧構造より現DB側の方が整理されている
+## 2026-03-25 Notes
+
+- Added `mx_companies.postal_code` for company-side postal code storage.
+- `mx_stores.postal_code` remains the store-side postal code field.
+- `office_number` stays under social insurance usage and should not be edited from the company info tab.

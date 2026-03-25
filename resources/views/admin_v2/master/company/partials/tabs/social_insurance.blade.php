@@ -1,4 +1,4 @@
-@php
+﻿@php
   $rate2 = static function ($value): string {
       if ($value === null || $value === '') {
           return '---';
@@ -24,44 +24,85 @@
   $defaultBasicPaymentDays = ($syahoSeed['basic_payment_days'] ?? '') !== '' ? $syahoSeed['basic_payment_days'] : '暦日基準';
 @endphp
 
-<div class="company-detail-form company-tab-readonly">
-  <div class="detail-grid">
-    <div class="detail-section detail-field-wide">
-      <span>社会保険 連携会社情報</span>
+<form method="post" action="{{ route('admin.master.company.update') }}" class="company-detail-form company-info-form" id="syaho-company-form">
+  @csrf
+  <input type="hidden" name="company_id" value="{{ $selectedRow['company_id'] }}">
+  <input type="hidden" name="q" value="{{ $keyword }}">
+  <input type="hidden" name="tab" value="syaho">
+
+  <div class="company-info-view company-view">
+    <div class="detail-grid">
+      <div class="detail-field">
+        <span>健保事業所記号</span>
+        <div class="company-display-value {{ $selectedRow['health_office_code'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['health_office_code'] !== '' ? $selectedRow['health_office_code'] : '---' }}</div>
+      </div>
+
+      <div class="detail-field">
+        <span>年金事業所番号</span>
+        <div class="company-display-value {{ $selectedRow['pension_office_code'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['pension_office_code'] !== '' ? $selectedRow['pension_office_code'] : '---' }}</div>
+      </div>
+      <div class="detail-field">
+        <span>事業所番号（保険料納入告知番号）</span>
+        <div class="company-display-value {{ $selectedRow['office_number'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['office_number'] !== '' ? $selectedRow['office_number'] : '---' }}</div>
+      </div>
+
+      <div class="detail-field-wide company-person-stack">
+        <div class="detail-field">
+          <span>保険者番号</span>
+          <div class="company-display-value {{ $selectedRow['insurer_number'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_number'] !== '' ? $selectedRow['insurer_number'] : '---' }}</div>
+        </div>
+        <div class="detail-field">
+          <span>保険者名称</span>
+          <div class="company-display-value {{ $selectedRow['insurer_name'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_name'] !== '' ? $selectedRow['insurer_name'] : '---' }}</div>
+        </div>
+        <div class="detail-field">
+          <span>保険者住所</span>
+          <div class="company-display-value {{ $selectedRow['insurer_address'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_address'] !== '' ? $selectedRow['insurer_address'] : '---' }}</div>
+        </div>
+      </div>
     </div>
 
-    <label class="detail-field">
-      <span>会社キー</span>
-      <div class="detail-value">{{ $selectedCompanyId !== '' ? $selectedCompanyId : '---' }}</div>
-    </label>
-    <label class="detail-field">
-      <span>健保事業所記号</span>
-      <div class="detail-value {{ $selectedRow['health_office_code'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['health_office_code'] !== '' ? $selectedRow['health_office_code'] : '---' }}</div>
-    </label>
-
-    <label class="detail-field">
-      <span>年金事業所番号</span>
-      <div class="detail-value {{ $selectedRow['pension_office_code'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['pension_office_code'] !== '' ? $selectedRow['pension_office_code'] : '---' }}</div>
-    </label>
-    <label class="detail-field">
-      <span>保険者番号</span>
-      <div class="detail-value {{ $selectedRow['insurer_number'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_number'] !== '' ? $selectedRow['insurer_number'] : '---' }}</div>
-    </label>
-
-    <label class="detail-field">
-      <span>保険者名称</span>
-      <div class="detail-value {{ $selectedRow['insurer_name'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_name'] !== '' ? $selectedRow['insurer_name'] : '---' }}</div>
-    </label>
-    <label class="detail-field">
-      <span>ハローワーク番号</span>
-      <div class="detail-value {{ $selectedRow['employment_office_number'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['employment_office_number'] !== '' ? $selectedRow['employment_office_number'] : '---' }}</div>
-    </label>
-
-    <label class="detail-field detail-field-wide">
-      <span>保険者住所</span>
-      <div class="detail-value {{ $selectedRow['insurer_address'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['insurer_address'] !== '' ? $selectedRow['insurer_address'] : '---' }}</div>
-    </label>
+    <div class="detail-actions">
+      <button type="button" class="btn-secondary" onclick="toggleCompanyInfoEdit('syaho-company-form', true)">編集</button>
+    </div>
   </div>
+
+  <div class="company-info-edit company-edit" hidden>
+    <div class="detail-grid">
+      <label class="detail-field">
+        <span>健保事業所記号</span>
+        <input type="text" name="health_office_code" value="{{ $selectedRow['health_office_code'] }}">
+      </label>
+      <label class="detail-field">
+        <span>年金事業所番号</span>
+        <input type="text" name="pension_office_code" value="{{ $selectedRow['pension_office_code'] }}">
+      </label>
+      <label class="detail-field">
+        <span>事業所番号（保険料納入告知番号）</span>
+        <input type="text" name="office_number" value="{{ $selectedRow['office_number'] }}">
+      </label>
+      <div class="detail-field-wide company-person-stack">
+        <label class="detail-field">
+          <span>保険者番号</span>
+          <input type="text" name="insurer_number" value="{{ $selectedRow['insurer_number'] }}">
+        </label>
+        <label class="detail-field">
+          <span>保険者名称</span>
+          <input type="text" name="insurer_name" value="{{ $selectedRow['insurer_name'] }}">
+        </label>
+        <label class="detail-field">
+          <span>保険者住所</span>
+          <input type="text" name="insurer_address" value="{{ $selectedRow['insurer_address'] }}">
+        </label>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button type="submit">保存</button>
+      <button type="button" class="btn-secondary" onclick="toggleCompanyInfoEdit('syaho-company-form', false)">取消</button>
+    </div>
+  </div>
+</form>
 
   <div class="current-rate-card" id="syaho-current-card">
     <div class="rate-history-header">

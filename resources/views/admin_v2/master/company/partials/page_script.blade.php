@@ -1,11 +1,30 @@
 <script>
 function toggleCompanyEdit(editing) {
-  const panel = document.getElementById('company-detail-panel');
-  if (!panel) return;
-  panel.classList.toggle('editing', editing);
+  toggleCompanyInfoEdit('company-info-form', editing);
+}
+
+function toggleCompanyInfoEdit(formId, editing) {
+  const form = document.getElementById(formId);
+  if (!form) return;
+  form.classList.toggle('editing', editing);
+
+  const view = form.querySelector('.company-info-view');
+  const edit = form.querySelector('.company-info-edit');
+  if (view) {
+    view.hidden = editing;
+    view.style.display = editing ? 'none' : 'block';
+  }
+  if (edit) {
+    edit.hidden = !editing;
+    edit.style.display = editing ? 'block' : 'none';
+  }
 }
 
 function setCompanyTab(tabName) {
+  document.querySelectorAll('.company-info-form').forEach((form) => {
+    toggleCompanyInfoEdit(form.id, false);
+  });
+
   document.querySelectorAll('[data-company-tab]').forEach((button) => {
     button.classList.toggle('is-active', button.getAttribute('data-company-tab') === tabName);
   });
@@ -33,4 +52,10 @@ function toggleMayorRowEdit(rowId, editing) {
   if (!row) return;
   row.classList.toggle('editing', editing);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.company-info-form').forEach((form) => {
+    toggleCompanyInfoEdit(form.id, false);
+  });
+});
 </script>

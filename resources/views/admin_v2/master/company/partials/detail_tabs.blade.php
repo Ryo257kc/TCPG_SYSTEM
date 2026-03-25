@@ -1,4 +1,4 @@
-<div class="company-detail-panel" id="company-detail-panel">
+﻿<div class="company-detail-panel" id="company-detail-panel">
   <div class="panel-title">会社詳細</div>
   @if($selectedRow)
     <div class="company-tab-bar">
