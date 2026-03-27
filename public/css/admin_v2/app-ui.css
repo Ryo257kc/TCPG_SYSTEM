@@ -1,0 +1,77 @@
+.btn,
+button,
+input[type="submit"],
+input[type="button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid #c7d2df;
+    border-radius: 10px;
+    background: #fff;
+    color: #253043;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.btn:hover,
+button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover {
+    background: #f7fbff;
+    border-color: #9fc2ef;
+    color: #183b67;
+}
+
+.btn-primary,
+.button-primary {
+    background: #1f4f8f;
+    border-color: #1f4f8f;
+    color: #fff;
+}
+
+.btn-primary:hover,
+.button-primary:hover {
+    background: #183f73;
+    border-color: #183f73;
+    color: #fff;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="password"],
+select,
+textarea {
+    border: 1px solid #c7d2df;
+    border-radius: 10px;
+    background: #fff;
+    color: #253043;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="password"],
+select {
+    min-height: 38px;
+    padding: 0 12px;
+}
+
+textarea {
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.meta-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: #667085;
+}

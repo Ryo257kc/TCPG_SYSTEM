@@ -10,7 +10,7 @@ class PayrollV2DeleteService
      * @param list<string> $staffIds
      * @return array{deleted:int,skipped:int,deleted_ids:list<string>,skipped_ids:list<string>}
      */
-    public function delete(array $staffIds, string $paymentDate = ''): array
+    public function delete(array $staffIds, string $paymentDate = '', bool $bonus = false): array
     {
         $result = [
             'deleted' => 0,
@@ -32,7 +32,7 @@ class PayrollV2DeleteService
         foreach ($staffIds as $staffId) {
             $deleted = DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
-                ->where('bonus', 0)
+                ->where('bonus', $bonus ? 1 : 0)
                 ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
                 ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
                 ->delete();

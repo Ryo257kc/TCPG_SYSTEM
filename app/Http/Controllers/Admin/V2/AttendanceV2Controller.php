@@ -77,44 +77,15 @@ class AttendanceV2Controller extends Controller
         $selectedStaffId = trim((string) $request->query('staff_id', ''));
 
         $staffRows = $this->attendanceStaffService->staffs($fromDate, $toDate, $selectedCompanyId);
-        $staffRowsById = [];
-        foreach ($staffRows as $staffRow) {
-            $staffRowsById[$staffRow['staff_id']] = $staffRow;
-        }
         if ($selectedStaffId !== '' && !in_array($selectedStaffId, array_column($staffRows, 'staff_id'), true)) {
             $selectedStaffId = '';
         }
 
         $metricMap = $this->metricService->metricMap($year, $month);
         $categoryTimeMap = $this->metricService->categoryTimeMap($year, $month);
-        $listSummaryMap = $this->listSummaryService->summaryMap($year, $month);
         $attendanceCheckedMap = $this->confirmedStateService->mapByStaffIds(array_column($staffRows, 'staff_id'), $year, $month);
         $rows = $this->metricService->mergeRows($staffRows, $metricMap, $categoryTimeMap, $selectedStaffId);
         foreach ($rows as &$row) {
-            $summary = [
-                'work_in_num' => 0.0,
-                'absence_num' => 0.0,
-                'work_holiday_num' => 0.0,
-                'work_time' => 0.0,
-                'holiday_true' => 0.0,
-                'overtime' => 0.0,
-                'night_over_time' => 0.0,
-                'holiday_work_time' => 0.0,
-                'late_early_time' => 0.0,
-            ];
-            foreach ((array) ($staffRowsById[$row['staff_id']]['time_card_keys'] ?? []) as $timeCardKey) {
-                $timeCardKey = trim((string) $timeCardKey);
-                if ($timeCardKey === '') {
-                    continue;
-                }
-                $item = (array) ($listSummaryMap[$timeCardKey] ?? []);
-                foreach (array_keys($summary) as $metricKey) {
-                    $summary[$metricKey] += (float) ($item[$metricKey] ?? 0);
-                }
-            }
-            foreach ($summary as $metricKey => $value) {
-                $row['metrics'][$metricKey] = $value;
-            }
             $row['metrics']['attendance_checked'] = (bool) ($attendanceCheckedMap[$row['staff_id']] ?? false);
         }
         unset($row);
@@ -135,7 +106,7 @@ class AttendanceV2Controller extends Controller
             }
         }
 
-        return view('admin_v2.attendance.index', [
+        return view('admin_v2.work.attendance.index', [
             'availableMonths' => $availableMonths,
             'selectedMonth' => $selectedMonth,
             'companyOptions' => $companies,

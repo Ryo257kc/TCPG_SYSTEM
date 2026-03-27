@@ -34,25 +34,9 @@ class ReportV2Controller extends Controller
                 'description' => '毎月の給与確認や社保負担の確認に使う帳票です。',
                 'items' => [
                     [
-                        'title' => '振込先一覧',
-                        'description' => '給与計算の振込先一覧を開きます。',
-                        'status' => 'available',
-                        'url' => route('admin.payroll.transfer-list'),
-                        'action' => '開く',
-                    ],
-                    [
-                        'title' => '賃金台帳',
-                        'description' => '給与計算の賃金台帳を開きます。',
-                        'status' => 'available',
-                        'url' => route('admin.payroll.wage-ledger'),
-                        'action' => '開く',
-                    ],
-                    [
                         'title' => '社保負担一覧',
                         'description' => '事業主負担と個人負担を確認する一覧です。',
-                        'status' => 'available',
-                        'url' => route('admin.report.labor-insurance.index'),
-                        'action' => '髢九￥',
+                        'status' => 'planned',
                     ],
                     [
                         'title' => 'ベースアップ一覧',
@@ -66,23 +50,18 @@ class ReportV2Controller extends Controller
                 'description' => '電子申請や提出用の一覧・CSVをまとめていく枠です。',
                 'items' => [
                     [
-                        'title' => '算定基礎一覧',
+                        'title' => '算定基礎',
                         'description' => '算定基礎の対象者と算定結果を確認する一覧です。',
                         'status' => 'available',
                         'url' => route('admin.report.santei.index'),
                         'action' => '開く',
                     ],
                     [
-                        'title' => '賞与支払届一覧',
+                        'title' => '賞与支払届',
                         'description' => '賞与支払届の対象者と賞与額を会社ごとに確認する一覧です。',
                         'status' => 'available',
                         'url' => route('admin.report.bonus-payment.index'),
                         'action' => '開く',
-                    ],
-                    [
-                        'title' => '賞与支払届 CSV',
-                        'description' => '電子申請用の賞与支払届 CSV を出力します。',
-                        'status' => 'planned',
                     ],
                     [
                         'title' => '各種連絡票',
@@ -98,10 +77,19 @@ class ReportV2Controller extends Controller
                     [
                         'title' => '年度更新集計表',
                         'description' => '年度更新に必要な集計を確認する一覧です。',
-                        'status' => 'planned',
+                        'status' => 'available',
+                        'url' => route('admin.report.labor-insurance.index'),
+                        'action' => '開く',
                     ],
                     [
-                        'title' => '月変対象者一覧',
+                        'title' => '離職票',
+                        'description' => '離職票作成用の確認一覧を開く画面です。',
+                        'status' => 'available',
+                        'url' => route('admin.report.rishoku.index'),
+                        'action' => '開く',
+                    ],
+                    [
+                        'title' => '月変対象者',
                         'description' => '月額変更の候補者を確認する一覧です。',
                         'status' => 'planned',
                     ],
@@ -113,7 +101,6 @@ class ReportV2Controller extends Controller
             'categories' => $categories,
         ]);
     }
-
     public function santeiIndex(Request $request): View
     {
         $availableYears = $this->santeiService->availableYears();
@@ -128,7 +115,7 @@ class ReportV2Controller extends Controller
             $selectedCompany = '';
         }
 
-        return view('admin_v2.report.santei_clean', [
+        return view('admin_v2.report.santei.index', [
             'availableYears' => $availableYears,
             'selectedYear' => $selectedYear,
             'companyOptions' => $companyOptions,
@@ -191,7 +178,7 @@ class ReportV2Controller extends Controller
             $selectedPaymentMonth = '';
         }
 
-        return view('admin_v2.report.bonus_payment_clean', [
+        return view('admin_v2.report.bonus_payment.index', [
             'availableYears' => $availableYears,
             'selectedYear' => $selectedYear,
             'companyOptions' => $companyOptions,
@@ -263,7 +250,7 @@ class ReportV2Controller extends Controller
         $detailBucket = trim((string) $request->query('detail_bucket', ''));
         $detailKind = trim((string) $request->query('detail_kind', 'regular'));
 
-        return view('admin_v2.report.labor_insurance_clean_v2', [
+        return view('admin_v2.report.labor_insurance.index', [
             'availableYears' => $availableYears,
             'selectedYear' => $selectedYear,
             'companyOptions' => $companyOptions,
@@ -292,7 +279,7 @@ class ReportV2Controller extends Controller
             $selectedCompany = '';
         }
 
-        return view('admin_v2.report.labor_insurance_print_v6', [
+        return view('admin_v2.report.labor_insurance.labor_insurance_print_v6', [
             'selectedYear' => $selectedYear,
             'selectedCompany' => $selectedCompany,
             'report' => $this->laborInsuranceService->build($selectedYear, $selectedCompany),
@@ -348,7 +335,7 @@ class ReportV2Controller extends Controller
             $selectedStaffId = '';
         }
 
-        return view('admin_v2.report.rishoku_clean', [
+        return view('admin_v2.report.rishoku.index', [
             'companyOptions' => $companyOptions,
             'selectedCompany' => $selectedCompany,
             'staffOptions' => $staffOptions,

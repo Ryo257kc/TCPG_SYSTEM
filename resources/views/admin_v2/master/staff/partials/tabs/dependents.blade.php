@@ -1,1 +1,0 @@
-@include('admin_v2.master.staff.partials.tabs.related_table', ['title' => '扶養一覧', 'dataset' => $fuyoRows, 'fieldLabels' => $fieldLabels])

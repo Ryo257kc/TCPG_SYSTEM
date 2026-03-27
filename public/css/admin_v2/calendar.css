@@ -1,0 +1,129 @@
+.calendar-controls {
+    justify-content: space-between;
+    margin-top: 0;
+}
+
+.filter-form-inline {
+    margin: 0;
+}
+
+.add-form {
+    margin-top: 0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.calendar-table-wrap {
+    overflow: auto;
+    max-height: 70vh;
+    border: 1px solid #d3dff0;
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+.calendar-table-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0;
+}
+
+.calendar-table-wrap th,
+.calendar-table-wrap td {
+    border: 1px solid #d3dff0;
+    padding: 6px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.calendar-table-wrap th {
+    background: #f5f8fd;
+}
+
+.text-input {
+    width: 180px;
+}
+
+.select-input {
+    min-width: 120px;
+    background: #fff;
+}
+
+.value-text {
+    display: inline-block;
+    min-width: 120px;
+    color: #1f2937;
+}
+
+.value-text.empty {
+    color: #9aa4b2;
+}
+
+.view-field {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.edit-field {
+    display: none !important;
+}
+
+tr.is-editing .view-field {
+    display: none !important;
+}
+
+tr.is-editing .edit-field {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+tbody tr:hover td {
+    background: #f7fbff;
+}
+
+tbody tr:focus-within td {
+    background: #eef5ff;
+}
+
+.calendar-row.is-company-holiday-row td {
+    background: #fff6eb;
+}
+
+.calendar-row.is-company-holiday-row:hover td,
+.calendar-row.is-company-holiday-row:focus-within td {
+    background: #fff1dd;
+}
+
+.inline-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.btn-edit {
+    background: #fff;
+    color: #1f4f8f;
+}
+
+.btn-cancel {
+    background: #fff;
+    color: #6b7280;
+}
+
+.btn-delete {
+    background: #fff;
+    color: #b42318;
+    border-color: #efc2bf;
+}
+
+.meta-count {
+    margin: 6px 0 0;
+    color: #5b708f;
+    font-size: 12px;
+    line-height: 1.2;
+}

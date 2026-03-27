@@ -1,0 +1,257 @@
+.paid-leave-filter-panel {
+    margin-bottom: 10px;
+}
+
+.paid-leave-filter-form {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: end;
+}
+
+.paid-leave-field {
+    display: grid;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.paid-leave-field-staff {
+    flex: 0 1 420px;
+    min-width: 320px;
+}
+
+.paid-leave-field span {
+    font-size: 12px;
+    color: #667085;
+    font-weight: 700;
+}
+
+.paid-leave-field input,
+.paid-leave-field select {
+    width: 100%;
+}
+
+.paid-leave-actions {
+    min-width: auto;
+}
+
+.paid-leave-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 18px;
+    align-items: start;
+}
+
+.paid-leave-summary-panel {
+    padding: 16px;
+}
+
+.paid-leave-summary-head {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f4f8f;
+    margin-bottom: 12px;
+}
+
+.paid-leave-kv-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.paid-leave-kv-list div {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.paid-leave-kv-list dt {
+    color: #667085;
+    font-size: 12px;
+}
+
+.paid-leave-kv-list dd {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.paid-leave-history-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 16px;
+    align-items: start;
+}
+
+.paid-leave-schedule-side-panel {
+    padding: 14px 12px;
+}
+
+.paid-leave-grant-schedule {
+    display: grid;
+    gap: 8px;
+}
+
+.paid-leave-grant-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+    color: #2b66b1;
+}
+
+.paid-leave-grant-row strong {
+    color: #2b66b1;
+    font-weight: 800;
+}
+
+.paid-leave-table-panel {
+    padding: 14px;
+}
+
+.paid-leave-history-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.paid-leave-history-head-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.history-add-panel {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: #f9fbfe;
+    border: 1px solid #d7e0eb;
+    border-radius: 10px;
+}
+
+.paid-leave-table-wrap {
+    overflow-x: auto;
+}
+
+.paid-leave-history-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.paid-leave-history-table th,
+.paid-leave-history-table td {
+    border: 1px solid #d7e0eb;
+    padding: 8px 10px;
+    font-size: 13px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.paid-leave-history-table th {
+    background: #f4f7fb;
+}
+
+.paid-leave-history-action-cell {
+    width: 92px;
+    text-align: center;
+}
+
+.btn-small {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 64px;
+}
+
+.btn-danger {
+    border-color: #e4bcbc;
+    color: #a64242;
+    background: #fff5f5;
+}
+
+.history-edit-row td {
+    background: #f9fbfe;
+    padding: 12px;
+}
+
+.history-edit-form {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.history-edit-stack {
+    display: grid;
+    gap: 10px;
+}
+
+.history-edit-form label {
+    display: grid;
+    gap: 6px;
+}
+
+.history-edit-form span {
+    font-size: 12px;
+    color: #667085;
+    font-weight: 700;
+}
+
+.history-edit-form input {
+    width: 100%;
+}
+
+.history-edit-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.history-delete-form {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.history-delete-form .btn-danger {
+    min-width: 120px;
+}
+
+.paid-leave-empty-cell {
+    color: #667085;
+    text-align: center;
+    padding: 28px 12px;
+}
+
+.paid-leave-history-pager {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.paid-leave-history-page-label {
+    color: #667085;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.btn.is-disabled {
+    pointer-events: none;
+    opacity: .45;
+}
+
+@media (max-width: 1100px) {
+    .paid-leave-summary-grid,
+    .paid-leave-history-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .history-edit-form {
+        grid-template-columns: 1fr 1fr;
+    }
+}

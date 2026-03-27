@@ -80,7 +80,7 @@ class PaidLeaveV2Controller extends Controller
 
         $payload = $summaryService->build($selectedStaffId, $selectedYear, $page, 20);
 
-        return view('admin_v2.paid_leave.index', [
+        return view('admin_v2.work.paid_leave.index', [
             'selectedYear' => $selectedYear,
             'selectedStaffId' => $selectedStaffId,
             'historyPage' => $page,

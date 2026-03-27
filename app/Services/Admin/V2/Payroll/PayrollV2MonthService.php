@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2MonthService
 {
     /** @return list<string> */
-    public function availablePaymentDates(): array
+    public function availablePaymentDates(bool $bonus = false): array
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->selectRaw('CONVERT(date, [supply_month]) as payment_date')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereNotNull('supply_month')
             ->groupByRaw('CONVERT(date, [supply_month])')
             ->orderByRaw('CONVERT(date, [supply_month]) desc')

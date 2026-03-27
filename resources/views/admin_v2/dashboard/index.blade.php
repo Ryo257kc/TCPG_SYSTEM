@@ -6,13 +6,14 @@
     <title>TCPG SYSTEM ダッシュボード</title>
     <style>
         :root {
-            --bg: #eef3fb;
+            --bg: #edf3fb;
             --panel: #ffffff;
-            --line: #d6e1f0;
+            --line: #d5e0ef;
             --text: #1f2937;
             --muted: #667085;
             --primary: #1f4f8f;
-            --active: #e8f0fd;
+            --primary-soft: #eaf1fb;
+            --shadow: 0 14px 34px rgba(31, 79, 143, 0.10);
         }
         * { box-sizing: border-box; }
         body {
@@ -20,57 +21,83 @@
             min-height: 100vh;
             font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
             color: var(--text);
-            background: radial-gradient(900px 300px at 10% -10%, #dce7fa 0%, transparent 65%), var(--bg);
+            background:
+                radial-gradient(880px 280px at 8% -8%, rgba(184, 206, 240, 0.85) 0%, transparent 62%),
+                linear-gradient(180deg, #f7faff 0%, var(--bg) 100%);
         }
-        .layout { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
-        .side {
-            border-right: 1px solid var(--line);
-            background: #f8fbff;
-            padding: 16px 14px 20px;
-            overflow-y: auto;
+        .page-shell {
+            padding: 14px 18px 24px;
         }
-        .brand {
-            margin: 0 0 10px;
-            color: var(--primary);
-            font-weight: 800;
-            font-size: 20px;
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+            gap: 16px;
+            margin-bottom: 16px;
         }
-        .note {
-            margin: 0 0 14px;
+        .hero-card,
+        .session-card,
+        .menu-card {
             border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 10px;
-            background: #fff;
-            color: var(--muted);
-            font-size: 12px;
+            border-radius: 16px;
+            background: var(--panel);
+            box-shadow: var(--shadow);
         }
-        .group { margin-bottom: 14px; }
-        .group-title {
-            margin: 0 0 6px;
-            color: var(--muted);
+        .hero-card {
+            padding: 22px 24px;
+            background:
+                linear-gradient(135deg, rgba(31, 79, 143, 0.08), rgba(31, 79, 143, 0.00) 55%),
+                var(--panel);
+        }
+        .hero-kicker {
+            display: inline-block;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: var(--primary);
             font-size: 12px;
-            letter-spacing: .06em;
             font-weight: 700;
+            letter-spacing: .04em;
         }
-        .item {
-            display: block;
-            text-decoration: none;
-            color: var(--text);
-            border: 1px solid transparent;
-            border-radius: 10px;
-            padding: 9px 10px;
-            margin-bottom: 6px;
+        .hero h1 {
+            margin: 0 0 8px;
+            font-size: 28px;
+            line-height: 1.2;
+        }
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
             font-size: 14px;
         }
-        .item:hover { border-color: var(--line); background: #fff; }
-        .item.active {
-            background: var(--active);
-            border-color: #b7caec;
-            color: var(--primary);
-            font-weight: 700;
+        .session-card {
+            padding: 18px 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
-        .content { padding: 22px; }
-        .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+        .session-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .06em;
+        }
+        .session-name {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        .session-meta {
+            display: grid;
+            gap: 8px;
+            margin-top: auto;
+            font-size: 13px;
+        }
+        .session-row strong {
+            display: inline-block;
+            min-width: 74px;
+            color: #344054;
+        }
         .logout-btn {
             border: 0;
             border-radius: 10px;
@@ -79,57 +106,110 @@
             padding: 10px 14px;
             font-size: 13px;
             cursor: pointer;
+            align-self: flex-start;
         }
-        .card {
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .menu-card {
+            padding: 16px;
+        }
+        .menu-title {
+            margin: 0 0 12px;
+            font-size: 14px;
+            color: var(--muted);
+            letter-spacing: .05em;
+        }
+        .menu-list {
+            display: grid;
+            gap: 8px;
+        }
+        .menu-link {
+            display: block;
+            padding: 11px 12px;
             border: 1px solid var(--line);
-            border-radius: 14px;
-            background: var(--panel);
-            padding: 20px;
-            box-shadow: 0 10px 26px rgba(21, 66, 122, 0.08);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text);
+            background: #fbfdff;
+            transition: border-color .15s ease, transform .15s ease, background .15s ease;
         }
-        h1 { margin: 0 0 8px; font-size: 24px; }
-        p { margin: 0; color: var(--muted); }
-        .meta {
-            margin-top: 14px;
-            padding-top: 12px;
-            border-top: 1px solid var(--line);
-            font-size: 12px;
-            color: #475467;
+        .menu-link:hover {
+            border-color: #b7caec;
+            background: #fff;
+            transform: translateY(-1px);
+        }
+        .menu-link.active {
+            border-color: #b7caec;
+            background: var(--primary-soft);
+            color: var(--primary);
+            font-weight: 700;
+        }
+        .menu-link small {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 11px;
+        }
+        @media (max-width: 980px) {
+            .hero,
+            .menu-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="layout">
-        <aside class="side">
-            <p class="brand">TCPG SYSTEM</p>
-            <p class="note">この画面は新規admin_v2です。右上からログアウトできます。</p>
+    @include('admin_v2.shared.global_nav')
 
-            @foreach ($menuGroups as $groupName => $items)
-                <section class="group">
-                    <p class="group-title">{{ $groupName }}</p>
-                    @foreach ($items as $item)
-                        <a class="item {{ $selectedPage === $item['key'] ? 'active' : '' }}" href="{{ url($item['url']) }}{{ $item['url'] === '/admin' ? '?page=' . $item['key'] : '' }}">
-                            {{ $item['label'] }}
-                        </a>
-                    @endforeach
-                </section>
-            @endforeach
-        </aside>
+    <div class="page-shell">
+        <section class="hero">
+            <div class="hero-card">
+                <span class="hero-kicker">TOP PAGE</span>
+                <h1>{{ $pageData['title'] }}</h1>
+                <p>{{ $pageData['description'] }}</p>
+            </div>
 
-        <main class="content">
-            <div class="toolbar">
+            <aside class="session-card">
+                <div class="session-label">SESSION</div>
+                <div class="session-name">{{ session('admin_staff_name') ?: '管理者' }}</div>
+                <div class="session-meta">
+                    <div class="session-row"><strong>ログインID</strong>{{ session('admin_staff_id') ?: '-' }}</div>
+                    <div class="session-row"><strong>選択中</strong>{{ $pageData['title'] }}</div>
+                </div>
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
                     <button type="submit" class="logout-btn">ログアウト</button>
                 </form>
-            </div>
+            </aside>
+        </section>
 
-            <section class="card">
-                <h1>{{ $pageData['title'] }}</h1>
-                <p>{{ $pageData['description'] }}</p>
-                <p class="meta">ログイン中: {{ session('admin_staff_id') }} {{ session('admin_staff_name') }}</p>
-            </section>
-        </main>
+        @php
+            $groupDescriptions = [
+                '勤怠・給与' => '毎月の勤怠・給与・振込まわり',
+                '帳票' => '提出や確認に使う帳票と集計',
+                'マスタ' => '会社・スタッフ・店舗などの基本設定',
+            ];
+        @endphp
+
+        <section class="menu-grid">
+            @foreach ($menuGroups as $groupName => $items)
+                <section class="menu-card">
+                    <h2 class="menu-title">{{ $groupName }}</h2>
+                    <div class="menu-list">
+                        @foreach ($items as $item)
+                            <a class="menu-link {{ $selectedPage === $item['key'] ? 'active' : '' }}"
+                               href="{{ url($item['url']) }}{{ $item['url'] === '/admin' ? '?page=' . $item['key'] : '' }}">
+                                {{ $item['label'] }}
+                                <small>{{ $groupDescriptions[$groupName] ?? '' }}</small>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endforeach
+        </section>
     </div>
 </body>
 </html>

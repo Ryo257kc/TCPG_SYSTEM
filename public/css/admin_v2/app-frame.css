@@ -1,0 +1,38 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: #edf3fc;
+    color: #1f2937;
+    font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+}
+
+.wrap {
+    width: min(1440px, 96vw);
+    margin: 6px auto 18px;
+}
+
+.top,
+.head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.title,
+.head-title {
+    margin: 0;
+    padding: 0;
+    font-size: 24px;
+    font-weight: 800;
+    color: #1f4f8f;
+    line-height: 1.2;
+}
+
+.panel {
+    background: #fff;
+    border: 1px solid #d3dff0;
+    border-radius: 14px;
+    padding: 16px;
+}

@@ -1,0 +1,35 @@
+.bonus-payment-filter-panel,
+    .bonus-payment-table-panel {
+        padding: 16px 18px;
+    }
+    .bonus-payment-filter-panel {
+        margin-bottom: 14px;
+    }
+    .bonus-payment-filter-form {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+    .bonus-payment-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 14px;
+    }
+    .bonus-payment-head h2 {
+        margin: 0;
+        font-size: 18px;
+        color: var(--primary);
+    }
+    .bonus-payment-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .bonus-payment-meta {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+    }

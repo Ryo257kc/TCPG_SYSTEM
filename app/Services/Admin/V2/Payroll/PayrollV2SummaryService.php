@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2SummaryService
 {
     /** @return array<string, array<string, mixed>> */
-    public function summaryMapByPaymentDate(string $paymentDate): array
+    public function summaryMapByPaymentDate(string $paymentDate, bool $bonus = false): array
     {
         if (!$this->isValidPaymentDate($paymentDate)) {
             return [];
@@ -15,7 +15,7 @@ class PayrollV2SummaryService
 
         $rows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
             ->orderBy('kyuyo_sho_no', 'desc')
             ->get();
@@ -24,14 +24,14 @@ class PayrollV2SummaryService
     }
 
     /** @return array<string, array<string, mixed>> */
-    public function previousSummaryMapByPaymentDate(string $paymentDate): array
+    public function previousSummaryMapByPaymentDate(string $paymentDate, bool $bonus = false): array
     {
-        $previousPaymentDate = $this->previousPaymentDate($paymentDate);
+        $previousPaymentDate = $this->previousPaymentDate($paymentDate, $bonus);
         if ($previousPaymentDate === '') {
             return [];
         }
 
-        return $this->summaryMapByPaymentDate($previousPaymentDate);
+        return $this->summaryMapByPaymentDate($previousPaymentDate, $bonus);
     }
 
     /**
@@ -53,7 +53,7 @@ class PayrollV2SummaryService
         return $map;
     }
 
-    private function previousPaymentDate(string $paymentDate): string
+    private function previousPaymentDate(string $paymentDate, bool $bonus = false): string
     {
         if (!$this->isValidPaymentDate($paymentDate)) {
             return '';
@@ -62,7 +62,7 @@ class PayrollV2SummaryService
         $dates = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->selectRaw('CONVERT(date, [supply_month]) as payment_date')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereNotNull('supply_month')
             ->groupByRaw('CONVERT(date, [supply_month])')
             ->orderByRaw('CONVERT(date, [supply_month]) desc')

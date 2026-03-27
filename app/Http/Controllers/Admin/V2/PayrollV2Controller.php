@@ -72,35 +72,10 @@ class PayrollV2Controller extends Controller
         $staffRows = $pageData['staffRows'];
         $rows = $pageData['rows'];
 
-        [$year, $month] = array_map('intval', explode('-', $selectedMonth));
-        [$attendanceYear, $attendanceMonth] = $month === 1
-            ? [$year - 1, 12]
-            : [$year, $month - 1];
-
-        $attendanceSourceMap = $this->attendanceListSummaryService->summaryMap($attendanceYear, $attendanceMonth);
-        $attendanceConfirmedMap = $this->confirmedStateService->mapByStaffIds(array_column($rows, 'staff_id'), $attendanceYear, $attendanceMonth);
-        $rows = array_map(function (array $row) use ($attendanceSourceMap): array {
-            $staffId = trim((string) ($row['staff_id'] ?? ''));
-            $row['attendance_source'] = $attendanceSourceMap[$staffId] ?? [];
-            $referenceCalc = $this->overtimeDeductionService->referenceBases(
-                (array) ($row['summary'] ?? []),
-                (string) ($row['company_name'] ?? '')
-            );
-            $row['reference_calc'] = $referenceCalc;
-            return $row;
-            return $row;
-        }, $rows);
-        $rows = array_map(function (array $row) use ($attendanceConfirmedMap): array {
-            $staffId = trim((string) ($row['staff_id'] ?? ''));
-            $row['summary'] = (array) ($row['summary'] ?? []);
-            $row['summary']['attendance_checked'] = ((bool) ($attendanceConfirmedMap[$staffId] ?? false)) ? 1 : 0;
-            return $row;
-        }, $rows);
-
         $allowanceEntries = $this->allowanceLabelService->entries();
         $labelOverrides = $this->allowanceLabelService->labelMap();
 
-        return view('admin_v2.payroll.index', [
+        return view('admin_v2.work.payroll.index', [
             'availablePaymentDates' => $availablePaymentDates,
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedMonth' => $selectedMonth,
@@ -124,9 +99,9 @@ class PayrollV2Controller extends Controller
         $selectedCompanyId = $pageData['selectedCompanyId'];
         $selectedStaffId = $pageData['selectedStaffId'];
         $staffRows = $pageData['staffRows'];
-        $rows = $this->attachBonusCalc((array) $pageData['rows'], $selectedPaymentDate);
+        $rows = (array) $pageData['rows'];
 
-        return view('admin_v2.payroll.bonus_clean', [
+        return view('admin_v2.work.bonus.index', [
             'availablePaymentDates' => $availablePaymentDates,
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedMonth' => $selectedMonth,
@@ -269,7 +244,7 @@ class PayrollV2Controller extends Controller
             $grandIncomeTax += $row['income_tax'];
         }
 
-        return view('admin_v2.payroll.transfer_list_clean', [
+        return view('admin_v2.work.transfer_list.index', [
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
             'groupedCompanies' => array_map(static function (array $company): array {
@@ -402,7 +377,7 @@ class PayrollV2Controller extends Controller
             $groupedCompanies[$companyKey]['totals']['income_tax'] += $row['income_tax'];
         }
 
-        return view('admin_v2.payroll.wage_ledger_clean', [
+        return view('admin_v2.work.wage_ledger.index', [
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
             'groupedCompanies' => array_values($groupedCompanies),

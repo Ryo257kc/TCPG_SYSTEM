@@ -14,7 +14,7 @@ class PayrollV2UpdateService
     }
 
     /** @param array<string,mixed> $values */
-    public function save(string $staffId, int $year, int $month, array $values, ?string $companyName = null): int
+    public function save(string $staffId, int $year, int $month, array $values, ?string $companyName = null, bool $bonus = false): int
     {
         $staffId = trim($staffId);
         if ($staffId === '' || $year < 2000 || $month < 1 || $month > 12) {
@@ -26,7 +26,7 @@ class PayrollV2UpdateService
             return 0;
         }
 
-        $row = $this->targetRow($staffId, $year, $month);
+        $row = $this->targetRow($staffId, $year, $month, $bonus);
 
         if (!$row || !isset($row->kyuyo_sho_no)) {
             return 0;
@@ -48,14 +48,14 @@ class PayrollV2UpdateService
             ->update($updatePayload);
     }
 
-    public function refreshTotals(string $staffId, int $year, int $month, ?string $companyName = null): int
+    public function refreshTotals(string $staffId, int $year, int $month, ?string $companyName = null, bool $bonus = false): int
     {
         $staffId = trim($staffId);
         if ($staffId === '' || $year < 2000 || $month < 1 || $month > 12) {
             return 0;
         }
 
-        $row = $this->targetRow($staffId, $year, $month);
+        $row = $this->targetRow($staffId, $year, $month, $bonus);
         if (!$row || !isset($row->kyuyo_sho_no)) {
             return 0;
         }
@@ -94,14 +94,14 @@ class PayrollV2UpdateService
         return (bool) ($map[$staffId] ?? false);
     }
 
-    public function setPayrollConfirmed(string $staffId, int $year, int $month, bool $confirmed): int
+    public function setPayrollConfirmed(string $staffId, int $year, int $month, bool $confirmed, bool $bonus = false): int
     {
         $staffId = trim($staffId);
         if ($staffId === '' || $year < 2000 || $month < 1 || $month > 12) {
             return 0;
         }
 
-        $row = $this->targetRow($staffId, $year, $month);
+        $row = $this->targetRow($staffId, $year, $month, $bonus);
         if (!$row || !isset($row->kyuyo_sho_no)) {
             return 0;
         }
@@ -366,11 +366,11 @@ class PayrollV2UpdateService
         return $cached;
     }
 
-    private function targetRow(string $staffId, int $year, int $month): ?object
+    private function targetRow(string $staffId, int $year, int $month, bool $bonus = false): ?object
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])

@@ -1,0 +1,98 @@
+.santei-filter-panel,
+    .santei-table-panel {
+        padding: 16px 18px;
+    }
+    .santei-filter-panel {
+        margin-bottom: 14px;
+    }
+    .santei-filter-form {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+    .field {
+        display: grid;
+        gap: 6px;
+        min-width: 160px;
+    }
+    .field span {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 700;
+    }
+    .field select {
+        height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0 12px;
+        font-size: 14px;
+        background: #fff;
+    }
+    .santei-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 14px;
+    }
+    .santei-head h2 {
+        margin: 0;
+        font-size: 18px;
+        color: var(--primary);
+    }
+    .santei-head p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+    }
+    .santei-meta {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .table-wrap {
+        overflow-x: auto;
+    }
+    .santei-table {
+        width: 100%;
+        min-width: 1180px;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .santei-table th,
+    .santei-table td {
+        border-bottom: 1px solid #e7eef8;
+        padding: 9px 10px;
+        vertical-align: top;
+        white-space: nowrap;
+    }
+    .santei-table th {
+        background: #f8fbff;
+        color: var(--primary);
+        text-align: left;
+        font-size: 12px;
+    }
+    .santei-table td.num,
+    .santei-table th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .santei-table tr:hover td {
+        background: #fbfdff;
+    }
+    .santei-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: var(--primary);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .santei-cell-stack {
+        display: grid;
+        gap: 4px;
+    }

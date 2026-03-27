@@ -9,21 +9,21 @@ class PayrollV2CreateCandidatesService
     /**
      * @return array{candidates:list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string,retire_date:string,candidate_type:string,existing:bool}>,suggested_payment_date:string,payment_date_options:list<string>}
      */
-    public function payload(int $year, int $month, string $companyName = '', string $paymentDate = ''): array
+    public function payload(int $year, int $month, string $companyName = '', string $paymentDate = '', bool $bonus = false): array
     {
         [$targetYear, $targetMonth] = $this->targetYearMonth($year, $month, $paymentDate);
 
         return [
-            'candidates' => $this->candidates($targetYear, $targetMonth, $companyName, $paymentDate),
-            'suggested_payment_date' => $paymentDate !== '' ? $paymentDate : $this->suggestedPaymentDate($year, $month),
-            'payment_date_options' => $this->paymentDateOptions(),
+            'candidates' => $this->candidates($targetYear, $targetMonth, $companyName, $paymentDate, $bonus),
+            'suggested_payment_date' => $paymentDate !== '' ? $paymentDate : $this->suggestedPaymentDate($year, $month, $bonus),
+            'payment_date_options' => $this->paymentDateOptions($bonus),
         ];
     }
 
     /**
      * @return list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string,retire_date:string,candidate_type:string,existing:bool}>
      */
-    public function candidates(int $year, int $month, string $companyName = '', string $paymentDate = ''): array
+    public function candidates(int $year, int $month, string $companyName = '', string $paymentDate = '', bool $bonus = false): array
     {
         if ($year < 2000 || $month < 1 || $month > 12) {
             return [];
@@ -60,7 +60,7 @@ class PayrollV2CreateCandidatesService
             $query->whereRaw("LTRIM(RTRIM(ISNULL(c.company_name, ''))) = ?", [$companyName]);
         }
 
-        $existingMap = $this->existingStaffMapByPaymentDate($paymentDate);
+        $existingMap = $this->existingStaffMapByPaymentDate($paymentDate, $bonus);
 
         return $query
             ->orderBy('s.staff_id')
@@ -85,11 +85,11 @@ class PayrollV2CreateCandidatesService
             ->all();
     }
 
-    public function suggestedPaymentDate(int $year, int $month): string
+    public function suggestedPaymentDate(int $year, int $month, bool $bonus = false): string
     {
         $value = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
             ->whereNotNull('supply_month')
@@ -105,11 +105,11 @@ class PayrollV2CreateCandidatesService
     }
 
     /** @return list<string> */
-    public function paymentDateOptions(): array
+    public function paymentDateOptions(bool $bonus = false): array
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereNotNull('supply_month')
             ->orderBy('supply_month', 'desc')
             ->pluck('supply_month')
@@ -124,7 +124,7 @@ class PayrollV2CreateCandidatesService
     }
 
     /** @return array<string,true> */
-    private function existingStaffMapByPaymentDate(string $paymentDate): array
+    private function existingStaffMapByPaymentDate(string $paymentDate, bool $bonus = false): array
     {
         $paymentDate = trim($paymentDate);
         if (!$this->isValidPaymentDate($paymentDate)) {
@@ -133,7 +133,7 @@ class PayrollV2CreateCandidatesService
 
         $ids = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 0)
+            ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
             ->pluck('kyuyo_staff_id')
             ->map(static fn ($id) => trim((string) $id))

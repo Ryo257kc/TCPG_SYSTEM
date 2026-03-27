@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Schema;
 
 class CompanyV2Service
 {
+    /** @var array<string,bool> */
+    private array $columnExistsCache = [];
+
     /** @return list<string> */
     private function companyInfoColumns(): array
     {
@@ -91,24 +94,24 @@ class CompanyV2Service
 
     public function hasColumn(string $column): bool
     {
+        if (array_key_exists($column, $this->columnExistsCache)) {
+            return $this->columnExistsCache[$column];
+        }
+
         try {
-            return Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
+            $exists = Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
                 || Schema::connection('sqlsrv')->hasColumn('dbo.mx_companies', $column);
+            $this->columnExistsCache[$column] = $exists;
+            return $exists;
         } catch (\Throwable) {
+            $this->columnExistsCache[$column] = false;
             return false;
         }
     }
 
     public function list(string $keyword): array
     {
-        $selects = ['company_id', 'company_name'];
-        foreach ($this->optionalColumns() as $col) {
-            if ($this->hasColumn($col)) {
-                $selects[] = $col;
-            }
-        }
-
-        $query = DB::connection('sqlsrv')->table('dbo.mx_companies')->select($selects)->orderBy('company_id');
+        $query = DB::connection('sqlsrv')->table('dbo.mx_companies')->select(['company_id', 'company_name'])->orderBy('company_id');
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword): void {
                 $q->where('company_name', 'like', '%' . $keyword . '%');
@@ -116,21 +119,48 @@ class CompanyV2Service
         }
 
         $rows = $query->get()->map(function ($r): array {
-            $row = [
+            return [
                 'company_id' => (string) ($r->company_id ?? ''),
                 'company_name' => (string) ($r->company_name ?? ''),
             ];
-
-            foreach ($this->optionalColumns() as $col) {
-                $row[$col] = (string) ($r->{$col} ?? '');
-            }
-
-            $row['phone'] = $row['tel'] !== '' ? $row['tel'] : '';
-
-            return $row;
         })->all();
 
         return ['rows' => $rows];
+    }
+
+    public function detail(string $companyId): ?array
+    {
+        $selects = ['company_id', 'company_name'];
+        $detailColumns = [];
+        foreach ($this->optionalColumns() as $col) {
+            if ($this->hasColumn($col)) {
+                $detailColumns[] = $col;
+                $selects[] = $col;
+            }
+        }
+
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_companies')
+            ->select($selects)
+            ->whereRaw('LTRIM(RTRIM(CAST(company_id AS nvarchar(255)))) = ?', [trim($companyId)])
+            ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        $detail = [
+            'company_id' => (string) ($row->company_id ?? ''),
+            'company_name' => (string) ($row->company_name ?? ''),
+        ];
+
+        foreach ($detailColumns as $col) {
+            $detail[$col] = (string) ($row->{$col} ?? '');
+        }
+
+        $detail['phone'] = $detail['tel'] !== '' ? $detail['tel'] : '';
+
+        return $detail;
     }
 
     public function update(array $v, string $tab = 'company'): void

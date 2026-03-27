@@ -33,13 +33,9 @@ class CompanyV2Controller extends Controller
             $selectedCompanyId = (string) ($rows[0]['company_id'] ?? '');
         }
 
-        $selectedRow = null;
-        foreach ($rows as $row) {
-            if ((string) ($row['company_id'] ?? '') === $selectedCompanyId) {
-                $selectedRow = $row;
-                break;
-            }
-        }
+        $selectedRow = $selectedCompanyId !== ''
+            ? $this->service->detail($selectedCompanyId)
+            : null;
 
         $allowedTabs = ['company', 'syaho', 'rouho', 'mayor'];
         if (!in_array($selectedTab, $allowedTabs, true)) {
@@ -50,9 +46,17 @@ class CompanyV2Controller extends Controller
         $rouho = ['latest' => null, 'rows' => []];
         $mayor = ['latest' => null, 'rows' => []];
         if ($selectedCompanyId !== '') {
-            $shaho = $this->shahoService->listByCompanyId($selectedCompanyId);
-            $rouho = $this->rouhoService->listByCompanyId($selectedCompanyId);
-            $mayor = $this->mayorService->listByCompanyId($selectedCompanyId);
+            if ($selectedTab === 'syaho') {
+                $shaho = $this->shahoService->listByCompanyId($selectedCompanyId);
+            }
+
+            if ($selectedTab === 'rouho') {
+                $rouho = $this->rouhoService->listByCompanyId($selectedCompanyId);
+            }
+
+            if ($selectedTab === 'mayor') {
+                $mayor = $this->mayorService->listByCompanyId($selectedCompanyId);
+            }
         }
 
         return view('admin_v2.master.company.index', [
