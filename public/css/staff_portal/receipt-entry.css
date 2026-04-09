@@ -1,0 +1,234 @@
+.office-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.office-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1 1 auto;
+}
+
+.receipt-entry-panel {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 110px);
+    min-height: 0;
+}
+
+.receipt-entry-list-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+.receipt-entry-summary-wrap {
+    flex: 0 0 auto;
+    margin-top: 12px;
+}
+
+.receipt-entry-toolbar-add-btn {
+    margin-left: auto;
+}
+
+.content-panel .data-table {
+    font-size: 12px;
+}
+
+.content-panel .data-table th,
+.content-panel .data-table td {
+    font-size: 12px;
+}
+
+.receipt-entry-table-actions {
+    display: none;
+}
+
+td.receipt-entry-wrap,
+th.receipt-entry-wrap {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+}
+
+.receipt-entry-row.is-editing td {
+    vertical-align: center;
+}
+
+.receipt-entry-row .receipt-entry-edit-control {
+    display: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 5px 4px;
+    border: 1px solid #cfd7e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #233044;
+    font-size: 12px;
+    /* line-height: 1.3; */
+}
+
+.receipt-entry-row.is-editing .receipt-entry-edit-control {
+    display: block;
+}
+
+.receipt-entry-row.is-editing [data-receipt-editable-display] {
+    display: none;
+}
+
+.receipt-entry-row textarea.receipt-entry-edit-control,
+.receipt-entry-detail textarea.receipt-entry-edit-control {
+    resize: vertical;
+}
+
+.receipt-entry-row td {
+    overflow: hidden;
+}
+
+.receipt-entry-toggle {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #cfd7e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #42536b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.receipt-entry-row-actions {
+    white-space: nowrap;
+    text-align: center;
+}
+
+.receipt-entry-copy-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.receipt-entry-toggle[aria-expanded="true"] {
+    background: #eef4ff;
+    color: #1f4f8f;
+}
+
+.receipt-entry-detail[hidden] {
+    display: none;
+}
+
+.receipt-entry-detail-cell {
+    padding: 10px 12px;
+    background: #f6f8fc;
+}
+
+.receipt-entry-detail-layout {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.receipt-entry-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 140px));
+    gap: 6px 8px;
+    flex: 1 1 auto;
+}
+
+.receipt-entry-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.receipt-entry-detail-label {
+    font-size: 11px;
+    color: #6a778b;
+    font-weight: 700;
+}
+
+.receipt-entry-detail-value {
+    min-height: 20px;
+    padding: 5px 6px;
+    border: 1px solid #d7dfec;
+    border-radius: 6px;
+    background: #fff;
+    color: #233044;
+    word-break: break-word;
+}
+
+.receipt-entry-detail-item .form-input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 5px 6px;
+    border: 1px solid #cfd7e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #233044;
+    font-size: 12px;
+}
+
+.receipt-entry-detail-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
+    align-self: flex-end;
+}
+
+.receipt-entry-detail-actions .btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.receipt-entry-row td {
+    padding: 3px 4px;
+}
+
+.receipt-entry-money-cell {
+    text-align: right;
+}
+
+.receipt-entry-money-cell .receipt-entry-readonly {
+    display: block;
+    text-align: right;
+}
+
+.receipt-entry-money-input {
+    text-align: right;
+}
+
+.receipt-entry-alert {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.receipt-entry-alert-error {
+    border-color: #f3a6a6;
+    background: #fff1f1;
+    color: #b42318;
+}

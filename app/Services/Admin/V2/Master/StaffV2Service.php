@@ -112,6 +112,11 @@ class StaffV2Service
     {
         return DB::connection('sqlsrv')
             ->table('dbo.mx_stores')
+            ->where(function ($query) {
+                $query->where('is_closed', false)
+                    ->orWhere('is_closed', 0)
+                    ->orWhereNull('is_closed');
+            })
             ->select(['store_code', 'store_name'])
             ->orderBy('store_code')
             ->get()

@@ -96,6 +96,69 @@
 
 - `mx_account_titles` は未使用で、列名が `legacy_t_*` になっているため作り直し候補
 - `mx_stores` と `mx_companies` の分割は、旧構造より現DB側の方が整理されている
+## `T_保険請求内訳` -> `mx_insurance_claim_details`
+
+- 主キー: `insurance_claim_detail_id`
+- Column mapping:
+  - `保険請求内訳No` -> `insurance_claim_detail_id`
+  - `保険者No` -> `insurer_number`
+  - `施術月` -> `treatment_month`
+  - `店舗` -> `store_name`
+  - `担当者` -> `staff_name`
+  - `集計区分` -> `summary_category`
+  - `総枚数` -> `total_sheets`
+  - `総部位数` -> `total_parts_count`
+  - `合計金額` -> `total_amount`
+  - `一部負担金` -> `copayment_amount`
+  - `請求金額` -> `claim_amount`
+  - `現金回収` -> `cash_collected_amount`
+  - `修正額` -> `adjustment_amount`
+  - `高額療養費` -> `is_high_cost_medical`
+  - `回収不可` -> `is_uncollectible`
+  - `通帳入金日` -> `bank_deposit_date`
+  - `通帳入金額` -> `bank_deposit_amount`
+  - `入金日` -> `payment_date_text`
+  - `入金額` -> `payment_amount`
+  - `備考` -> `remarks`
+  - `入金名称` -> `deposit_name`
+  - `入金日表示` -> `payment_date_display`
+  - `返戻額` -> `returned_amount`
+  - `返戻仕訳処理日` -> `returned_journal_processed_at`
+  - `患者名` -> `patient_name`
+  - `記帳済` -> `is_journalized`
+  - `請求書` -> `is_invoiced`
+  - `対象者名` -> `subject_name`
+- Notes:
+  - Column order was rebuilt to match the legacy table order.
+  - Recreated with the same English table name after cleanup.
+
+## `T_保険者` -> `mx_insurers`
+
+- 主キー: `insurer_number`
+- Column mapping:
+  - `保険者番号` -> `insurer_number`
+  - `保険者名称` -> `insurer_name`
+  - `表示名称` -> `display_name`
+  - `表示支部` -> `display_branch`
+  - `入金予定名称` -> `scheduled_payment_name`
+  - `入金予定名称2` -> `scheduled_payment_name_2`
+  - `保険区分` -> `insurance_category`
+  - `保険種別` -> `insurance_type`
+  - `保険種類` -> `insurance_kind`
+  - `助成種類` -> `subsidy_type`
+  - `助成支給者` -> `subsidy_provider`
+  - `郵便番号` -> `postal_code`
+  - `保険者住所` -> `insurer_address`
+  - `送付先` -> `mailing_address`
+  - `保険者電話` -> `insurer_phone`
+  - `市区町村番号` -> `municipality_number`
+  - `後期高齢登録番号` -> `late_elderly_registration_number`
+  - `一般登録番号` -> `general_registration_number`
+  - `No` -> `legacy_no`
+- Notes:
+  - Column order was rebuilt to match the legacy table order.
+  - Recreated with the same English table name after cleanup.
+
 ## 2026-03-25 Notes
 
 - Added `mx_companies.postal_code` for company-side postal code storage.

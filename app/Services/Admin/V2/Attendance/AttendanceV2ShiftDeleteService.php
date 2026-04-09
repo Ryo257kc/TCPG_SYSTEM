@@ -34,7 +34,8 @@ class AttendanceV2ShiftDeleteService
             $query = DB::connection('sqlsrv')
                 ->table('dbo.mx_time_cards')
                 ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
-                ->whereBetween('work_date', [$fromDate, $toDate]);
+                ->where('work_date', '>=', $fromDate)
+                ->where('work_date', '<', $toDate);
 
             if (!$query->exists()) {
                 $result['skipped']++;
@@ -65,7 +66,7 @@ class AttendanceV2ShiftDeleteService
     private function monthRange(int $year, int $month): array
     {
         $fromDate = sprintf('%04d-%02d-01 00:00:00', $year, $month);
-        $toDate = date('Y-m-t 23:59:59', strtotime(substr($fromDate, 0, 10)));
+        $toDate = date('Y-m-01 00:00:00', strtotime(substr($fromDate, 0, 10) . ' +1 month'));
 
         return [$fromDate, $toDate];
     }

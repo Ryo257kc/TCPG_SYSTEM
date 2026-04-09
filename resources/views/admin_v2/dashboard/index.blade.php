@@ -1,165 +1,78 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+    @php
+        $menuGroups = [
+            '勤怠・給与' => [
+                ['key' => 'attendance-manage', 'label' => '勤怠管理', 'url' => '/admin/attendance'],
+                ['key' => 'salary-detail', 'label' => '給与計算', 'url' => '/admin/payroll'],
+                ['key' => 'bonus-detail', 'label' => '賞与計算', 'url' => '/admin/bonus'],
+                ['key' => 'paid-leave-manage', 'label' => '有休管理', 'url' => '/admin/paid-leave'],
+            ],
+            '売上' => [
+                ['key' => 'sales-preview', 'label' => '売上', 'url' => '/admin/sales'],
+                ['key' => 'accounts-receivable', 'label' => '未収入金', 'url' => '/admin'],
+                ['key' => 'high-cost-medical', 'label' => '高額療養費', 'url' => '/admin'],
+                ['key' => 'home-visit-counter-list', 'label' => '往診窓口一覧', 'url' => '/admin'],
+                ['key' => 'return-processing', 'label' => '返戻処理', 'url' => '/admin'],
+            ],
+            '請求・仕訳' => [
+                ['key' => 'journal-entries', 'label' => '仕訳帳', 'url' => '/admin'],
+                ['key' => 'petty-cash-list', 'label' => '小口一覧', 'url' => '/admin'],
+                ['key' => 'billing-list', 'label' => '請求一覧', 'url' => '/admin'],
+                ['key' => 'loan-repayment', 'label' => '借入返済', 'url' => '/admin'],
+            ],
+            '帳票' => [
+                ['key' => 'report-center', 'label' => '給与帳票', 'url' => '/admin/reports'],
+                ['key' => 'manager-documents', 'label' => '入社書類', 'url' => '/staff/attendance/management'],
+            ],
+            'マスタ' => [
+                ['key' => 'master-company', 'label' => '会社マスタ', 'url' => '/admin/master/company'],
+                ['key' => 'master-staff', 'label' => 'スタッフマスタ', 'url' => '/admin/master/staff'],
+                ['key' => 'master-store', 'label' => '店舗マスタ', 'url' => '/admin/master/store'],
+                ['key' => 'master-allowance', 'label' => '手当設定', 'url' => '/admin/master/allowance'],
+                ['key' => 'master-calendar', 'label' => 'カレンダー', 'url' => '/admin/master/calendar'],
+            ],
+            '事務所MENU' => [
+                ['key' => 'office-attendance', 'label' => '事務所勤怠', 'url' => '/staff/office/attendance'],
+                ['key' => 'office-receipt', 'label' => 'レセ関連', 'url' => '/staff/office/receipt'],
+                ['key' => 'office-daily-report', 'label' => '店舗日報', 'url' => '/admin/reports'],
+                ['key' => 'office-backoffice', 'label' => '事務業務', 'url' => '/admin/reports'],
+                ['key' => 'office-sales', 'label' => '売上関連', 'url' => '/admin/reports'],
+            ],
+            '管理者MENU' => [
+                ['key' => 'manager-shift-change', 'label' => 'シフト変更', 'url' => '/staff/attendance/management'],
+                ['key' => 'manager-attendance-manage', 'label' => '勤怠管理', 'url' => '/staff/attendance/management'],
+                ['key' => 'manager-punch-list', 'label' => '打刻一覧', 'url' => '/staff/attendance/punch-list'],
+                ['key' => 'manager-paid-leave', 'label' => '申請有休', 'url' => '/staff/attendance/management'],
+                ['key' => 'manager-sales', 'label' => '各種売上', 'url' => '/staff/attendance/management'],
+            ],
+        ];
+
+        $pages = [
+            'home' => ['title' => '管理メニュー', 'description' => '各メニューからページを選択してください。'],
+            'attendance-manage' => ['title' => '勤怠管理', 'description' => '勤怠管理ページへ移動します。'],
+            'salary-detail' => ['title' => '給与計算', 'description' => '給与計算ページへ移動します。'],
+            'bonus-detail' => ['title' => '賞与計算', 'description' => '賞与計算ページへ移動します。'],
+            'paid-leave-manage' => ['title' => '有休管理', 'description' => '有休の使用・残数確認ページへ移動します。'],
+            'sales-preview' => ['title' => '売上', 'description' => '売上ページはこちらから移動してください。'],
+            'accounts-receivable' => ['title' => '未収入金', 'description' => '未収入金ページはこちらから移動してください。'],
+            'high-cost-medical' => ['title' => '高額療養費', 'description' => '高額療養費ページはこちらから移動してください。'],
+            'report-center' => ['title' => '帳票一覧', 'description' => '帳票一覧ページへ移動します。'],
+            'master-company' => ['title' => '会社マスタ', 'description' => '会社マスタページへ移動します。'],
+            'master-staff' => ['title' => 'スタッフマスタ', 'description' => 'スタッフマスタページへ移動します。'],
+            'master-store' => ['title' => '店舗マスタ', 'description' => '店舗マスタページへ移動します。'],
+            'master-allowance' => ['title' => '手当設定', 'description' => '手当設定ページへ移動します。'],
+            'master-calendar' => ['title' => 'カレンダー', 'description' => 'カレンダーページへ移動します。'],
+        ];
+
+        $selectedPage = array_key_exists($requestedPage ?? 'home', $pages) ? $requestedPage : 'home';
+        $pageData = $pages[$selectedPage];
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM ダッシュボード</title>
-    <style>
-        :root {
-            --bg: #edf3fb;
-            --panel: #ffffff;
-            --line: #d5e0ef;
-            --text: #1f2937;
-            --muted: #667085;
-            --primary: #1f4f8f;
-            --primary-soft: #eaf1fb;
-            --shadow: 0 14px 34px rgba(31, 79, 143, 0.10);
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-            color: var(--text);
-            background:
-                radial-gradient(880px 280px at 8% -8%, rgba(184, 206, 240, 0.85) 0%, transparent 62%),
-                linear-gradient(180deg, #f7faff 0%, var(--bg) 100%);
-        }
-        .page-shell {
-            padding: 14px 18px 24px;
-        }
-        .hero {
-            display: grid;
-            grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-        .hero-card,
-        .session-card,
-        .menu-card {
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            background: var(--panel);
-            box-shadow: var(--shadow);
-        }
-        .hero-card {
-            padding: 22px 24px;
-            background:
-                linear-gradient(135deg, rgba(31, 79, 143, 0.08), rgba(31, 79, 143, 0.00) 55%),
-                var(--panel);
-        }
-        .hero-kicker {
-            display: inline-block;
-            margin-bottom: 10px;
-            padding: 5px 10px;
-            border-radius: 999px;
-            background: var(--primary-soft);
-            color: var(--primary);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: .04em;
-        }
-        .hero h1 {
-            margin: 0 0 8px;
-            font-size: 28px;
-            line-height: 1.2;
-        }
-        .hero p {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.7;
-            font-size: 14px;
-        }
-        .session-card {
-            padding: 18px 18px 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .session-label {
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: .06em;
-        }
-        .session-name {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--primary);
-        }
-        .session-meta {
-            display: grid;
-            gap: 8px;
-            margin-top: auto;
-            font-size: 13px;
-        }
-        .session-row strong {
-            display: inline-block;
-            min-width: 74px;
-            color: #344054;
-        }
-        .logout-btn {
-            border: 0;
-            border-radius: 10px;
-            background: var(--primary);
-            color: #fff;
-            padding: 10px 14px;
-            font-size: 13px;
-            cursor: pointer;
-            align-self: flex-start;
-        }
-        .menu-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
-        }
-        .menu-card {
-            padding: 16px;
-        }
-        .menu-title {
-            margin: 0 0 12px;
-            font-size: 14px;
-            color: var(--muted);
-            letter-spacing: .05em;
-        }
-        .menu-list {
-            display: grid;
-            gap: 8px;
-        }
-        .menu-link {
-            display: block;
-            padding: 11px 12px;
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            text-decoration: none;
-            color: var(--text);
-            background: #fbfdff;
-            transition: border-color .15s ease, transform .15s ease, background .15s ease;
-        }
-        .menu-link:hover {
-            border-color: #b7caec;
-            background: #fff;
-            transform: translateY(-1px);
-        }
-        .menu-link.active {
-            border-color: #b7caec;
-            background: var(--primary-soft);
-            color: var(--primary);
-            font-weight: 700;
-        }
-        .menu-link small {
-            display: block;
-            margin-top: 3px;
-            color: var(--muted);
-            font-size: 11px;
-        }
-        @media (max-width: 980px) {
-            .hero,
-            .menu-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ asset('css/admin_v2/dashboard.css') }}">
 </head>
 <body>
     @include('admin_v2.shared.global_nav')
@@ -186,24 +99,25 @@
             </aside>
         </section>
 
-        @php
-            $groupDescriptions = [
-                '勤怠・給与' => '毎月の勤怠・給与・振込まわり',
-                '帳票' => '提出や確認に使う帳票と集計',
-                'マスタ' => '会社・スタッフ・店舗などの基本設定',
-            ];
-        @endphp
-
         <section class="menu-grid">
             @foreach ($menuGroups as $groupName => $items)
                 <section class="menu-card">
                     <h2 class="menu-title">{{ $groupName }}</h2>
                     <div class="menu-list">
                         @foreach ($items as $item)
+                            @continue(!empty($item['hidden']))
+                            @php
+                                $itemPage = $pages[$item['key']] ?? null;
+                                $itemHref = $item['url'] === '/admin'
+                                    ? url($item['url']) . '?page=' . $item['key']
+                                    : url($item['url']);
+                            @endphp
                             <a class="menu-link {{ $selectedPage === $item['key'] ? 'active' : '' }}"
-                               href="{{ url($item['url']) }}{{ $item['url'] === '/admin' ? '?page=' . $item['key'] : '' }}">
-                                {{ $item['label'] }}
-                                <small>{{ $groupDescriptions[$groupName] ?? '' }}</small>
+                               href="{{ $itemHref }}">
+                                <span class="menu-link-title">{{ $item['label'] }}</span>
+                                @if (!empty($itemPage['description']))
+                                    <span class="menu-link-sub">{{ $itemPage['description'] }}</span>
+                                @endif
                             </a>
                         @endforeach
                     </div>

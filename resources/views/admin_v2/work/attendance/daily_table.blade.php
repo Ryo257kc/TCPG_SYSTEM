@@ -2,7 +2,6 @@
     @php
         $hasStaffApproval = collect($dailyRows)->contains(static fn ($row) => ($row['has_staff_approval'] ?? '0') === '1');
         $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['has_manager_approval'] ?? '0') === '1');
-        $attendanceCategories = ["\u{632F}\u{51FA}", "\u{4EE3}\u{51FA}", "\u{632F}\u{4F11}", "\u{4EE3}\u{4F11}", "\u{6B20}\u{52E4}", "\u{6709}\u{4F11}", "\u{6709}\u{534A}", "\u{4F11}\u{51FA}", "\u{6CD5}\u{51FA}", "\u{51FA}\u{5F35}", "\u{9045}\u{65E9}"];
     @endphp
     <div class="daily-panel">
         <div class="daily-head">
@@ -32,11 +31,11 @@
                 <div class="daily-summary-group">
                     <div class="daily-summary-title">所定</div>
                     <div class="daily-summary-row">
-                        <div class="daily-summary-label">シフト所定合計</div>
+                        <div class="daily-summary-label">シフト所定</div>
                         <div class="daily-summary-value">{{ number_format((float) ($dailySummary['shift_scheduled_total'] ?? 0), 2) }}</div>
-                        <div class="daily-summary-label">打刻所定合計</div>
+                        <div class="daily-summary-label">打刻所定</div>
                         <div class="daily-summary-value">{{ number_format((float) ($dailySummary['actual_scheduled_total'] ?? 0), 2) }}</div>
-                        <div class="daily-summary-label">変更実績所定合計</div>
+                        <div class="daily-summary-label">変更実績所定</div>
                         <div class="daily-summary-value">{{ number_format((float) ($dailySummary['change_scheduled_total'] ?? 0), 2) }}</div>
                     </div>
                 </div>
@@ -56,43 +55,45 @@
             </div>
         @endif
         @if (!empty($dailyRows))
+            @php
+                $isEditable = false;
+            @endphp
             <div class="daily-wrap">
-                <table class="daily-table">
+                <table class="daily-table cen">
                     <thead>
                     <tr>
                         <th rowspan="2">日付</th>
-                        <th colspan="3">区分</th>
-                        <th rowspan="2">有休<br>使用</th>
-                        <th rowspan="2">勤務店舗</th>
-                        <th class="daily-group-start" colspan="5">打刻</th>
-                        <th class="daily-group-start" colspan="5">シフト</th>
-                        <th class="daily-group-start" colspan="7">変更実績</th>
-                        <th class="daily-group-start" colspan="2">備考</th>
+                        <th colspan="3">勤怠</th>
+                        <th class="f-sen" rowspan="2">有休<br>取得</th>
+                        <th class="daily-group-start f-sen" colspan="5">打刻</th>
+                        <th class="daily-group-start f-sen" colspan="5">シフト</th>
+                        <th class="daily-group-start f-sen" colspan="7">変更実績</th>
+                        <th class="daily-group-start daily-work-store-col" rowspan="2">勤務店舗</th>
+                        <th colspan="2">備考</th>
                     </tr>
                     <tr>
                         <th>休日</th>
-                        <th>勤怠</th>
+                        <th>区分</th>
                         <th>時間</th>
                         <th class="daily-group-start">始業</th>
                         <th>退出</th>
                         <th>入出</th>
                         <th>終業</th>
-                        <th>所定</th>
+                        <th class="f-sen">所定</th>
                         <th class="daily-group-start">始業</th>
                         <th>退出</th>
                         <th>入出</th>
                         <th>終業</th>
-                        <th>所定</th>
+                        <th class="f-sen">所定</th>
                         <th class="daily-group-start">始業</th>
                         <th>退出</th>
                         <th>入出</th>
                         <th>終業</th>
                         <th>所定</th>
                         <th>残業</th>
-                        <th>深夜</th>
-                        <th class="daily-group-start">勤怠</th>
+                        <th class="f-sen">深夜</th>
+                        <th>勤怠</th>
                         <th>差戻し</th>
-                        <th>操作</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -115,103 +116,137 @@
                             <td>{{ $row['holiday_category'] }}</td>
                             <td>
                                 <span class="daily-view">{{ $row['attendance_category'] }}</span>
-                                <select class="daily-edit daily-edit-input daily-edit-input-category" name="attendance_category" form="{{ $formId }}" data-original="{{ $row['attendance_category'] }}">
-                                    <option value=""></option>
-                                    @foreach ($attendanceCategories as $attendanceCategory)
-                                        <option value="{{ $attendanceCategory }}" @selected($row['attendance_category'] === $attendanceCategory)>{{ $attendanceCategory }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td class="num">
-                                <span class="daily-view">{{ $row['category_time'] }}</span>
-                                <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="category_time" value="{{ $row['category_time'] }}" form="{{ $formId }}" data-original="{{ $row['category_time'] }}">
-                            </td>
-                            <td class="num">
-                                <span class="daily-view">{{ $row['paid_leave_used'] }}</span>
-                                <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="paid_leave_used" value="{{ $row['paid_leave_used'] }}" form="{{ $formId }}" data-original="{{ $row['paid_leave_used'] }}">
+                                @if ($isEditable)
+                                    <select class="daily-edit daily-edit-input daily-edit-input-category" name="attendance_category" form="{{ $formId }}" data-original="{{ $row['attendance_category'] }}">
+                                        <option value=""></option>
+                                        @foreach ($attendanceCategories as $attendanceCategory)
+                                            <option value="{{ $attendanceCategory }}" @selected($row['attendance_category'] === $attendanceCategory)>{{ $attendanceCategory }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
                             </td>
                             <td>
-                                <span class="daily-view">{{ $row['work_store'] }}</span>
-                                <select class="daily-edit daily-edit-input daily-edit-input-store" name="work_store" form="{{ $formId }}" data-original="{{ $row['work_store'] }}">
-                                    <option value=""></option>
-                                    @foreach (($storeOptions ?? []) as $storeOption)
-                                        <option value="{{ $storeOption['value'] }}" @selected($row['work_store'] === $storeOption['value'])>{{ $storeOption['label'] }}</option>
-                                    @endforeach
-                                </select>
+                                <span class="daily-view">{{ $row['category_time'] }}</span>
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="category_time" value="{{ $row['category_time'] }}" form="{{ $formId }}" data-original="{{ $row['category_time'] }}">
+                                @endif
+                            </td>
+                            <td class="f-sen">
+                                <span class="daily-view">{{ $row['paid_leave_used'] }}</span>
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="paid_leave_used" value="{{ $row['paid_leave_used'] }}" form="{{ $formId }}" data-original="{{ $row['paid_leave_used'] }}">
+                                @endif
                             </td>
                             <td class="daily-group-start">{{ $row['actual_start'] }}</td>
                             <td>{{ $row['actual_leave'] }}</td>
                             <td>{{ $row['actual_break_out'] }}</td>
                             <td>{{ $row['actual_end'] }}</td>
-                            <td>{{ $row['actual_scheduled'] }}</td>
+                            <td class="f-sen">{{ $row['actual_scheduled'] }}</td>
                             <td class="daily-group-start">
                                 <span class="daily-view">{{ $row['shift_start'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="shift_start" value="{{ $row['shift_start'] }}" form="{{ $formId }}" data-original="{{ $row['shift_start'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="shift_start" value="{{ $row['shift_start'] }}" form="{{ $formId }}" data-original="{{ $row['shift_start'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['shift_leave'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="shift_leave" value="{{ $row['shift_leave'] }}" form="{{ $formId }}" data-original="{{ $row['shift_leave'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="shift_leave" value="{{ $row['shift_leave'] }}" form="{{ $formId }}" data-original="{{ $row['shift_leave'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['shift_break_out'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="shift_break_out" value="{{ $row['shift_break_out'] }}" form="{{ $formId }}" data-original="{{ $row['shift_break_out'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="shift_break_out" value="{{ $row['shift_break_out'] }}" form="{{ $formId }}" data-original="{{ $row['shift_break_out'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['shift_end'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="shift_end" value="{{ $row['shift_end'] }}" form="{{ $formId }}" data-original="{{ $row['shift_end'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="shift_end" value="{{ $row['shift_end'] }}" form="{{ $formId }}" data-original="{{ $row['shift_end'] }}">
+                                @endif
                             </td>
-                            <td>{{ $row['shift_scheduled'] }}</td>
+                            <td class="f-sen">{{ $row['shift_scheduled'] }}</td>
                             <td class="daily-group-start">
                                 <span class="daily-view">{{ $row['change_start'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="change_start" value="{{ $row['change_start'] }}" form="{{ $formId }}" data-original="{{ $row['change_start'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="change_start" value="{{ $row['change_start'] }}" form="{{ $formId }}" data-original="{{ $row['change_start'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['change_leave'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="change_leave" value="{{ $row['change_leave'] }}" form="{{ $formId }}" data-original="{{ $row['change_leave'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="change_leave" value="{{ $row['change_leave'] }}" form="{{ $formId }}" data-original="{{ $row['change_leave'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['change_break_out'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="change_break_out" value="{{ $row['change_break_out'] }}" form="{{ $formId }}" data-original="{{ $row['change_break_out'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="change_break_out" value="{{ $row['change_break_out'] }}" form="{{ $formId }}" data-original="{{ $row['change_break_out'] }}">
+                                @endif
                             </td>
                             <td>
                                 <span class="daily-view">{{ $row['change_end'] }}</span>
-                                <input class="daily-edit daily-edit-input" type="text" name="change_end" value="{{ $row['change_end'] }}" form="{{ $formId }}" data-original="{{ $row['change_end'] }}">
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input" type="text" name="change_end" value="{{ $row['change_end'] }}" form="{{ $formId }}" data-original="{{ $row['change_end'] }}">
+                                @endif
                             </td>
                             <td @class(['daily-value-alert' => $isChangeScheduledOver])>
                                 <span class="daily-view">{{ $row['change_scheduled'] }}</span>
-                                <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="change_scheduled" value="{{ $row['change_scheduled'] }}" form="{{ $formId }}" data-original="{{ $row['change_scheduled'] }}">
-                            </td>
-                            <td class="num">
-                                <span class="daily-view">{{ $row['overtime'] }}</span>
-                                <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="overtime" value="{{ $row['overtime'] }}" form="{{ $formId }}" data-original="{{ $row['overtime'] }}">
-                            </td>
-                            <td class="num">
-                                <span class="daily-view">{{ $row['night_overtime'] }}</span>
-                            </td>
-                            <td class="daily-group-start daily-note-cell" title="{{ $row['timecard_note'] }}" ondblclick="openDailyNoteEditor(this)">
-                                <span class="daily-view daily-note-text">{{ $row['timecard_note'] }}</span>
-                                <textarea class="daily-note-textarea" name="timecard_note" form="{{ $formId }}" data-original="{{ $row['timecard_note'] }}">{{ $row['timecard_note'] }}</textarea>
-                            </td>
-                            <td class="daily-note-cell" title="{{ $row['return_note'] }}" ondblclick="openDailyNoteEditor(this)">
-                                <span class="daily-view daily-note-text">{{ $row['return_note'] }}</span>
-                                <textarea class="daily-note-textarea" name="return_note" form="{{ $formId }}" data-original="{{ $row['return_note'] }}">{{ $row['return_note'] }}</textarea>
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="change_scheduled" value="{{ $row['change_scheduled'] }}" form="{{ $formId }}" data-original="{{ $row['change_scheduled'] }}">
+                                @endif
                             </td>
                             <td>
-                                <div class="daily-actions daily-view">
-                                    <button class="btn btn-small daily-btn-muted" type="button" data-action="edit">編集</button>
-                                </div>
-                                <div class="daily-actions daily-edit">
-                                    <button class="btn btn-small" type="submit" form="{{ $formId }}">保存</button>
-                                    <button class="btn btn-small daily-btn-muted" type="button" data-action="cancel">取消</button>
-                                </div>
-                                <form id="{{ $formId }}" method="post" action="{{ route('admin.attendance.update-daily') }}">
-                                    @csrf
-                                    <input type="hidden" name="month" value="{{ $selectedMonth }}">
-                                    <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
-                                    <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
-                                    <input type="hidden" name="time_card_key" value="{{ $row['time_card_key'] }}">
-                                    <input type="hidden" name="work_date" value="{{ $row['work_date'] }}">
-                                </form>
+                                <span class="daily-view">{{ $row['overtime'] }}</span>
+                                @if ($isEditable)
+                                    <input class="daily-edit daily-edit-input daily-edit-input-num" type="number" step="0.01" name="overtime" value="{{ $row['overtime'] }}" form="{{ $formId }}" data-original="{{ $row['overtime'] }}">
+                                @endif
+                            </td>
+                            <td class="f-sen">
+                                <span class="daily-view">{{ $row['night_overtime'] }}</span>
+                            </td>
+                            <td class="daily-group-start daily-work-store-col">
+                                <span class="daily-view">{{ $row['work_store'] }}</span>
+                                @if ($isEditable)
+                                    <select class="daily-edit daily-edit-input daily-edit-input-store" name="work_store" form="{{ $formId }}" data-original="{{ $row['work_store'] }}">
+                                        <option value=""></option>
+                                        @foreach (($storeOptions ?? []) as $storeOption)
+                                            <option value="{{ $storeOption['value'] }}" @selected($row['work_store'] === $storeOption['value'])>{{ $storeOption['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
+                            </td>
+                            <td class="daily-note-first{{ $isEditable ? ' daily-note-cell' : '' }}" title="{{ $row['timecard_note'] }}" @if ($isEditable) ondblclick="openDailyNoteEditor(this)" @endif>
+                                <span class="daily-view daily-note-text">{{ $row['timecard_note'] }}</span>
+                                @if ($isEditable)
+                                    <textarea class="daily-note-textarea" name="timecard_note" form="{{ $formId }}" data-original="{{ $row['timecard_note'] }}">{{ $row['timecard_note'] }}</textarea>
+                                @endif
+                            </td>
+                            <td class="{{ $isEditable ? ' daily-note-cell' : '' }}" title="{{ $row['return_note'] }}" @if ($isEditable) ondblclick="openDailyNoteEditor(this)" @endif>
+                                <span class="daily-view daily-note-text">{{ $row['return_note'] }}</span>
+                                @if ($isEditable)
+                                    <textarea class="daily-note-textarea" name="return_note" form="{{ $formId }}" data-original="{{ $row['return_note'] }}">{{ $row['return_note'] }}</textarea>
+                                @endif
+                            </td>
+                            <td>
+                                @if ($isEditable)
+                                    <div class="daily-actions daily-view">
+                                        <button class="btn btn-small daily-btn-muted" type="button" data-action="edit">編集</button>
+                                    </div>
+                                    <div class="daily-actions daily-edit">
+                                        <button class="btn btn-small" type="submit" form="{{ $formId }}">保存</button>
+                                        <button class="btn btn-small daily-btn-muted" type="button" data-action="cancel">キャンセル</button>
+                                    </div>
+                                    <form id="{{ $formId }}" method="post" action="{{ route('admin.attendance.update-daily') }}">
+                                        @csrf
+                                        <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                                        <input type="hidden" name="company_id" value="{{ $selectedCompanyId }}">
+                                        <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                                        <input type="hidden" name="time_card_key" value="{{ $row['time_card_key'] }}">
+                                        <input type="hidden" name="work_date" value="{{ $row['work_date'] }}">
+                                    </form>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

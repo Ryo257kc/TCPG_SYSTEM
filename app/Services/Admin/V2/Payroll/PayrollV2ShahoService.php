@@ -53,7 +53,7 @@ class PayrollV2ShahoService
             if ((int)$d->format('Y') === (int)$targetSep->format('Y') && (int)$d->format('n') === 9) {
                 return $row;
             }
-            if ($d <= $targetSep) {
+            if ($d->format('Y-m-d') <= $targetSep->format('Y-m-d')) {
                 $anchor = $row;
                 break;
             }
@@ -68,7 +68,7 @@ class PayrollV2ShahoService
             return null;
         }
         $y = $month >= 10 ? $year : ($year - 1);
-        return new \DateTimeImmutable(sprintf('%04d-09-30 23:59:59', $y));
+        return new \DateTimeImmutable(sprintf('%04d-09-30', $y));
     }
 
     private function toDate(mixed $v): ?\DateTimeImmutable

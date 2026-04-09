@@ -8,6 +8,8 @@ Route::get('/payroll-v2', [PayrollV2Controller::class, 'index'])->name('admin.pa
 Route::get('/bonus', [PayrollV2Controller::class, 'bonusIndex'])->name('admin.bonus.index');
 Route::get('/payroll/transfer-list', [PayrollV2Controller::class, 'transferList'])->name('admin.payroll.transfer-list');
 Route::get('/payroll/wage-ledger', [PayrollV2Controller::class, 'wageLedger'])->name('admin.payroll.wage-ledger');
+Route::get('/bonus/transfer-list', [PayrollV2Controller::class, 'bonusTransferList'])->name('admin.bonus.transfer-list');
+Route::get('/bonus/wage-ledger', [PayrollV2Controller::class, 'bonusWageLedger'])->name('admin.bonus.wage-ledger');
 Route::post('/payroll/update', [PayrollV2Controller::class, 'update'])->name('admin.payroll.update');
 Route::post('/payroll/attendance-reflect', [PayrollV2Controller::class, 'reflectAttendance'])->name('admin.payroll.attendance-reflect');
 Route::post('/payroll/recalculate', [PayrollV2Controller::class, 'recalculate'])->name('admin.payroll.recalculate');

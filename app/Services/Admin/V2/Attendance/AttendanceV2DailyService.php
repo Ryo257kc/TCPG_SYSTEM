@@ -27,20 +27,6 @@ class AttendanceV2DailyService
         $end = $start->modify('first day of next month');
         $lastDay = $start->modify('last day of this month');
 
-        $calendarMap = DB::connection('sqlsrv')
-            ->table('dbo.mx_calendar')
-            ->whereBetween('calendar_day', [$start->format('Y-m-d 00:00:00'), $lastDay->format('Y-m-d 23:59:59')])
-            ->get()
-            ->mapWithKeys(function ($row) {
-                $key = date('Y-m-d', strtotime((string) $row->calendar_day));
-                $holiday = trim((string) ($row->public_holiday ?? ''));
-                if ($holiday === '') {
-                    $holiday = trim((string) ($row->work_holiday ?? ''));
-                }
-                return [$key => $holiday];
-            })
-            ->all();
-
         $storeRows = DB::connection('sqlsrv')
             ->table('dbo.mx_stores')
             ->select(['store_code', 'store_name', 'store_short_name'])
@@ -79,7 +65,8 @@ class AttendanceV2DailyService
                     $query->orWhereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffKey]);
                 }
             })
-            ->whereBetween('work_date', [$start->format('Y-m-d 00:00:00'), $lastDay->format('Y-m-d 23:59:59')])
+            ->where('work_date', '>=', $start->format('Y-m-d 00:00:00'))
+            ->where('work_date', '<', $end->format('Y-m-d 00:00:00'))
             ->orderBy('work_date')
             ->get()
             ->mapWithKeys(function ($row) {
@@ -116,9 +103,7 @@ class AttendanceV2DailyService
                     $card->change_break_out ?? null,
                     $card->change_end ?? null,
                 ]) ? '1' : '0',
-                'holiday_category' => trim((string) ($card->holiday_category ?? '')) !== ''
-                    ? trim((string) ($card->holiday_category ?? ''))
-                    : (string) ($calendarMap[$key] ?? ''),
+                'holiday_category' => trim((string) ($card->holiday_category ?? '')),
                 'attendance_category' => trim((string) ($card->work_type ?? '')),
                 'category_time' => $this->formatNumber($card->work_type_time ?? null),
                 'paid_leave_used' => $this->formatPaidLeave($card->paid_leave_used ?? null),

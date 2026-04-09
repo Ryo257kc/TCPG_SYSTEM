@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -15,7 +15,7 @@
         <div class="title">TCPG SYSTEM 帳票一覧</div>
     </div>
 
-    <section class="panel report-main-panel">
+    <section class="report-main-panel">
         <div class="report-grid">
             @foreach ($categories as $category)
                 <section class="panel category-panel">

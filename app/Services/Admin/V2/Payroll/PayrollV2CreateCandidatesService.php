@@ -49,10 +49,10 @@ class PayrollV2CreateCandidatesService
             ->whereRaw('LTRIM(RTRIM(s.staff_id)) <> ?', [''])
             ->where(function ($q) use ($prevStart, $prevEnd) {
                 $q->whereNull('s.tai_date')
-                    ->orWhereBetween('s.tai_date', [
-                        $prevStart->format('Y-m-d 00:00:00'),
-                        $prevEnd->format('Y-m-d 23:59:59'),
-                    ]);
+                    ->orWhere(function ($q) use ($prevStart, $prevEnd) {
+                        $q->where('s.tai_date', '>=', $prevStart->format('Y-m-d 00:00:00'))
+                            ->where('s.tai_date', '<', $prevEnd->modify('+1 day')->format('Y-m-d 00:00:00'));
+                    });
             });
 
         $companyName = trim($companyName);

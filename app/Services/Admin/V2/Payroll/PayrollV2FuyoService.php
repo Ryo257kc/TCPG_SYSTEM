@@ -30,8 +30,6 @@ class PayrollV2FuyoService
         $birthdayColumn = $this->firstExistingColumn($columns, ['fuyo_birthday', 'birthday', 'birth_day']);
         $deductionTargetColumn = $this->firstExistingColumn($columns, ['deduction_target']);
         $registrationDateColumn = $this->firstExistingColumn($columns, ['registration_date']);
-        $incomeColumn = $this->firstExistingColumn($columns, ['income_amount', 'income_amo', 'income']);
-        $salaryIncomeColumn = $this->firstExistingColumn($columns, ['salary_amount', 'salary_amo', 'salary_income']);
 
         $rows = DB::connection($connection)
             ->table('dbo.mx_fuyo')
@@ -47,14 +45,6 @@ class PayrollV2FuyoService
 
         foreach ($rows as $row) {
             if ($deductionTargetColumn !== null && !$this->isTruthy($row->{$deductionTargetColumn} ?? null)) {
-                continue;
-            }
-
-            if ($incomeColumn !== null && $this->num($row->{$incomeColumn} ?? null) > 480000) {
-                continue;
-            }
-
-            if ($salaryIncomeColumn !== null && $this->num($row->{$salaryIncomeColumn} ?? null) > 1030000) {
                 continue;
             }
 

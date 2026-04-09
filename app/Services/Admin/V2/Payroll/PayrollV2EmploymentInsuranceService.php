@@ -150,9 +150,11 @@ class PayrollV2EmploymentInsuranceService
 
         $companyId = $this->resolveCompanyId($staffId);
 
+        $paymentDateNext = date('Y-m-d 00:00:00', strtotime($paymentDate . ' +1 day'));
+
         $rouhoQuery = $conn->table('dbo.mx_rouho')
             ->whereNotNull('rou_apply_date')
-            ->where('rou_apply_date', '<=', $paymentDate . ' 23:59:59');
+            ->where('rou_apply_date', '<', $paymentDateNext);
         if ($companyId !== '' && $this->hasPayrollColumn('mx_rouho', 'office_no')) {
             $rouhoQuery->whereRaw('LTRIM(RTRIM(CAST(office_no AS nvarchar(50)))) = ?', [$companyId]);
         }
@@ -162,7 +164,7 @@ class PayrollV2EmploymentInsuranceService
 
         $syahoQuery = $conn->table('dbo.mx_syaho')
             ->whereNotNull('jidou_apply_date')
-            ->where('jidou_apply_date', '<=', $paymentDate . ' 23:59:59');
+            ->where('jidou_apply_date', '<', $paymentDateNext);
         if ($companyId !== '' && $this->hasPayrollColumn('mx_syaho', 'office_no')) {
             $syahoQuery->whereRaw('LTRIM(RTRIM(CAST(office_no AS nvarchar(50)))) = ?', [$companyId]);
         }
@@ -309,7 +311,7 @@ class PayrollV2EmploymentInsuranceService
                 return $row;
             }
 
-            if ($date <= $targetSep) {
+            if ($date->format('Y-m-d') <= $targetSep->format('Y-m-d')) {
                 $anchor = $row;
                 break;
             }
@@ -326,7 +328,7 @@ class PayrollV2EmploymentInsuranceService
 
         $targetYear = $month >= 10 ? $year : ($year - 1);
 
-        return new \DateTimeImmutable(sprintf('%04d-09-30 23:59:59', $targetYear));
+        return new \DateTimeImmutable(sprintf('%04d-09-30', $targetYear));
     }
 
     private function toDate(mixed $value): ?\DateTimeImmutable

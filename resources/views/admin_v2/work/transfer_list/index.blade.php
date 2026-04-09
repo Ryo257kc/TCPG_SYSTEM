@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TCPG SYSTEM 振込先一覧</title>
+<title>TCPG SYSTEM {{ !empty($isBonus) ? '賞与' : '給与' }}振込先一覧</title>
 <link rel="stylesheet" href="{{ asset('css/admin_v2/transfer_list.css') }}">
 </head>
 <body>
@@ -29,7 +29,7 @@
     @foreach ($groupedCompanies as $company)
       <section class="company-page">
         <header class="sheet-head">
-          <div class="sheet-title">振込先一覧</div>
+          <div class="sheet-title">{{ !empty($isBonus) ? '賞与' : '給与' }}振込先一覧</div>
           <div class="sheet-center">
             <div>{{ $paymentMonthText }}</div>
             <div>支払日: {{ $paymentDateText }}</div>

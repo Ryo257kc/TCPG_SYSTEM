@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(\App\Http\Middleware\ForceUtf8Response::class);
+        $middleware->validateCsrfTokens(except: [
+            'staff/login',
+        ]);
 
         $middleware->alias([
             'admin.auth' => \App\Http\Middleware\AdminAuthenticate::class,

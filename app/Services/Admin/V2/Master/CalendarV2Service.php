@@ -45,11 +45,12 @@ class CalendarV2Service
             ->all();
 
         $fromDate = sprintf('%04d-01-01 00:00:00', $yearValue);
-        $toDate = sprintf('%04d-12-31 23:59:59', $yearValue);
+        $toDate = sprintf('%04d-01-01 00:00:00', $yearValue + 1);
 
         $calendarMap = DB::connection('sqlsrv')
             ->table('dbo.mx_calendar')
-            ->whereBetween('calendar_day', [$fromDate, $toDate])
+            ->where('calendar_day', '>=', $fromDate)
+            ->where('calendar_day', '<', $toDate)
             ->orderBy('calendar_day')
             ->get()
             ->mapWithKeys(function ($row): array {
@@ -165,7 +166,8 @@ class CalendarV2Service
         $existingRows = DB::connection('sqlsrv')
             ->table('dbo.mx_calendar')
             ->select('calendar_day', 'public_holiday', 'work_holiday')
-            ->whereBetween('calendar_day', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+            ->where('calendar_day', '>=', $fromDate . ' 00:00:00')
+            ->where('calendar_day', '<', sprintf('%04d-01-01 00:00:00', $year + 1))
             ->get()
             ->mapWithKeys(function ($row): array {
                 $date = date('Y-m-d', strtotime((string) ($row->calendar_day ?? 'now')));

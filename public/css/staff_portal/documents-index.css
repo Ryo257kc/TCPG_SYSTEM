@@ -1,0 +1,40 @@
+.documents-index-page table {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    margin-bottom: 16px;
+}
+
+.documents-index-page th,
+.documents-index-page td {
+    border: 1px solid #d8c4b0;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.documents-index-page thead th {
+    background: #fff4e8;
+    text-align: center;
+}
+
+.documents-index-page .num {
+    width: 48px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.documents-index-page .note {
+    text-align: center;
+    color: var(--sub);
+    font-weight: 700;
+    line-height: 1.7;
+    margin-top: 8px;
+}
+
+.documents-index-page .doc-link {
+    color: #6b3f1f;
+    font-weight: 700;
+}

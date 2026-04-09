@@ -44,7 +44,8 @@ class AttendanceV2ShiftCandidatesService
     {
         $ids = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards')
-            ->whereBetween('work_date', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59'])
+            ->where('work_date', '>=', $fromDate . ' 00:00:00')
+            ->where('work_date', '<', date('Y-m-d 00:00:00', strtotime($toDate . ' +1 day')))
             ->pluck('staff_name')
             ->map(static fn ($id): string => trim((string) $id))
             ->filter(static fn (string $id): bool => $id !== '')

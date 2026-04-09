@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM 離職票確認</title>
+    <title>TCPG SYSTEM 離職票</title>
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/report.css') }}">
@@ -29,7 +29,7 @@
 @endphp
 <div class="wrap">
     <div class="top">
-        <div class="title">TCPG SYSTEM 離職票確認</div>
+        <div class="title">TCPG SYSTEM 離職票</div>
     </div>
 
     <section class="panel report-main-panel">

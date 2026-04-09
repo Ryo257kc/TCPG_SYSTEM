@@ -170,7 +170,7 @@ class ReportV2SanteiService
             ->orderByDesc('decision_date')
             ->get();
 
-        $kihonCutoff = sprintf('%04d-06-30 23:59:59', $year);
+        $kihonCutoff = sprintf('%04d-06-30', $year);
         $kihonMap = [];
         foreach ($kihonRows as $kihonRow) {
             $staffId = trim((string) ($kihonRow->staff_id ?? ''));
@@ -179,7 +179,7 @@ class ReportV2SanteiService
             }
 
             $decisionDate = trim((string) ($kihonRow->decision_date ?? ''));
-            if ($decisionDate !== '' && strtotime($decisionDate) !== false && strtotime($decisionDate) > strtotime($kihonCutoff)) {
+            if ($decisionDate !== '' && strtotime($decisionDate) !== false && date('Y-m-d', strtotime($decisionDate)) > $kihonCutoff) {
                 continue;
             }
 
@@ -205,7 +205,7 @@ class ReportV2SanteiService
             ->orderByDesc('raise_year')
             ->get();
 
-        $juneCutoff = sprintf('%04d-06-30 23:59:59', $year);
+        $juneCutoff = sprintf('%04d-06-30', $year);
         $shahoMap = [];
         foreach ($shahoRows as $shahoRow) {
             $staffId = trim((string) ($shahoRow->staff_id ?? ''));
@@ -214,7 +214,7 @@ class ReportV2SanteiService
             }
 
             $raiseYear = trim((string) ($shahoRow->raise_year ?? ''));
-            if ($raiseYear !== '' && strtotime($raiseYear) !== false && strtotime($raiseYear) > strtotime($juneCutoff)) {
+            if ($raiseYear !== '' && strtotime($raiseYear) !== false && date('Y-m-d', strtotime($raiseYear)) > $juneCutoff) {
                 continue;
             }
 

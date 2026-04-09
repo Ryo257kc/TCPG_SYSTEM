@@ -8,7 +8,7 @@ use App\Services\Admin\V2\Attendance\AttendanceV2BulkReflectService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmService;
 use App\Services\Admin\V2\Attendance\AttendanceV2CompanyService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
-use App\Services\Admin\V2\Attendance\AttendanceV2DailyService;
+use App\Services\Admin\V2\Attendance\AttendanceV2DailyTableItemBuilder;
 use App\Services\Admin\V2\Attendance\AttendanceV2DailyEditService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
 use App\Services\Admin\V2\Attendance\AttendanceV2MetricService;
@@ -17,7 +17,6 @@ use App\Services\Admin\V2\Attendance\AttendanceV2PayrollTargetService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ShiftCandidatesService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ShiftCreateService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ShiftDeleteService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -34,7 +33,7 @@ class AttendanceV2Controller extends Controller
         private readonly AttendanceV2MetricService $metricService,
         private readonly AttendanceV2ListSummaryService $listSummaryService,
         private readonly AttendanceV2PayrollTargetService $payrollTargetService,
-        private readonly AttendanceV2DailyService $dailyService,
+        private readonly AttendanceV2DailyTableItemBuilder $dailyTableItemService,
         private readonly AttendanceV2DailyEditService $dailyEditService,
         private readonly AttendanceV2ShiftCandidatesService $shiftCandidatesService,
         private readonly AttendanceV2ShiftCreateService $shiftCreateService,
@@ -53,26 +52,7 @@ class AttendanceV2Controller extends Controller
         $payrollLinkPaymentDate = $this->payrollTargetService->resolvePaymentDate($year, $month);
 
         $companies = $this->companyService->companies();
-        $storeOptions = DB::connection('sqlsrv')
-            ->table('dbo.mx_stores')
-            ->select(['store_code', 'store_name', 'store_short_name'])
-            ->orderBy('store_code')
-            ->get()
-            ->map(static function ($row): array {
-                $value = trim((string) ($row->store_short_name ?? ''));
-                if ($value === '') {
-                    $value = trim((string) ($row->store_name ?? ''));
-                }
-
-                return [
-                    'value' => $value,
-                    'label' => $value,
-                ];
-            })
-            ->filter(static fn (array $row): bool => $row['value'] !== '')
-            ->unique('value')
-            ->values()
-            ->all();
+        $storeOptions = $this->dailyTableItemService->storeOptions();
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
         $selectedStaffId = trim((string) $request->query('staff_id', ''));
 
@@ -93,6 +73,8 @@ class AttendanceV2Controller extends Controller
         $detailStaff = null;
         $dailyRows = [];
         $dailySummary = null;
+        $attendanceCategories = $this->dailyTableItemService->attendanceCategories();
+        $isEditable = true;
         if ($selectedStaffId !== '') {
             foreach ($staffRows as $staff) {
                 if ($staff['staff_id'] === $selectedStaffId) {
@@ -101,8 +83,17 @@ class AttendanceV2Controller extends Controller
                 }
             }
             if ($detailStaff !== null) {
-                $dailyRows = $this->dailyService->rows((array) ($detailStaff['time_card_keys'] ?? []), $year, $month);
-                $dailySummary = $this->dailyService->summary($dailyRows);
+                $dailyTableItem = $this->dailyTableItemService->build(
+                    (array) ($detailStaff['time_card_keys'] ?? []),
+                    $year,
+                    $month,
+                    true,
+                );
+                $dailyRows = $dailyTableItem['dailyRows'];
+                $dailySummary = $dailyTableItem['dailySummary'];
+                $attendanceCategories = $dailyTableItem['attendanceCategories'];
+                $storeOptions = $dailyTableItem['storeOptions'];
+                $isEditable = $dailyTableItem['isEditable'];
             }
         }
 
@@ -119,6 +110,8 @@ class AttendanceV2Controller extends Controller
             'detailStaff' => $detailStaff,
             'dailyRows' => $dailyRows,
             'dailySummary' => $dailySummary,
+            'attendanceCategories' => $attendanceCategories,
+            'isEditable' => $isEditable,
         ]);
     }
 

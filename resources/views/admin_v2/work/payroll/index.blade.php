@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
 <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
 <link rel="stylesheet" href="{{ asset('css/admin_v2/payroll.css') }}">
+<link rel="stylesheet" href="{{ asset('css/admin_v2/payslip_item.css') }}">
 </head>
 <body>
 @include('admin_v2.shared.global_nav')
@@ -117,6 +118,7 @@ if (!isset($selectedRow) || $selectedRow === null) {
   }
   $payrollConfirmed = ((int) ($cardSummary['edit_lock'] ?? 0)) === 1;
   $attendanceConfirmed = ((int) ($cardSummary['attendance_checked'] ?? 0)) === 1;
+  $attendanceRecordExists = (bool) ($selectedRow['attendance_record_exists'] ?? false);
 @endphp
 <section class="card"><div class="k">対象者</div><div class="v name-value">{{ $selectedRow['staff_id'] }} {{ $selectedRow['staff_name'] }}</div></section>
 <section class="card"><div class="k">会社名</div><div class="v name-value">{{ $selectedRow['company_name'] }}</div></section>
@@ -130,12 +132,12 @@ if (!isset($selectedRow) || $selectedRow === null) {
       <button class="btn btn-primary" type="button" id="confirm-btn">解除</button>
     </div>
   @else
-    @if ($attendanceConfirmed)
+    @if (!$attendanceRecordExists || $attendanceConfirmed)
     <div class="card-status-actions">
       <button class="btn btn-primary" type="button" id="confirm-btn">確定</button>
     </div>
     @else
-    <div class="card-status-note" id="attendance-confirm-note">勤怠確定後に給与確定できます</div>
+    <div class="card-status-note" id="attendance-confirm-note">勤怠未確定</div>
     @endif
   @endif
 </section>
@@ -148,7 +150,106 @@ if (!isset($selectedRow) || $selectedRow === null) {
   <button class="btn" type="button" id="calc-koyou-btn">雇用保険</button>
   <button class="btn" type="button" id="calc-income-tax-btn">所得税</button>
 </div>
-@include('admin_v2.work.payroll.layout_columns')
+<div class="sections" style="display:flex;flex-wrap:nowrap;gap:6px;align-items:flex-start;">
+  <div style="flex:1.2 1 0;min-width:0;display:grid;gap:8px;">
+    @foreach($attendance as $title => $items)
+    <section class="card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it)
+    @php
+        [$k, $m] = $it;
+        $val = $m === -1 ? $t($k) : $n($k, $m);
+        $delta = ($k === 'holiday_true_num' && $m !== -1) ? $deltaFrom($k, $m) : '';
+        $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : '';
+    @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!in_array($k, $totalRowKeys, true))<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td></tr>
+    @endforeach
+    </table></section>
+    @endforeach
+    @foreach($sales as $title => $items)
+    <section class="card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it)
+    @php
+        [$k, $m] = $it;
+        $val = $m === -1 ? $t($k) : $n($k, $m);
+        $delta = ($k === 'holiday_true_num' && $m !== -1) ? $deltaFrom($k, $m) : '';
+        $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : '';
+    @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!in_array($k, $totalRowKeys, true))<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td></tr>
+    @endforeach
+    </table></section>
+    @endforeach
+  </div>
+  <div style="flex:1.2 1 0;min-width:0;display:grid;gap:8px;">
+    @foreach($supply as $title=>$items)
+    <section class="card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it) @php [$k,$m]=$it; $val = $m===-1 ? $t($k) : $n($k,$m); $delta = $m===-1 ? '' : $deltaFrom($k,$m); $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : ''; @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!in_array($k, $totalRowKeys, true))<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td></tr>
+    @endforeach
+    </table></section>
+    @endforeach
+  </div>
+  <div style="flex:1.2 1 0;min-width:0;display:grid;gap:8px;">
+    @foreach($mid as $title=>$items)
+    <section class="card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it) @php [$k,$m]=$it; $val = $m===-1 ? $t($k) : $n($k,$m); $delta = $m===-1 ? '' : $deltaFrom($k,$m); $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : ''; $isReadOnlyCalc = in_array($k, ['transfer_amount_calc'], true); @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!in_array($k, $totalRowKeys, true) && !$isReadOnlyCalc)<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td></tr>
+    @endforeach
+    </table></section>
+    @endforeach
+  </div>
+  <div style="flex:1 1 0;min-width:0;display:grid;gap:8px;">
+    @foreach($rightA as $title=>$items)
+    @php
+    $source = $summary;
+    if ($title === $baseInfoTitle) {
+        $source = $baseInfoView;
+    } elseif ($title === $referenceTitle) {
+        $source = array_merge($summary, $referenceView ?? []);
+    }
+    @endphp
+    <section class="card readonly-card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it) @php
+    [$k,$m]=$it;
+    $val = $m===-1 ? $tFrom($source,$k) : $nFrom($source,$k,$m);
+    if (in_array($k, ['social_join', 'employment_join'], true)) {
+        $val = ((int)$val === 1) ? '有' : '無';
+    }
+    if ($k === 'yukyu_month') {
+        $v = trim((string) $val);
+        if ($v !== '' && is_numeric($v)) {
+            $val = ((string) ((int) $v)) . '月';
+        }
+    }
+    @endphp
+    @if ($k === 'memo')
+    <tr><td colspan="2" class="memo-wrap"><div class="memo-label">{!! $l($k) !!}</div><div class="memo-value" title="{{ $val }}">{{ $val }}</div></td></tr>
+    @else
+    @php $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : ''; @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td>{{ $val }}</td></tr>
+    @endif
+    @endforeach
+    </table></section>
+    @endforeach
+  </div>
+  <div style="flex:1 1 0;min-width:0;display:grid;gap:8px;">
+    @foreach($rightB as $title=>$items)
+    @php
+    $source = $title === $masterTitle
+        ? $kihonMasterView
+        : ($title === $shahoTitle ? $shahoView : $residentView);
+    @endphp
+    <section class="card readonly-card"><h2 class="section-title">{!! $title !!}</h2><table class="kv">
+    @foreach($items as $it) @php
+    [$k,$m]=$it;
+    $val = $m===-1 ? $tFrom($source,$k) : $nFrom($source,$k,$m);
+    @endphp
+    @php $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : ''; @endphp
+    <tr class="{{ $rowClass }}"><td>{!! $l($k) !!}</td><td>{{ $val }}</td></tr>
+    @endforeach
+    </table></section>
+    @endforeach
+  </div>
+</div>
 <div class="summary-grid">
   <section class="memo-card">
     <div class="memo-label">{!! $l('kyuyo_memo') !!}</div>
@@ -160,6 +261,30 @@ if (!isset($selectedRow) || $selectedRow === null) {
   <section class="total-card"><div class="k">控除合計</div><div class="v">{{ number_format($deductionSum, 0) }}</div></section>
   <section class="total-card"><div class="k">差引支給額</div><div class="v">{{ number_format($netPay, 0) }}</div></section>
 </div>
+@php
+  $payrollSheetRows = [];
+  $sheetRow = (array) ($selectedRow['summary'] ?? []);
+  if ($sheetRow !== []) {
+      $sheetRow['staff_name'] = (string) ($selectedRow['staff_name'] ?? '');
+      $sheetRow['section_name'] = (string) ($selectedRow['store_name'] ?? '');
+      $sheetRow['office_name'] = (string) ($selectedRow['company_name'] ?? '');
+      $sheetRow['tax_category'] = (string) (($selectedRow['staff_master']['tax_category'] ?? '') ?: ($sheetRow['tax_category'] ?? ''));
+      $sheetRow['supply_month'] = (string) ($sheetRow['supply_month'] ?? $selectedPaymentDate ?? '');
+      $payrollSheetRows = [$sheetRow];
+  }
+@endphp
+@if (!empty($payrollSheetRows))
+<section class="panel" style="margin-top:16px;">
+  @include('shared.payroll.payslip_item', [
+      'rawRows' => $payrollSheetRows,
+      'targetStaffName' => $selectedRow['staff_name'] ?? '',
+      'storeName' => $selectedRow['store_name'] ?? '',
+      'companyName' => $selectedRow['company_name'] ?? '',
+      'targetTaxCategory' => $selectedRow['staff_master']['tax_amount'] ?? '',
+      'isBonus' => false,
+  ])
+</section>
+@endif
 @else
 <div class="empty">対象スタッフがありません。</div>
 @endif

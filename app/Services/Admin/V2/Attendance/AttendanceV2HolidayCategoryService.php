@@ -20,11 +20,12 @@ class AttendanceV2HolidayCategoryService
         }
 
         $fromDate = sprintf('%04d-%02d-01 00:00:00', $year, $month);
-        $toDate = date('Y-m-t 23:59:59', strtotime(substr($fromDate, 0, 10)));
+        $toDate = date('Y-m-01 00:00:00', strtotime(substr($fromDate, 0, 10) . ' +1 month'));
 
         return DB::connection('sqlsrv')
             ->table('dbo.mx_calendar')
-            ->whereBetween('calendar_day', [$fromDate, $toDate])
+            ->where('calendar_day', '>=', $fromDate)
+            ->where('calendar_day', '<', $toDate)
             ->get()
             ->mapWithKeys(function ($row): array {
                 $key = date('Y-m-d', strtotime((string) $row->calendar_day));

@@ -18,6 +18,7 @@
   var month = @json($selectedMonth);
   var staffId = @json((string) ($selectedRow['staff_id'] ?? ''));
   var selectedCompanyId = @json((string) ($selectedCompanyId ?? ''));
+  var hasAttendanceRecords = @json((bool) ($selectedRow['attendance_record_exists'] ?? false));
   var isAttendanceConfirmed = @json(((int)($summary['attendance_checked'] ?? 0)) === 1);
   var isPayrollConfirmed = @json(((int)($summary['edit_lock'] ?? 0)) === 1);
   var attendanceConfirmNote = document.getElementById('attendance-confirm-note');
@@ -115,7 +116,7 @@
     if (payrollCreateInline) payrollCreateInline.hidden = false;
   };
 
-  if (attendanceConfirmNote && isAttendanceConfirmed) {
+  if (attendanceConfirmNote && (!hasAttendanceRecords || isAttendanceConfirmed)) {
     attendanceConfirmNote.hidden = true;
   }
 
@@ -522,7 +523,7 @@
 
   if (confirmBtn && staffId !== '') {
     confirmBtn.addEventListener('click', function(){
-      if (!isPayrollConfirmed && !isAttendanceConfirmed) {
+      if (hasAttendanceRecords && !isPayrollConfirmed && !isAttendanceConfirmed) {
         alert('\u52e4\u6020\u672a\u78ba\u5b9a\u306e\u305f\u3081\u7d66\u4e0e\u78ba\u5b9a\u3067\u304d\u307e\u305b\u3093\u3002');
         return;
       }

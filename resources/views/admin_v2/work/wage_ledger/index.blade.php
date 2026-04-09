@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TCPG SYSTEM 賃金台帳</title>
+<title>TCPG SYSTEM {{ !empty($isBonus) ? '賞与' : '給与' }}賃金台帳</title>
 <link rel="stylesheet" href="{{ asset('css/admin_v2/wage_ledger.css') }}">
 </head>
 <body>
@@ -219,7 +219,7 @@
         @endphp
         <section class="company-page">
           <header class="sheet-head">
-            <div class="sheet-title">賃金台帳</div>
+            <div class="sheet-title">{{ !empty($isBonus) ? '賞与' : '給与' }}賃金台帳</div>
             <div class="sheet-center">
               <div>{{ $paymentMonthText }}</div>
               <div>{{ $paymentDateText }} 支払</div>
