@@ -75,7 +75,6 @@
                     </select>
 
                     <button type="submit" class="btn">表示</button>
-                    <!-- <button type="button" class="btn" id="insurance-csv-import-btn">柔整取込</button> -->
                     @unless ($isReceiptMonthlyClosed ?? false)
                     <div>
                         <input type="file"

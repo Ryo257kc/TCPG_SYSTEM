@@ -67,7 +67,6 @@
                         <col style="width: 50px;">
                         <col style="width: 90px;">
                         <col style="width: 20px;">
-                        <!-- <col style="width: 90px;"> -->
                     </colgroup>
                     <thead>
                         <tr>
@@ -79,7 +78,6 @@
                             <th>店舗</th>
                             <th>店舗非表示・事務所備忘用</th>
                             <th>保存</th>
-                            <!-- <th>店舗非表示・事務所備忘用</th> -->
                         </tr>
                     </thead>
                     <tbody>
@@ -110,7 +108,6 @@
                             <td>{{ $row['店舗'] }}</td>
                             <td><input form="{{ $formId }}" type="text" name="事務所コメント" value="{{ $row['事務所コメント'] }}"></td>
                             <td><button form="{{ $formId }}" type="submit" class="btn_small">保存</button></td>
-                            <!-- <td>{{-- $row['店舗非表示・事務所備忘用'] --}}</td> -->
                         </tr>
                         @empty
                         <tr>

@@ -121,7 +121,6 @@
             </div>
             <form method="get" action="{{ route('office.receipt.insurers') }}" class="office-toolbar">
                 <div class="office-toolbar-group">
-                    <!-- <label for="insurer-search">保険者検索</label> -->
                     <input id="insurer-search" name="search" type="text" value="{{ $search ?? '' }}" class="insurer-inline-input" placeholder="保険者検索">
                     <label>入金名称表示</label>
                     <label><input type="radio" name="deposit_name_display" value="all" @checked(($depositNameFilter ?? 'all' )==='all' )>全て</label>

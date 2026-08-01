@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - 保険請求未収入金</title>
     <link rel="stylesheet" href="{{ asset('css/print.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/uncollected_print.css') }}"> -->
     <style>
         .print-company {
             font-size: 13px;
@@ -179,9 +178,6 @@
 
     <main class="print-page">
         <header class="print-header">
-            <!-- <div class="print-company">
-                {{ collect($printRows ?? [])->pluck('company_name')->filter()->unique()->implode(' / ') }}
-            </div> -->
             <h1>保険請求未収入金</h1>
             <div class="print-meta12">印刷月 {{ $paymentMonth ?? '' }} 月迄／ {{ now()->format('Y/m/d H:i') }} 現在</div>
         </header>

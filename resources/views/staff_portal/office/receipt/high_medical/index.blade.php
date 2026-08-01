@@ -111,7 +111,6 @@
                         <option value="paid" @selected(($selectedStatus ?? 'unpaid' )==='paid' )>入金済</option>
                     </select>
 
-                    <!-- <label for="receipt-store">店舗選択</label> -->
                     <select id="receipt-store" name="store_name">
                         <option value="">-店舗選択-</option>
                         @foreach (($storeOptions ?? []) as $storeName)
@@ -119,7 +118,6 @@
                         @endforeach
                     </select>
 
-                    <!-- <label for="high-medical-subject-name">患者選択</label> -->
                     <select id="high-medical-subject-name" name="subject_name">
                         <option value="">-患者選択-</option>
                         @foreach (($patientOptions ?? []) as $patientName)
@@ -127,7 +125,6 @@
                         @endforeach
                     </select>
 
-                    <!-- <label for="high-medical-bank-deposit-date">入金日</label> -->
                     <select id="high-medical-bank-deposit-date" name="bank_deposit_date">
                         <option value="">-入金日-</option>
                         @foreach (($bankDepositDateOptions ?? []) as $bankDepositDate)

@@ -7,7 +7,6 @@
     <title>TCPG SYSTEM - 入金確認一覧</title>
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/payment-confirmation.css') }}"> -->
 
     <style>
         .payment-confirmation-panel {
@@ -323,7 +322,6 @@
                                     <td class="right"><span data-payment-entry-confirmed="{{ $row['journal_entry_id'] }}">{{ $row['confirmed_amount'] }}</span></td>
                                     <td class="right"><span data-payment-entry-remaining="{{ $row['journal_entry_id'] }}">{{ $row['remaining_amount'] }}</span></td>
                                     <td class="staff-wrap-text">{{ $row['bank_account_selection'] }}</td>
-                                    <!-- <td>{{ $row['store_name'] }}</td> -->
                                     <td class="payment-confirmation-wrap staff-wrap-text">{{ $row['remarks'] }}</td>
                                     <td>
                                         <a
@@ -343,36 +341,9 @@
 
                 <section class="payment-confirmation-pane payment-confirmation-pane-bottom">
                     <div class="payment-confirmation-detail">
-                        <!-- <div class="payment-confirmation-detail-head">
-                            <h2 class="payment-confirmation-detail-title">選択中の入金</h2>
-                        </div> -->
 
                         @if (!empty($selectedPaymentRow))
                         <div class="payment-confirmation-detail-grid">
-                            <!-- <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">入金日</span>
-                                <span class="payment-confirmation-detail-value">{{ $selectedPaymentRow['occurred_at'] }}</span>
-                            </div>
-                            <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">入金名称</span>
-                                <span class="payment-confirmation-detail-value">{{ $selectedPaymentRow['deposit_name'] }}</span>
-                            </div>
-                            <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">入金額</span>
-                                <span class="payment-confirmation-detail-value">{{ $selectedPaymentRow['deposit_amount'] }}</span>
-                            </div> -->
-                            <!-- <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">確認済</span>
-                                <span class="payment-confirmation-detail-value" data-payment-entry-confirmed="{{ $selectedPaymentRow['journal_entry_id'] }}">{{ $selectedPaymentRow['confirmed_amount'] }}</span>
-                            </div>
-                            <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">残額</span>
-                                <span class="payment-confirmation-detail-value" data-payment-entry-remaining="{{ $selectedPaymentRow['journal_entry_id'] }}">{{ $selectedPaymentRow['remaining_amount'] }}</span>
-                            </div> -->
-                            <!-- <div class="payment-confirmation-detail-item">
-                                <span class="payment-confirmation-detail-label">通帳</span>
-                                <span class="payment-confirmation-detail-value">{{ $selectedPaymentRow['bank_account_selection'] }}</span>
-                            </div> -->
                             <div class="payment-confirmation-detail-item payment-confirmation-detail-control-row">
                                 <div class="payment-confirmation-detail-meta">
                                     <span class="payment-confirmation-detail-label">店舗</span>
@@ -393,7 +364,6 @@
                                         <option value="{{ $insurerOption }}"></option>
                                         @endforeach
                                     </datalist>
-                                    <!-- <label for="payment-confirmation-detail-deposit-name">入金名称</label> -->
                                     <input class="filter-search-input" id="payment-confirmation-detail-deposit-name" name="detail_deposit_name" type="text" value="{{ $detailDepositName ?? '' }}" list="payment-confirmation-detail-deposit-name-options" placeholder="入金名称検索">
                                     <datalist id="payment-confirmation-detail-deposit-name-options">
                                         @foreach (($detailDepositNameOptions ?? []) as $depositName)
@@ -409,26 +379,10 @@
                                     <a href="{{ route('office.receipt.payment_confirmation', ['target_month' => $targetMonth, 'bank_account' => $selectedBankAccount, 'payment_check' => $paymentCheck, 'journal_entry_id' => $selectedPaymentRow['journal_entry_id'], 'detail_tab' => 'unpaid', 'detail_insurer_keyword' => $detailInsurerKeyword ?? '', 'detail_deposit_name' => $detailDepositName ?? '']) }}#payment-confirmation-top" @class(['btn', 'btn_small' , 'btn-primary'=> (($detailTab ?? 'unpaid') === 'unpaid')])>未入金</a>
                                 </div>
                             </div>
-                            <!-- </div>
-                        <div class="payment-confirmation-detail-row">
-                            <div class="payment-confirmation-detail-item payment-confirmation-detail-item-wide">
-                                <span class="payment-confirmation-detail-label">備考</span>
-                                <span class="payment-confirmation-detail-value payment-confirmation-wrap">
-                                    {{ $selectedPaymentRow['remarks'] }}
-                                </span>
-                            </div>
-
-                            <div class="payment-confirmation-detail-item payment-confirmation-detail-item-wide">
-                                <span class="payment-confirmation-detail-label">仕訳備考</span>
-                                <span class="payment-confirmation-detail-value payment-confirmation-wrap">
-                                    {{ $selectedPaymentRow['journal_note'] }}
-                                </span>
-                            </div> -->
 
                         </div>
 
                         <div class="table-wrap payment-confirmation-candidate-wrap">
-                            <!-- <table class="data-table payment-confirmation-candidate-table"> -->
                             <table class="data-table f_size12">
                                 <colgroup>
                                     <col style="width: 50px;">

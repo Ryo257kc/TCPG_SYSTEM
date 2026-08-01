@@ -22,7 +22,6 @@
                 <div class="toolbar-group">
                     <label for="uncollected-payment-month">印刷月</label>
                     <input id="uncollected-payment-month" name="payment_month" type="month" value="{{ $paymentMonth ?? now()->format('Y-m') }}">迄
-                    <!-- <label for="uncollected-store-category">店舗選択</label> -->
                     <span class="margin_l20"></span>
                     <select id="uncollected-store-category" name="store_category">
                         <option value="">-店舗選択-</option>
@@ -30,7 +29,6 @@
                         <option value="{{ $storeCategory }}" @selected(($selectedStoreCategory ?? '' )===$storeCategory)>{{ $storeCategory }}</option>
                         @endforeach
                     </select>
-                    <!-- <label for="uncollected-company-id">事業所選択</label> -->
                     <select id="uncollected-company-id" name="company_id">
                         <option value="">-事業所選択-</option>
                         @foreach (($companyOptions ?? []) as $company)

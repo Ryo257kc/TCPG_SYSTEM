@@ -375,8 +375,6 @@
 
                             <div class="daily-summary-header-label">確定</div>
                             <div class="daily-summary-header-value">{{ $dailySummary['確定'] }}</div>
-                            <!-- <div class="daily-summary-header-label">確定日</div>
-                            <div class="daily-summary-header-value">{{ $dailySummary['確定日'] }}</div> -->
                         </div>
                     </section>
 
@@ -472,14 +470,12 @@
                 <form method="get" action="{{ route('office.store_daily_report.daily_summary.detail') }}">
                     <input type="hidden" name="daily_summary_id" value="{{ $dailySummary['日報集計No'] }}">
                     <input type="hidden" name="filter_patient_name" value="{{ $filterPatientName ?? '' }}">
-                    <!-- <label>担当者 -->
                     <select name="filter_staff_id">
                         <option value="">担当者全て</option>
                         @foreach (($filterStaffOptions ?? []) as $staffId => $staffName)
                         <option value="{{ $staffId }}" @selected(($filterStaffId ?? '' )===(string) $staffId)>{{ $staffName }}</option>
                         @endforeach
                     </select>
-                    <!-- </label> -->
                     <label>
                         <input type="checkbox" name="filter_modified_only" value="1" @checked($filterModifiedOnly ?? false)>
                         chのみ
@@ -505,9 +501,6 @@
                         <input type="hidden" name="店舗" value="{{ $dailySummary['日報集計店舗'] }}">
                         <input type="hidden" name="日別順" value="{{ $nextDailyOrder ?? '' }}">
                         <input type="hidden" name="患者名" value="{{ $filterPatientName ?? '' }}" data-daily-summary-add-patient-name>
-                        <!-- <label>患者名 -->
-                        <!-- <input type="text" name="患者名" list="daily-summary-patient-name-options" placeholder="患者名"> -->
-                        <!-- </label> -->
                         @if (!($isDailySummaryMonthlyClosed ?? false))
                         <button type="submit" class="btn">新規追加</button>
                         @endif
@@ -689,13 +682,11 @@
                                     <input type="hidden" name="日付" value="{{ $row['日付'] }}">
                                     <input type="hidden" name="店舗" value="{{ $dailySummary['日報集計店舗'] }}">
                                     <div class="daily-summary-detail-block">
-                                        <!-- <p class="daily-summary-detail-title">患者情報</p> -->
                                         <div class="daily-summary-access-form">
                                             <div class="daily-summary-access-group">
                                                 <p class="daily-summary-access-group-title">患者基本</p>
                                                 <table class="data-table f_size12">
                                                     <tbody>
-                                                        <tr>
                                                         <tr>
                                                             <th>日別順</th>
                                                             <td>{{ $row['日別順'] }}</td>
@@ -732,17 +723,6 @@
                                                                 <input type="text" name="患者名" value="{{ $row['患者名'] }}" list="daily-summary-patient-name-options">
                                                             </td>
                                                         </tr>
-                                                        <!-- <tr>
-                                                            <th>割合</th>
-                                                            <td>
-                                                                <select name="割合">
-                                                                    <option value=""></option>
-                                                                    @foreach ($ratioOptions as $option)
-                                                                    <option value="{{ $option }}" @selected((string) ($row['割合'] ?? '' )===(string) $option)>{{ $option }}</option>
-                                                                    @endforeach
-                                                                </select>
-                                                            </td>
-                                                        </tr> -->
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -800,7 +780,6 @@
                                                 <table class="data-table f_size12">
                                                     <tbody>
                                                         <tr>
-                                                            <!-- <th width="80">日報備考</th> -->
                                                             <td><textarea class="daily-summary-remarks-textarea" name="日報備考" rows="4">{{ $row['日報備考'] }}</textarea></td>
                                                         </tr>
                                                     </tbody>
@@ -822,7 +801,6 @@
                                     </div>
 
                                     <div class="daily-summary-detail-block">
-                                        <!-- <p class="daily-summary-detail-title">明細入力</p> -->
                                         <table class="data-table f_size11 daily-summary-detail-input-table">
                                             <colgroup>
                                                 <col style="width: 80px;">
@@ -896,17 +874,11 @@
                                                         </select>
                                                     </td>
                                                     <td>
-                                                        <!-- <select name="detail_rows[{{ $loop->index }}][項目]"> -->
-                                                        <!-- <option value=""></option> -->
                                                         <select name="detail_rows[{{ $loop->index }}][項目]">
                                                             <option value=""></option>
                                                             <option value="物品販売" @selected((string) ($detailRow['項目'] ?? '' )==='物品販売' )>物品販売</option>
                                                         </select>
 
-                                                        <!-- @foreach ($itemOptions as $option)
-                                                            <option value="{{ $option }}" @selected((string) ($detailRow['項目'] ?? '' )===(string) $option)>{{ $option }}</option>
-                                                            @endforeach -->
-                                                        <!-- </select> -->
                                                     </td>
                                                     <td class="text-center"><input type="checkbox" name="detail_rows[{{ $loop->index }}][計算外]" value="1" @checked((bool) ($detailRow['計算外'] ?? false))></td>
                                                     <td class="text-center"><input type="checkbox" name="detail_rows[{{ $loop->index }}][先生別外]" value="1" @checked((bool) ($detailRow['先生別外'] ?? false))></td>
@@ -967,7 +939,6 @@
 
             <div>
                 <a href="{{ url()->previous() }}" class="btn btn_back">戻る</a>
-                <!-- <a href="{{ route('office.store_daily_report.daily_summary') }}" class="btn btn_back">戻る</a> -->
             </div>
         </section>
     </main>

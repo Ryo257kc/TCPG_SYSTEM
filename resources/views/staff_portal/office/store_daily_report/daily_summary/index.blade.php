@@ -32,7 +32,6 @@
                     <label for="target_month">日付</label>
                     <input id="target_month" type="month" name="target_month" value="{{ $targetMonth ?? now()->format('Y-m') }}">
 
-                    <!-- <label for="store">店舗選択</label> -->
                     <select id="store" name="日報集計店舗">
                         <option value="">-店舗選択-</option>
                         @foreach (($storeOptions ?? []) as $日報集計店舗)
@@ -47,7 +46,6 @@
 
 
                     @if (($selectedStore ?? '') !== '')
-                    <!-- <label for="print_type">印刷</label> -->
                     <select id="print_type" name="print_type">
                         <option value="">-印刷選択-</option>
                         <option value="monthly_daily_report" @selected(($selectedPrintType ?? 'monthly_daily_report' )==='monthly_daily_report' )>月報</option>
@@ -172,7 +170,6 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <!-- <th>日報集計No</th> -->
                             <th>日付</th>
                             <th>来院<br>人数</th>
                             <th>予約<br>人数</th>
@@ -188,13 +185,11 @@
                             <th>確定日</th>
                             <th>日報集計店舗</th>
                             <th></th>
-                            <!-- <th>備考</th> -->
                         </tr>
                     </thead>
                     <tbody>
                         @forelse (($dailySummaryRows ?? []) as $row)
                         <tr>
-                            <!-- <td>{{ $row['日報集計No'] }}</td> -->
                             <td>{{ $row['日付'] }}</td>
                             <td class="text-right">{{ $row['来院人数'] }}</td>
                             <td class="text-right">{{ $row['予約人数'] }}</td>
@@ -214,7 +209,6 @@
                                     href="{{ route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $row['daily_summary_id']]) }}"
                                     class="btn btn_small">詳細</a>
                             </td>
-                            <!-- <td>{{ $row['備考'] }}</td> -->
                         </tr>
                         @empty
                         <tr>

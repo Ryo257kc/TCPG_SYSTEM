@@ -41,7 +41,6 @@ class EntryController extends Controller
         $rowsQuery = DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details as detail')
             ->leftJoin('dbo.mx_insurers as insurer', 'detail.insurer_number', '=', 'insurer.insurer_number')
-            // ->leftJoin('dbo.mx_departments as department', 'detail.department_no', '=', 'department.department_no')
             ->leftJoin('dbo.mx_departments as department', 'department.store_short_name', '=', 'detail.store_name')
             ->leftJoin('dbo.mx_staffs as staff', 'detail.staff_name', '=', 'staff.staff_id')
             ->select([
@@ -53,7 +52,6 @@ class EntryController extends Controller
                 'detail.total_sheets',
                 'detail.total_parts_count',
                 'detail.returned_amount',
-                // 'detail.department_no',
                 'department.store_category',
                 'detail.subject_name',
                 'detail.remarks',
@@ -813,7 +811,6 @@ class EntryController extends Controller
             ->where('store_category', $storeName)
             ->select(['store_short_name'])
             ->first();
-        // $resolvedDepartmentNo = $departmentRow?->department_no === null ? null : (int) $departmentRow->department_no;
         $resolvedStoreShortName = trim((string) ($departmentRow?->store_short_name ?? ''));
 
         if ($resolvedStoreShortName === '') {
@@ -949,64 +946,3 @@ class EntryController extends Controller
         return (float) $text;
     }
 }
-    //         continue;
-
-    //         DB::connection('sqlsrv')->table('dbo.mx_insurance_claim_details')->insert([
-    //             'treatment_month' => $treatmentMonth,
-    //             'insurer_number' => $row[1],       // 保険者番号
-    //             'summary_category' => $row[3],     // 集計区分
-    //             'total_sheets' => (int) $row[4],
-    //             'total_parts_count' => (int) $row[5],
-    //             'total_amount' => (float) $row[6],
-    //             'copayment_amount' => (float) $row[7],
-    //             'claim_amount' => (float) $row[8],
-    //             'department_no' => $storeName,
-    //         ]);
-
-    //         $count++;
-    //     }
-
-    //     fclose($handle);
-
-    //     if ($importRows === []) {
-    //         return back()->with('errorMessage', '取込対象のデータがありません。');
-    //     }
-
-    //     $insertedInsurerCount = 0;
-
-    //     DB::connection('sqlsrv')->transaction(function () use ($newInsurers, $importRows, &$insertedInsurerCount): void {
-    //         foreach ($newInsurers as $insurerNumber => $payload) {
-    //             $exists = DB::connection('sqlsrv')
-    //                 ->table('dbo.mx_insurers')
-    //                 ->where('insurer_number', $insurerNumber)
-    //                 ->exists();
-
-    //             if (!$exists) {
-    //                 DB::connection('sqlsrv')
-    //                     ->table('dbo.mx_insurers')
-    //                     ->insert($payload);
-    //                 $insertedInsurerCount++;
-    //             }
-    //         }
-
-    //         DB::connection('sqlsrv')
-    //             ->table('dbo.mx_insurance_claim_details')
-    //             ->insert($importRows);
-    //     });
-
-    //     return back()->with(
-    //         'statusMessage',
-    //         '保険者を' . $insertedInsurerCount . '件登録しました。明細を' . count($importRows) . '件取込しました。'
-    //     );
-
-    //     return back()->with('statusMessage', 'CSV取込が完了しました。件数: ' . count($importRows));
-
-    //     $importStatusMessage = '保険者を' . $insertedInsurerCount . '件登録しました。明細を' . count($importRows) . '件取込しました。';
-
-    //     return back()->with('statusMessage', $importStatusMessage);
-
-    //     return redirect()
-    //         ->back()
-    //         ->with('status', "CSV取込完了！{$count}件登録しました！");
-    // }
-// }

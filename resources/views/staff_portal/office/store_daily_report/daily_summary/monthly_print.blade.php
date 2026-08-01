@@ -101,16 +101,8 @@
 
     <main class="print-page">
         <header class="print-header">
-            <!-- <div class="print-title"> -->
             <h1>月報</h1>
             <h1>{{ $selectedStore !== '' ? $selectedStore : '全店舗' }}</h1>
-            <!-- <span>その他一覧</span> -->
-            <!-- </div> -->
-            <!-- <h1 class="print-title">月報</h1>
-            <div class="print-meta">
-                <span>{{ $selectedStore !== '' ? $selectedStore : '全店舗' }}</span>
-                <span>{{ $targetMonth }}</span>
-            </div> -->
         </header>
 
         <table class="print-table">

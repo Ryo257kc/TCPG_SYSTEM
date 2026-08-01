@@ -249,18 +249,6 @@
         </div>
 
         @if (!empty($teacherGroups ?? []))
-        <!-- <table class="print-table">
-            <tfoot>
-                <tr class="report-total">
-                    <td>総合計</td>
-                    <td class="text-right">{{ $printTotals['自費人数'] ?? '' }}</td>
-                    <td class="text-right">{{ $printTotals['自費'] ?? '' }}</td>
-                    <td class="text-right">{{ $printTotals['保険人数'] ?? '' }}</td>
-                    <td class="text-right">{{ $printTotals['保険合計'] ?? '' }}</td>
-                    <td class="text-right">{{ $printTotals['合計'] ?? '' }}</td>
-                </tr>
-            </tfoot>
-        </table> -->
         @endif
     </main>
 </body>

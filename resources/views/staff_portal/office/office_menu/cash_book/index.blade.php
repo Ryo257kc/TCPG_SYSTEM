@@ -31,7 +31,6 @@
                     <label for="cash-book-target-month">対象月</label>
                     <input id="cash-book-target-month" name="target_month" type="month" value="{{ $target_month ?? now()->format('Y-m') }}">
 
-                    <!-- <label for="cash-book-vault-name">会社選択</label> -->
                     <select id="cash-book-vault-name" name="vault_name">
                         <option value="">-会社選択-</option>
                         @foreach (($vaultOptions ?? []) as $vaultOption)
@@ -48,19 +47,19 @@
                 @if (($vault_name ?? '') !== '')
                 <button type="button" class="btn" data-cash-book-new>新規追加</button>
                 @endif
-                <button type="submit" class="btn apply" form="receipt-monthly-close-form" onclick="return confirm('{{ $target_month  }}月分の月次締め処理をします。該当月の編集はできなくなります。');">小口月次確定</button>
+                <button type="submit" class="btn apply" form="cash-book-monthly-close-form" onclick="return confirm('{{ $target_month  }}月分の月次締め処理をします。該当月の編集はできなくなります。');">小口月次確定</button>
                 @endif
 
                 @if($is_admin)
-                <button type="submit" class="btn master" form="receipt-monthly-unlock-form" onclick="return confirm('{{ $target_month }}月分の小口月次確定を解除します。該当月の編集ができるようになります。');">小口月次解除</button>
+                <button type="submit" class="btn master" form="cash-book-monthly-unlock-form" onclick="return confirm('{{ $target_month }}月分の小口月次確定を解除します。該当月の編集ができるようになります。');">小口月次解除</button>
                 @endif
             </form>
-            <form id="receipt-monthly-close-form" method="post" action="{{ route('office.office_menu.cash_book.monthly_close') }}">
+            <form id="cash-book-monthly-close-form" method="post" action="{{ route('office.office_menu.cash_book.monthly_close') }}">
                 @csrf
                 <input type="hidden" name="target_month" value="{{ $target_month ?? now()->format('Y-m') }}">
                 <input type="hidden" name="vault_name" value="{{ $vault_name ?? '' }}">
             </form>
-            <form id="receipt-monthly-unlock-form" method="post" action="{{ route('office.office_menu.cash_book.monthly_unlock') }}">
+            <form id="cash-book-monthly-unlock-form" method="post" action="{{ route('office.office_menu.cash_book.monthly_unlock') }}">
                 @csrf
                 <input type="hidden" name="target_month" value="{{ $target_month ?? now()->format('Y-m') }}">
                 <input type="hidden" name="vault_name" value="{{ $vault_name ?? '' }}">
@@ -72,15 +71,6 @@
             @else
             <div class="table-wrap">
                 <table class="data-table f_size14">
-                    <!-- <colgroup>
-                        <col style="width: 90px;">
-                        <col style="width: 80px;">
-                        <col style="width: 60px;">
-                        <col style="width: 60px;">
-                        <col style="width: 150px;">
-                        <col style="width: 60px;">
-                        <col style="width: 150px;">
-                    </colgroup> -->
                     <thead>
                         <tr>
                             <th>発生日</th>

@@ -162,7 +162,7 @@
 
 
     [
-    'visible' => $isViewOnly || $isVisitManagement || $isPaymentCheck || $isAdmin,
+    'visible' => $isAccounting || $isAdmin,
     'badge' => 'OFFICE',
     'title' => '往診事務',
     'cards' => [

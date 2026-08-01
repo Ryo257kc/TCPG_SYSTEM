@@ -12,7 +12,6 @@
             <thead>
                 <tr>
                     <th>部署</th>
-                    <!-- <th>店舗名</th> -->
                     <th>保険請求額</th>
                     <th>保険窓口負担</th>
                     <th>個人振込分</th>
@@ -26,7 +25,6 @@
                 @forelse (($salesRows ?? []) as $row)
                 <tr>
                     <td>{{ $row['department_name'] }}</td>
-                    <!-- <td>{{ $row['store_name'] }}</td> -->
                     <td class="num">{{ number_format((float) $row['insurance_amount']) }}</td>
                     <td class="num">{{ number_format((float) $row['counter_amount']) }}</td>
                     <td class="num">{{ number_format((float) $row['personal_transfer_amount']) }}</td>
@@ -37,7 +35,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="sales-empty">対象データを選んで表示してください。</td>
+                    <td colspan="8" class="sales-empty">対象データを選んで表示してください。</td>
                 </tr>
                 @endforelse
             </tbody>

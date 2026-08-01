@@ -41,15 +41,6 @@
                     <input type="month" name="target_month" value="{{ $targetMonth }}">
                 </label>
 
-                <!-- <label>
-                    店舗選択 -->
-                <select name="レジ店舗">
-                    <option value="">-店舗選択-</option>
-                    @foreach (($storeOptions ?? []) as $レジ店舗)
-                    <option value="{{ $レジ店舗 }}" @selected(($selectedStore ?? '' )===$レジ店舗)>{{ $レジ店舗 }}</option>
-                    @endforeach
-                </select>
-                <!-- </label> -->
 
                 <fieldset>
                     <legend>フィルタ</legend>

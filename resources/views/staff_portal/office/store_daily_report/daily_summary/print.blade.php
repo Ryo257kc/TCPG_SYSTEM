@@ -588,7 +588,6 @@
                 @endphp
                 <tr>
                     <td>{{ $row['時刻'] }}</td>
-                    <!-- <td class="{{ $dailyOrderClass }}">{{ $row['日別順'] }}</td> -->
                     <td class="{{ $dailyOrderClass }}">{{ $loop->iteration }}</td>
                     <td>{{ $row['患者名'] }}</td>
                     <td>{{ $row['割合'] }}</td>

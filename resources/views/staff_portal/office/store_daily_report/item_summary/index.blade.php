@@ -33,18 +33,8 @@
                     <input type="month" name="target_month" value="{{ $targetMonth }}">
                 </label>
 
-                <!-- <label>
-                    店舗選択 -->
-                <select name="店舗">
-                    <option value="">-店舗選択-</option>
-                    @foreach (($storeOptions ?? []) as $店舗)
-                    <option value="{{ $店舗 }}" @selected(($selectedStore ?? '' )===$店舗)>{{ $店舗 }}</option>
-                    @endforeach
-                </select>
-                <!-- </label> -->
 
                 <button type="submit" class="btn">表示</button>
-                <!-- <button type="button" class="btn" disabled>印刷</button> -->
             </form>
 
             <div class="table-wrap">

@@ -16,23 +16,11 @@ class SalesV2Service
         $start = CarbonImmutable::createFromFormat('Y-m-d', $normalizedMonth . '-01')->startOfMonth();
         $end = $start->addMonth();
 
-        $insuranceExpr = implode(' + ', [
-            "SUM(CASE WHEN je.debit_item_name = N'一般保険請求' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)",
-            "SUM(CASE WHEN je.debit_item_name = N'後期高齢保険請求' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)",
-            "SUM(CASE WHEN je.debit_item_name = N'医療助成請求' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)",
-        ]);
-
-        $counterExpr = "SUM(CASE WHEN je.credit_account_title = N'窓口収入' AND je.credit_item_name <> N'個人振込' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $selfPayExpr = "SUM(CASE WHEN je.credit_item_name = N'自費' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $expenseExpr = "SUM(CASE WHEN je.credit_item_name = N'店舗経費' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $personalTransferExpr = "SUM(CASE WHEN je.credit_account_title = N'窓口収入' AND je.credit_item_name = N'個人振込' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $totalExpr = implode(' + ', [$insuranceExpr, $counterExpr, $selfPayExpr, $personalTransferExpr]);
         $generalLabel = "一般保険請求";
         $lateElderlyLabel = "後期高齢保険請求";
         $aidLabel = "医療助成請求";
         $counterTitle = "窓口収入";
         $personalTransferLabel = "個人振込";
-        $selfPayLabel = "自費";
         $expenseLabel = "店舗経費";
 
         $generalExpr = "SUM(CASE WHEN je.debit_item_name = N'{$generalLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";

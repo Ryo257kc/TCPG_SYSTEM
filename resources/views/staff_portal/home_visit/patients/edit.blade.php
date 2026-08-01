@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - 患者詳細</title>
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/zzz_app-shell copy.css') }}"> -->
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
 
     <style>

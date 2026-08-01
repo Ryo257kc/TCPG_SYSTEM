@@ -26,10 +26,6 @@ class CashBookController extends Controller
         }
         $staffRow = $this->staffPortalStaffRow($staffId);
         $is_admin = $this->isAdmin($staffRow);
-
-
-        $staffRow = $this->staffPortalStaffRow($staffId);
-        $is_admin = $this->isAdmin($staffRow);
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $vault_name = trim((string) $request->query('vault_name', ''));
 
@@ -197,11 +193,6 @@ class CashBookController extends Controller
             ->whereDate('closing_month', $targetMonth->format('Y-m-d'))
             ->where('authority', self::MONTHLY_CLOSING_AUTHORITY)
             ->first();
-    }
-
-    private function isReceiptMonthlyClosed(Carbon $targetMonth): bool
-    {
-        return $this->cashMonthlyClosingRow($targetMonth) !== null;
     }
 
     private function cashBookMonthEndFromValue(mixed $value): ?Carbon
@@ -375,103 +366,6 @@ class CashBookController extends Controller
                 'vault_name' => $vaultName,
             ])
             ->with('statusMessage', '翌月繰越を登録し、月次処理が完了しました。');
-
-        $alreadyExists = DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->where('vault_name', $vaultName)
-            ->where('debit_account_title', '小口現金')
-            ->where('credit_account_title', '前月繰越')
-            ->whereDate('occurred_at', $nextMonthStart->format('Y-m-d'))
-            ->exists();
-
-        if ($alreadyExists) {
-            DB::connection('sqlsrv')
-                ->table('dbo.mx_monthly_closings')
-                ->insert([
-                    'closing_month' => $targetMonthEnd->format('Y-m-d'),
-                    'authority' => self::MONTHLY_CLOSING_AUTHORITY,
-                    'processed_at' => now(),
-                ]);
-
-            return redirect()
-                ->route('office.office_menu.cash_book', [
-                    'target_month' => $data['target_month'],
-                    'vault_name' => $vaultName,
-                ])
-                ->with('errorMessage', '翌月繰越は既に登録されています。');
-        }
-
-        $summary = DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries as entry')
-            ->where('entry.vault_name', $vaultName)
-            ->where(function ($query): void {
-                $this->applyCashBookConditions($query);
-            })
-            ->whereDate('entry.month_date', '>=', $targetMonthStart->format('Y-m-d'))
-            ->whereDate('entry.month_date', '<=', $targetMonthEnd->format('Y-m-d'))
-            ->selectRaw('COALESCE(SUM(COALESCE(entry.deposit_amount, 0)), 0) as deposit_amount_total')
-            ->selectRaw('COALESCE(SUM(COALESCE(entry.withdrawal_amount, 0)), 0) as withdrawal_amount_total')
-            ->first();
-
-        $previousSummary = DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries as entry')
-            ->where('entry.vault_name', $vaultName)
-            ->where('entry.debit_account_title', '小口現金')
-            ->where('entry.credit_account_title', '前月繰越')
-            ->whereDate('entry.occurred_at', '>=', $targetMonthStart->format('Y-m-d'))
-            ->whereDate('entry.occurred_at', '<=', $targetMonthEnd->format('Y-m-d'))
-            ->selectRaw('COALESCE(MAX(COALESCE(entry.debit_amount, 0)), 0) as previous_balance')
-            ->first();
-
-        $previousBalance = (float) ($previousSummary->previous_balance ?? 0);
-        $depositAmountTotal = (float) ($summary->deposit_amount_total ?? 0);
-        $withdrawalAmountTotal = (float) ($summary->withdrawal_amount_total ?? 0);
-        $currentBalance = $previousBalance + $depositAmountTotal - $withdrawalAmountTotal;
-
-        DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->insert([
-                'journal_breakdown' => '繰越',
-                'occurred_at' => $nextMonthStart->format('Y-m-d'),
-                'month_date' => $nextMonthStart->format('Y-m-d'),
-                'vault_name' => $vaultName,
-                'debit_account_title' => '小口現金',
-                'debit_amount' => $currentBalance,
-                'credit_account_title' => '前月繰越',
-                'company_name_short' => $this->resolveCashBookVaultDepartmentName($vaultName),
-            ]);
-
-        DB::connection('sqlsrv')
-            ->table('dbo.mx_monthly_closings')
-            ->insert([
-                'closing_month' => $targetMonthEnd->format('Y-m-d'),
-                'authority' => self::MONTHLY_CLOSING_AUTHORITY,
-                'processed_at' => now(),
-            ]);
-
-        return redirect()
-            ->route('office.office_menu.cash_book', [
-                'target_month' => $data['target_month'],
-                'vault_name' => $vaultName,
-            ])
-            ->with('statusMessage', '翌月繰越を登録し、月次処理が完了しました。');
-    }
-
-    private function isCashBookMonthlyClosed(string $vaultName, Carbon $targetMonthStart): bool
-    {
-        if ($vaultName === '') {
-            return false;
-        }
-
-        $nextMonthStart = $targetMonthStart->copy()->addMonthNoOverflow()->startOfMonth();
-
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->where('vault_name', $vaultName)
-            ->where('debit_account_title', '小口現金')
-            ->where('credit_account_title', '前月繰越')
-            ->whereDate('occurred_at', $nextMonthStart->format('Y-m-d'))
-            ->exists();
     }
 
     private function calculateCashBookCurrentBalance(string $vaultName, Carbon $targetMonthStart, Carbon $targetMonthEnd): float

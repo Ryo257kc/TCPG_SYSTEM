@@ -34,10 +34,6 @@
                         @foreach (($companyOptions ?? []) as $company)
                         <option value="{{ $company['company_id'] }}" @selected((string)($selectedCompanyId ?? '' )===(string)($company['company_id'] ?? '' ))>{{ $company['company_name'] }}</option>
                         @endforeach
-                        <!-- <option value="">会社を選択</option>
-                        @foreach (($companyOptions ?? []) as $company)
-                        <option value="{{ $company['company_id'] }}" @selected(($selectedCompanyId ?? '' )===$company['company_id'])>{{ $company['company_name'] }}</option>
-                        @endforeach -->
                     </select>
                 </div>
 
@@ -57,7 +53,6 @@
             ])
             <div>
                 <a href="{{ route('dashboard') }}" class="btn btn_back">戻る</a>
-                <!-- <button type="button" class="btn_back" onclick="history.back()">戻る</button> -->
             </div>
         </section>
     </main>

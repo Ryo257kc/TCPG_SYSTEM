@@ -5,8 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - 保険請求未収入金 個別一覧</title>
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/uncollected_print.css') }}"> -->
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/uncollected_detail_print.css') }}"> -->
     <link rel="stylesheet" href="{{ asset('css/print.css') }}">
 </head>
 
@@ -51,7 +49,6 @@
 
     <main class="print-page landscape">
         <header class="print-header">
-            <!-- <div></div> -->
             <h1>保険請求個別未収入金</h1>
             <div class="print-meta12">印刷月 {{ $paymentMonth ?? '' }}月迄／ {{ now()->format('Y/m/d H:i') }} 現在</div>
         </header>
