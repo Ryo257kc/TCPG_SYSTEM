@@ -64,3 +64,17 @@ admin/attendance
 - 管理側とスタッフ側の表示差はViewで出し分ける。
 - 計算差はService側で吸収し、別計算を作らない。
 - 勤怠反映、給与反映は最後に確認する。
+
+## 打刻
+
+/staff/attendance/punch
+- StaffPortal\AttendanceController::attendancePunch
+- StaffPortal\AttendanceController::attendancePunchStore
+- resources/views/staff_portal/attendance_punch/index.blade.php
+
+/staff/attendance/punch-list
+- StaffPortal\AttendanceController::punchList
+- resources/views/staff_portal/admin/attendance/punch_list.blade.php
+
+打刻は mx_time_cards の実働時刻を更新する。
+打刻一覧は表示専用とし、勤怠計算を追加しない。

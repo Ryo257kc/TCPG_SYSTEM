@@ -10,3 +10,4 @@
 - staff_portal/admin/attendance/management_detail.blade.php の日別行変換をControllerへ移し、Viewは表示専用に近づけた。
 - AttendanceV2DailyTableItemBuilder::summary() を削除し、月次集計は AttendanceV2MonthlySummaryService のみに寄せた。
 - AttendanceV2ListSummaryService を削除し、勤怠一覧の月次集計は AttendanceV2MetricService から AttendanceV2MonthlySummaryService を使う形に統一した。
+- 打刻ルール 03_punch.md を追加し、打刻と打刻一覧を勤怠カテゴリで管理する方針にした。
