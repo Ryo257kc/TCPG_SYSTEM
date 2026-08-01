@@ -1,5 +1,5 @@
 <?php
-
+// 各等級データ取得
 namespace App\Services\Admin\V2\Payroll;
 
 use Illuminate\Support\Facades\DB;

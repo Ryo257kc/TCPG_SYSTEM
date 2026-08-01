@@ -8,7 +8,7 @@ $adminIndex = <<<'BLADE'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM 売上</title>
+    <title>TCPG SYSTEM - 売上</title>
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/shared/sales/sales_item.css') }}">
@@ -65,7 +65,7 @@ $adminPrint = <<<'BLADE'
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM 売上一覧</title>
+    <title>TCPG SYSTEM - 売上一覧</title>
     <link rel="stylesheet" href="{{ asset('css/shared/sales/sales_print_item.css') }}">
 </head>
 <body>
@@ -95,7 +95,7 @@ $officeIndex = <<<'BLADE'
 
     <section class="panel content-panel sales-panel">
         <div class="content-head">
-            <h1 class="content-title">売上関連</h1>
+            <h2 class="content-title">売上関連</h2>
         </div>
 
         <form method="get" action="{{ route('office.sales') }}" class="sales-filter-row">

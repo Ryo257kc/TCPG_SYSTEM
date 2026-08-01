@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2MonthService
 {
+    // 勤怠管理で選択できる月を解決するサービス。
+    // 給与データの対象月に合わせて月選択を作るだけで、勤怠計算は持たない。
     /** @return list<string> */
     public function availableMonths(): array
     {

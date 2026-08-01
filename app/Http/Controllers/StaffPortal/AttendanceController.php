@@ -5,6 +5,7 @@ namespace App\Http\Controllers\StaffPortal;
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Attendance\AttendanceV2DailyEditService;
 use App\Services\StaffPortal\Attendance\AttendanceV2DailyTableItemBuilder;
+use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,11 +14,14 @@ use Illuminate\View\View;
 
 class AttendanceController extends Controller
 {
+    use HandlesStaffPortalContext;
+
+    // 月間勤怠
     public function attendanceMonthly(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -40,9 +44,7 @@ class AttendanceController extends Controller
             })
             ->all();
 
-        return view('staff_portal.attendance.monthly', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'hidePayrollLinks' => false,
+        return view('staff_portal.attendance.monthly', $this->commonViewData($request, [
             'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'selectedMonth' => $selectedMonth,
             'rowCount' => count($dailyRows),
@@ -52,14 +54,14 @@ class AttendanceController extends Controller
             'monthlyAppliedAt' => $latestAppliedAt ? Carbon::parse($latestAppliedAt)->format('Y/n/d G:i:s') : null,
             'canMonthlyApply' => $dailyTableData['dailyRows'] !== [] && empty($latestAppliedAt),
             'isAdmin' => false,
-        ]);
+        ]));
     }
 
     public function attendanceMonthlyApply(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -77,14 +79,101 @@ class AttendanceController extends Controller
 
         return redirect()
             ->route('attendance.monthly', ['month' => $selectedMonth])
-            ->with('statusMessage', 'Applied.');
+            ->with('statusMessage', '申請しました');
+    }
+
+    // 勤怠編集
+    public function attendancePunch(Request $request): RedirectResponse|View
+    {
+        $staffId = (string) $request->session()->get('staff_id', '');
+        if ($staffId === '') {
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+        }
+
+        $today = now('Asia/Tokyo');
+        $card = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards as tc')
+            ->leftJoin('dbo.mx_stores as st', DB::raw('LTRIM(RTRIM(tc.work_store))'), '=', DB::raw('LTRIM(RTRIM(st.store_code))'))
+            ->whereDate('tc.work_date', $today->format('Y-m-d'))
+            ->whereRaw('LTRIM(RTRIM(tc.staff_name)) = ?', [$staffId])
+            ->selectRaw("
+                CONVERT(char(10), tc.work_date, 111) as work_date,
+                LTRIM(RTRIM(COALESCE(tc.actual_start, ''))) as actual_start,
+                LTRIM(RTRIM(COALESCE(tc.actual_leave, ''))) as actual_leave,
+                LTRIM(RTRIM(COALESCE(tc.actual_break_out, ''))) as actual_break_out,
+                LTRIM(RTRIM(COALESCE(tc.actual_end, ''))) as actual_end,
+                LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, CONVERT(nvarchar(50), tc.work_store), ''))) as work_store,
+                LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id
+            ")
+            ->first();
+
+        return view('staff_portal.attendance_punch.index', $this->commonViewData($request, [
+            'currentDateTime' => $today->format('Y/m/d H:i:s'),
+            'punchRow' => [
+                'work_date' => (string) ($card->work_date ?? $today->format('Y/m/d')),
+                'actual_start' => $this->formatTimeValue($card->actual_start ?? null),
+                'actual_leave' => $this->formatTimeValue($card->actual_leave ?? null),
+                'actual_break_out' => $this->formatTimeValue($card->actual_break_out ?? null),
+                'actual_end' => $this->formatTimeValue($card->actual_end ?? null),
+                'work_store' => (string) ($card->work_store ?? ''),
+                'staff_id' => (string) ($card->staff_id ?? $staffId),
+            ],
+            'statusMessage' => (string) $request->session()->get('statusMessage', ''),
+            'isAdmin' => false,
+        ]));
+    }
+
+    public function attendancePunchStore(Request $request): RedirectResponse
+    {
+        $staffId = (string) $request->session()->get('staff_id', '');
+        if ($staffId === '') {
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+        }
+
+        $columnMap = [
+            'start' => 'actual_start',
+            'leave' => 'actual_leave',
+            'break' => 'actual_break_out',
+            'end' => 'actual_end',
+        ];
+
+        $type = trim((string) $request->input('type', ''));
+        $column = $columnMap[$type] ?? null;
+        if ($column === null) {
+            return redirect()->route('attendance.punch')->with('statusMessage', '打刻種別が不正です。');
+        }
+
+        $today = now('Asia/Tokyo');
+        $card = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->whereDate('work_date', $today->format('Y-m-d'))
+            ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
+            ->first();
+
+        if ($card === null) {
+            return redirect()->route('attendance.punch')->with('statusMessage', '本日の勤怠データがありません。');
+        }
+
+        $currentValue = $card->{$column} ?? null;
+        if ($currentValue !== null && trim((string) $currentValue) !== '') {
+            return redirect()->route('attendance.punch')->with('statusMessage', '既に打刻済です');
+        }
+
+        DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->where('time_no', $card->time_no)
+            ->update([
+                $column => $today->format('Y-m-d H:i:s'),
+            ]);
+
+        return redirect()->route('attendance.punch')->with('statusMessage', '打刻しました。');
     }
 
     public function attendanceEdit(Request $request, int $timeNo): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $card = DB::connection('sqlsrv')
@@ -99,12 +188,10 @@ class AttendanceController extends Controller
 
         $month = $this->resolveMonth((string) $request->query('month', date('Y-m', strtotime((string) $card->work_date))));
 
-        return view('staff_portal.attendance.edit', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'hidePayrollLinks' => false,
+        return view('staff_portal.attendance.edit', $this->commonViewData($request, [
             'timeNo' => $timeNo,
             'month' => $month,
-            'staffName' => $this->resolveDisplayName($staffId),
+            // 'staffName' => $this->resolveDisplayName($staffId),
             'dateLabel' => $this->formatFullDateLabel((string) ($card->work_date ?? '')),
             'row' => [
                 'kubun' => (string) ($card->work_type ?? ''),
@@ -127,14 +214,15 @@ class AttendanceController extends Controller
                 'can_submit' => empty($card->staff_request),
             ],
             'backUrl' => route('attendance.monthly', ['month' => $month]),
-        ]);
+        ]));
     }
 
+    // 勤怠申請
     public function attendanceUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $card = DB::connection('sqlsrv')
@@ -150,7 +238,7 @@ class AttendanceController extends Controller
         $month = $this->resolveMonth((string) $request->input('month', date('Y-m', strtotime((string) $card->work_date))));
 
         if (!empty($card->staff_request)) {
-            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', 'Already applied.');
+            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '差戻しました');
         }
 
         $submitted = array_values($request->except([
@@ -171,10 +259,22 @@ class AttendanceController extends Controller
             $timecardNote,
         ] = array_pad($submitted, 7, '');
 
+        $paid_leave_used = null;
+        $paid_leave_requested_at = null;
+        if ($attendanceCategory === '有休') {
+            $paid_leave_used = 1;
+            $paid_leave_requested_at = Carbon::now('Asia/Tokyo')->format('Y-m-d H:i:s');
+        } elseif ($attendanceCategory === '有半') {
+            $paid_leave_used = 0.5;
+            $paid_leave_requested_at = Carbon::now('Asia/Tokyo')->format('Y-m-d H:i:s');
+        }
+
         (new AttendanceV2DailyEditService())->update([
             'time_card_key' => trim((string) ($card->staff_name ?? '')),
             'work_date' => date('Y-m-d', strtotime((string) $card->work_date)),
             'attendance_category' => (string) $attendanceCategory,
+            'paid_leave_used' => $paid_leave_used,
+            'paid_leave_requested_at' => $paid_leave_requested_at,
             'change_start' => (string) $changeStart,
             'change_leave' => (string) $changeLeave,
             'change_break_out' => (string) $changeBreakOut,
@@ -183,14 +283,14 @@ class AttendanceController extends Controller
             'timecard_note' => (string) $timecardNote,
         ]);
 
-        return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', 'Updated.');
+        return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '保存しました');
     }
 
     public function managementApprove(Request $request, string $staffId): RedirectResponse
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
         if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -208,14 +308,14 @@ class AttendanceController extends Controller
 
         return redirect()
             ->route('attendance.management.detail', ['staffId' => $staffId, 'month' => $selectedMonth])
-            ->with('statusMessage', 'Approved.');
+            ->with('statusMessage', '承認しました');
     }
 
     public function managementRemand(Request $request, string $staffId): RedirectResponse
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
         if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -235,14 +335,16 @@ class AttendanceController extends Controller
 
         return redirect()
             ->route('attendance.management.detail', ['staffId' => $staffId, 'month' => $selectedMonth])
-            ->with('statusMessage', 'Remanded.');
+            ->with('statusMessage', '差戻しました');
     }
 
+
+    // 打刻一覧
     public function punchList(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedDate = $this->resolveDate((string) $request->query('date', now('Asia/Tokyo')->format('Y-m-d')));
@@ -264,7 +366,7 @@ class AttendanceController extends Controller
                 LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, tc.work_store, ''))) as shop
             ")
             ->get()
-            ->map(fn ($row): array => [
+            ->map(fn($row): array => [
                 'staff_name' => (string) ($row->staff_name ?? ''),
                 'kubun' => (string) ($row->kubun ?? ''),
                 'start' => $this->formatTimeValue($row->start ?? null),
@@ -275,38 +377,60 @@ class AttendanceController extends Controller
             ])
             ->all();
 
-        return view('staff_portal.admin.attendance.punch_list', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'hidePayrollLinks' => false,
+        return view('staff_portal.admin.attendance.punch_list', $this->commonViewData($request, [
             'selectedDate' => $selectedDate,
             'rowCount' => count($rows),
             'rows' => $rows,
             'isAdmin' => true,
-        ]);
+        ]));
     }
 
     public function management(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
+
+        $returnedStaffIds = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards as tc')
+            ->whereRaw('YEAR(tc.work_date) = ?', [$year])
+            ->whereRaw('MONTH(tc.work_date) = ?', [$month])
+            ->where('tc.is_returned', 1)
+            ->selectRaw("LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id")
+            ->groupByRaw("LTRIM(RTRIM(COALESCE(tc.staff_name, '')))")
+            ->pluck('staff_id')
+            ->map(fn($staffId): string => trim((string) $staffId))
+            ->filter(fn(string $staffId): bool => $staffId !== '')
+            ->flip()
+            ->all();
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
             ->leftJoin('dbo.mx_staffs as s', DB::raw('LTRIM(RTRIM(tc.staff_name))'), '=', DB::raw('LTRIM(RTRIM(s.staff_id))'))
             ->whereRaw('YEAR(tc.work_date) = ?', [$year])
             ->whereRaw('MONTH(tc.work_date) = ?', [$month])
-            ->whereNotNull('tc.staff_request')
+            ->where(function ($query): void {
+                $query
+                    ->whereRaw("LTRIM(RTRIM(COALESCE(tc.shift_start, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.shift_leave, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.shift_break_out, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.shift_end, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.change_start, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.change_leave, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.change_break_out, ''))) <> ''")
+                    ->orWhereRaw("LTRIM(RTRIM(COALESCE(tc.change_end, ''))) <> ''");
+            })
             ->selectRaw("
                 LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id,
                 LTRIM(RTRIM(COALESCE(s.staff_name, tc.staff_name, ''))) as staff_name,
                 CONVERT(char(7), tc.work_date, 126) as year_month,
                 MAX(CONVERT(varchar(19), tc.staff_request, 120)) as self_applied_at,
-                MAX(CONVERT(varchar(19), tc.manager_approval, 120)) as admin_approved
+                MAX(CONVERT(varchar(19), tc.manager_approval, 120)) as admin_approved,
+                MAX(CAST(ISNULL(tc.is_returned, 0) as int)) as is_returned
             ")
             ->groupByRaw("
                 LTRIM(RTRIM(COALESCE(tc.staff_name, ''))),
@@ -324,6 +448,7 @@ class AttendanceController extends Controller
                     'staff_name' => (string) ($row->staff_name ?? ''),
                     'self_applied_at' => (string) ($row->self_applied_at ?? ''),
                     'admin_approved' => (string) ($row->admin_approved ?? ''),
+                    'is_returned' => isset($returnedStaffIds[$staffId]),
                     'detail_url' => route('attendance.management.detail', [
                         'staffId' => $staffId,
                         'month' => $selectedMonth,
@@ -332,21 +457,38 @@ class AttendanceController extends Controller
             })
             ->all();
 
-        return view('staff_portal.admin.attendance.management', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'hidePayrollLinks' => false,
+        $returnedSummaries = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards as tc')
+            ->whereRaw('YEAR(tc.work_date) = ?', [$year])
+            ->whereRaw('MONTH(tc.work_date) = ?', [$month])
+            ->where('tc.is_returned', 1)
+            ->orderBy('tc.work_date')
+            ->selectRaw("
+                CONVERT(char(10), tc.work_date, 120) as work_date,
+                LTRIM(RTRIM(COALESCE(tc.return_note, ''))) as return_note
+            ")
+            ->get()
+            ->map(fn($row): array => [
+                'work_date' => $this->formatFullDateLabel((string) ($row->work_date ?? '')),
+                'return_note' => trim((string) ($row->return_note ?? '')),
+            ])
+            ->all();
+
+        return view('staff_portal.admin.attendance.management', $this->commonViewData($request, [
             'selectedMonth' => $selectedMonth,
             'rowCount' => count($rows),
             'rows' => $rows,
+            'returnedSummaries' => $returnedSummaries,
             'isAdmin' => true,
-        ]);
+        ]));
     }
 
+    // 有休申請
     public function paidLeave(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
@@ -363,45 +505,43 @@ class AttendanceController extends Controller
             ->selectRaw("
                 LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id,
                 LTRIM(RTRIM(COALESCE(s.staff_name, tc.staff_name, ''))) as staff_name,
-                CONVERT(char(10), tc.work_date, 120) as leave_date,
+                CONVERT(char(10), tc.work_date, 120) as work_date,
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(50), tc.paid_leave_used), ''))) as paid_leave_used,
-                CONVERT(varchar(19), tc.staff_request, 120) as paid_leave_applied_at,
-                CONVERT(varchar(19), tc.manager_approval, 120) as admin_approved
+                CONVERT(varchar(19), tc.paid_leave_requested_at, 120) as paid_leave_requested_at,
+                CONVERT(varchar(19), tc.manager_approval, 120) as manager_approval
             ")
             ->get()
             ->map(function ($row): array {
                 return [
-                    'leave_date' => $this->formatFullDateLabel($row->leave_date ?? ''),
+                    'work_date' => $this->formatFullDateLabel($row->work_date ?? ''),
                     'paid_leave_used' => $this->formatNumericDisplay($row->paid_leave_used ?? ''),
-                    'applied_date' => $this->formatFullDateLabel(substr((string) ($row->paid_leave_applied_at ?? ''), 0, 10)),
                     'staff_id' => (string) ($row->staff_id ?? ''),
                     'staff_name' => (string) ($row->staff_name ?? ''),
-                    'paid_leave_applied_at' => (string) ($row->paid_leave_applied_at ?? ''),
-                    'admin_approved' => (string) ($row->admin_approved ?? ''),
+                    'paid_leave_requested_at' => (string) ($row->paid_leave_requested_at ?? ''),
+                    'manager_approval' => (string) ($row->manager_approval ?? ''),
                 ];
             })
             ->all();
 
-        return view('staff_portal.admin.attendance.paid_leave', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'hidePayrollLinks' => false,
+        return view('staff_portal.admin.attendance.paid_leave', $this->commonViewData($request, [
             'selectedMonth' => $selectedMonth,
             'rowCount' => count($rows),
             'rows' => $rows,
             'isAdmin' => true,
-        ]);
+        ]));
     }
 
     public function managementDetail(Request $request, string $staffId): RedirectResponse|View
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
         if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'Please log in.');
+            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
         $monthlyStatus = $this->loadMonthlyApprovalStatus($staffId, $year, $month);
+        $targetStaffRow = $this->staffPortalStaffRow($staffId);
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
@@ -433,7 +573,9 @@ class AttendanceController extends Controller
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(50), tc.overtime), ''))) as overtime,
                 CAST(NULL as nvarchar(50)) as night_overtime,
                 LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, CONVERT(nvarchar(50), tc.work_store), ''))) as shop_name,
-                LTRIM(RTRIM(COALESCE(tc.timecard_note, ''))) as remark
+                LTRIM(RTRIM(COALESCE(tc.timecard_note, ''))) as remark,
+                LTRIM(RTRIM(COALESCE(tc.return_note, ''))) as return_note,
+                ISNULL(tc.is_returned, 0) as is_returned
             ")
             ->get()
             ->map(function ($row): array {
@@ -447,20 +589,23 @@ class AttendanceController extends Controller
                 }
                 $item['change_scheduled'] = $this->formatNumericDisplay($item['change_scheduled'] ?? null);
                 $item['overtime'] = $this->formatNumericDisplay($item['overtime'] ?? null);
-                foreach ([
-                    'jitu_sigyo',
-                    'jitu_taisitu',
-                    'jitu_irisitu',
-                    'jitu_syugyo',
-                    'shift_sigyo',
-                    'shift_taisitu',
-                    'shift_irisitu',
-                    'shift_syugyo',
-                    'change_sigyo',
-                    'change_taisitu',
-                    'change_irisitu',
-                    'change_syugyo',
-                ] as $key) {
+                $item['is_returned'] = ((int) ($item['is_returned'] ?? 0)) === 1;
+                foreach (
+                    [
+                        'jitu_sigyo',
+                        'jitu_taisitu',
+                        'jitu_irisitu',
+                        'jitu_syugyo',
+                        'shift_sigyo',
+                        'shift_taisitu',
+                        'shift_irisitu',
+                        'shift_syugyo',
+                        'change_sigyo',
+                        'change_taisitu',
+                        'change_irisitu',
+                        'change_syugyo',
+                    ] as $key
+                ) {
                     $item[$key] = $this->formatTimeValue($item[$key] ?? null);
                 }
 
@@ -468,21 +613,29 @@ class AttendanceController extends Controller
             })
             ->all();
 
-        return view('staff_portal.admin.attendance.management_detail', [
-            'displayName' => $this->resolveDisplayName($loginStaffId),
-            'hidePayrollLinks' => false,
+        $returnedSummaries = collect($rows)
+            ->filter(fn(array $row): bool => !empty($row['is_returned']))
+            ->map(fn(array $row): array => [
+                'work_date' => trim((string) ($row['date_label'] ?? '')),
+                'return_note' => trim((string) ($row['return_note'] ?? '')),
+            ])
+            ->values()
+            ->all();
+
+        return view('staff_portal.admin.attendance.management_detail', $this->commonViewData($request, [
             'selectedMonth' => $selectedMonth,
             'targetStaffId' => $staffId,
-            'targetStaffName' => $this->resolveDisplayName($staffId),
+            'targetStaffName' => $this->resolveDisplayName($targetStaffRow, $staffId),
             'rowCount' => count($rows),
             'rows' => $rows,
+            'returnedSummaries' => $returnedSummaries,
             'monthlyAppliedAt' => $monthlyStatus['monthlyAppliedAt'],
             'adminApprovedAt' => $monthlyStatus['adminApprovedAt'],
             'canAdminApprove' => $monthlyStatus['canAdminApprove'],
             'canAdminRemand' => $monthlyStatus['canAdminRemand'],
             'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'isAdmin' => true,
-        ]);
+        ]));
     }
 
     private function resolveMonth(string $month): string
@@ -510,17 +663,17 @@ class AttendanceController extends Controller
         return now('Asia/Tokyo')->format('Y-m-d');
     }
 
-    private function resolveDisplayName(string $staffId): string
-    {
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs')
-            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-            ->first(['staff_name']);
+    // private function resolveDisplayName(string $staffId): string
+    // {
+    //     $row = DB::connection('sqlsrv')
+    //         ->table('dbo.mx_staffs')
+    //         ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+    //         ->first(['staff_name']);
 
-        $name = trim((string) ($row->staff_name ?? ''));
+    //     $name = trim((string) ($row->staff_name ?? ''));
 
-        return $name !== '' ? $name : $staffId;
-    }
+    //     return $name !== '' ? $name : $staffId;
+    // }
 
     private function formatTimeValue(mixed $value): string
     {
@@ -674,4 +827,3 @@ class AttendanceController extends Controller
         ];
     }
 }
-

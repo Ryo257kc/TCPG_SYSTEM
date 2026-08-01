@@ -10,9 +10,10 @@ class PayrollV2CreateService
         private readonly PayrollV2CreateCandidatesService $createCandidatesService,
         private readonly PayrollV2RecalculateService $recalculateService,
         private readonly PayrollV2FuyoService $fuyoService,
-    ) {
-    }
+    ) {}
 
+
+    // 給与データ一括作成
     /**
      * @param list<string> $staffIds
      * @return array{created:int,skipped:int,created_ids:list<string>,skipped_ids:list<string>}
@@ -27,9 +28,9 @@ class PayrollV2CreateService
         ];
 
         $staffIds = array_values(array_unique(array_filter(array_map(
-            static fn ($id) => trim((string) $id),
+            static fn($id) => trim((string) $id),
             $staffIds
-        ), static fn ($id) => $id !== '')));
+        ), static fn($id) => $id !== '')));
 
         if ($staffIds === []) {
             return $result;
@@ -61,9 +62,9 @@ class PayrollV2CreateService
                     'fuyo_sum' => $this->fuyoService->resolveByPaymentDate($staffId, $paymentDate),
                 ]);
 
-            if (!$bonus) {
-                $this->recalculateService->recalculate($staffId, $targetYear, $targetMonth, $companyName);
-            }
+            // if (!$bonus) {
+            //     $this->recalculateService->recalculate($staffId, $targetYear, $targetMonth, $companyName);
+            // }
 
             $result['created']++;
             $result['created_ids'][] = $staffId;

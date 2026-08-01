@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2ShiftDeleteService
 {
+    // 未打刻のシフト予定行を削除するサービス。
+    // 実打刻がある勤怠行は削除しない。
     /**
      * @param list<string> $staffIds
      * @return array{deleted:int,skipped:int,deleted_ids:list<string>,skipped_ids:list<string>}
@@ -20,9 +22,9 @@ class AttendanceV2ShiftDeleteService
         ];
 
         $staffIds = array_values(array_unique(array_filter(array_map(
-            static fn ($id): string => trim((string) $id),
+            static fn($id): string => trim((string) $id),
             $staffIds
-        ), static fn (string $id): bool => $id !== '')));
+        ), static fn(string $id): bool => $id !== '')));
 
         if ($staffIds === [] || $year < 2000 || $month < 1 || $month > 12) {
             return $result;
@@ -83,7 +85,7 @@ class AttendanceV2ShiftDeleteService
                     'actual_leave',
                     'actual_break_out',
                     'actual_end',
-                    'actual_scheduled',
+                    'actual_scheduled_old',
                     'manager_approval',
                     'staff_request',
                 ];

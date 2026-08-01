@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2ShiftCreateService
 {
+    // スタッフの基本シフトから mx_time_cards の月次行を作成するサービス。
+    // 実打刻や月次計算は扱わず、未作成月の予定行作成だけを担当する。
     public function __construct(
         private readonly AttendanceV2HolidayCategoryService $holidayCategoryService,
     ) {

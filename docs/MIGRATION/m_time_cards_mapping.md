@@ -28,7 +28,7 @@
 - Leave: `actual_leave`, `actual_exit`
 - Break out: `actual_break_out`, `actual_entry`
 - End: `actual_end`, `actual_out`
-- Scheduled: `actual_scheduled`, `actual_work`
+- Scheduled: `actual_scheduled_old`, `actual_work`
 
 ## Change Record
 - Start: `change_start`, `edit_start`

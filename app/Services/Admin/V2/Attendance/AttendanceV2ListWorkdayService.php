@@ -2,6 +2,8 @@
 
 namespace App\Services\Admin\V2\Attendance;
 
+use App\Support\AttendanceTime;
+
 use Illuminate\Support\Facades\DB;
 
 class AttendanceV2ListWorkdayService
@@ -84,41 +86,7 @@ class AttendanceV2ListWorkdayService
 
     private function parseTimeMinutes(mixed $value): ?int
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        if (preg_match('/^\d+(\.\d+)?$/', $text) === 1) {
-            $numeric = (float) $text;
-            if ($numeric <= 24) {
-                return (int) round($numeric * 60);
-            }
-
-            $digitsOnly = preg_replace('/\D+/', '', $text);
-            if ($digitsOnly !== null && preg_match('/^\d{3,4}$/', $digitsOnly) === 1) {
-                $hours = (int) substr($digitsOnly, 0, -2);
-                $minutes = (int) substr($digitsOnly, -2);
-                if ($hours < 24 && $minutes < 60) {
-                    return ($hours * 60) + $minutes;
-                }
-            }
-        }
-
-        $normalized = str_ireplace(['AM', 'PM'], [' AM ', ' PM '], $text);
-        $timestamp = strtotime('2000-01-01 ' . $normalized);
-        if ($timestamp === false) {
-            $timestamp = strtotime($normalized);
-        }
-        if ($timestamp === false) {
-            return null;
-        }
-
-        return ((int) date('G', $timestamp) * 60) + (int) date('i', $timestamp);
+        return AttendanceTime::parseMinutes($value);
     }
 
     private function hasAnyTimeValue(array $values): bool

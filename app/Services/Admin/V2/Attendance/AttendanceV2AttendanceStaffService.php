@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2AttendanceStaffService
 {
+    // 勤怠対象スタッフを取得するサービス。
+    // タイムカード上の staff_name とスタッフマスタを突き合わせ、複数のタイムカードキーをスタッフIDへまとめる。
     /**
      * @return list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string,time_card_keys:list<string>}>
      */

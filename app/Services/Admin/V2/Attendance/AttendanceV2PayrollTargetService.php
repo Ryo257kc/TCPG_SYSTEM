@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2PayrollTargetService
 {
+    // 勤怠月から給与支給月を解決するサービス。
+    // 例: 3月勤怠を4月給与へ反映するような月ずれの入口をここに集約する。
     public function resolvePaymentDate(int $year, int $month): string
     {
         if ($year < 2000 || $month < 1 || $month > 12) {

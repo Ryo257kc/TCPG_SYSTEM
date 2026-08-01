@@ -23,40 +23,40 @@ class LoginV2Controller extends Controller
         return view('admin_v2.login.index');
     }
 
-    public function login(Request $request): RedirectResponse
-    {
-        $credentials = $request->validate([
-            'staff_id' => ['required', 'string'],
-            'password' => ['required', 'string'],
-        ], [
-            'staff_id.required' => 'IDを入力してください。',
-            'password.required' => 'パスワードを入力してください。',
-        ]);
+public function login(Request $request): RedirectResponse
+{
+    $credentials = $request->validate([
+        'staff_id' => ['required', 'string'],
+        'password' => ['required', 'string'],
+    ], [
+        'staff_id.required' => 'IDを入力してください。',
+        'password.required' => 'パスワードを入力してください。',
+    ]);
 
-        $staff = $this->loginService->findStaffForLogin((string) $credentials['staff_id']);
-        if (!$staff) {
-            return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
-        }
-
-        if ($this->loginService->isRetired((string) ($staff->employment ?? ''))) {
-            return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
-        }
-
-        if (!$this->loginService->isAllowedStaff($staff)) {
-            return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
-        }
-
-        if (!$this->loginService->verifyPassword($staff, (string) $credentials['password'])) {
-            return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
-        }
-
-        $request->session()->regenerate();
-        $request->session()->put('admin_logged_in', true);
-        $request->session()->put('admin_staff_id', (string) ($staff->staff_id ?? ''));
-        $request->session()->put('admin_staff_name', (string) ($staff->staff_name ?? ''));
-
-        return redirect()->route('admin.dashboard');
+    $staff = $this->loginService->findStaffForLogin((string) $credentials['staff_id']);
+    if (!$staff) {
+        return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
     }
+
+    if ($this->loginService->isRetired((string) ($staff->employment ?? ''))) {
+        return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
+    }
+
+    if (!$this->loginService->isAdminLogin($staff)) {
+        return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
+    }
+
+    if (!$this->loginService->verifyPassword($staff, (string) $credentials['password'])) {
+        return back()->withInput($request->except('password'))->withErrors(['staff_id' => 'ログインできません']);
+    }
+
+    $request->session()->regenerate();
+    $request->session()->put('admin_logged_in', true);
+    $request->session()->put('admin_staff_id', (string) ($staff->staff_id ?? ''));
+    $request->session()->put('admin_staff_name', (string) ($staff->staff_name ?? ''));
+
+    return redirect()->route('admin.dashboard');
+}
 
     public function logout(Request $request): RedirectResponse
     {

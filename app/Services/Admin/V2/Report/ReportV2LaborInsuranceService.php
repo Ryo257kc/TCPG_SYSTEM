@@ -16,8 +16,8 @@ class ReportV2LaborInsuranceService
             ->groupByRaw('CASE WHEN MONTH([supply_month]) >= 4 THEN YEAR([supply_month]) ELSE YEAR([supply_month]) - 1 END')
             ->orderByRaw('CASE WHEN MONTH([supply_month]) >= 4 THEN YEAR([supply_month]) ELSE YEAR([supply_month]) - 1 END desc')
             ->pluck('fiscal_year')
-            ->map(static fn ($year): int => (int) $year)
-            ->filter(static fn (int $year): bool => $year > 0)
+            ->map(static fn($year): int => (int) $year)
+            ->filter(static fn(int $year): bool => $year > 0)
             ->values()
             ->all();
     }
@@ -27,8 +27,8 @@ class ReportV2LaborInsuranceService
     {
         $staffIds = $this->basePayrollQuery($fiscalYear)
             ->pluck('kyuyo_staff_id')
-            ->map(static fn ($value): string => trim((string) $value))
-            ->filter(static fn (string $value): bool => $value !== '')
+            ->map(static fn($value): string => trim((string) $value))
+            ->filter(static fn(string $value): bool => $value !== '')
             ->unique()
             ->values()
             ->all();
@@ -47,8 +47,8 @@ class ReportV2LaborInsuranceService
             ->distinct()
             ->orderBy('c.company_name')
             ->pluck('c.company_name')
-            ->map(static fn ($value): string => trim((string) $value))
-            ->filter(static fn (string $value): bool => $value !== '')
+            ->map(static fn($value): string => trim((string) $value))
+            ->filter(static fn(string $value): bool => $value !== '')
             ->values()
             ->all();
     }
@@ -71,8 +71,7 @@ class ReportV2LaborInsuranceService
         string $detailMonth = '',
         string $detailBucket = '',
         string $detailKind = 'regular',
-    ): array
-    {
+    ): array {
         $payrollRows = $this->basePayrollQuery($fiscalYear)
             ->select([
                 'kyuyo_staff_id',
@@ -89,8 +88,8 @@ class ReportV2LaborInsuranceService
 
         $staffIds = $payrollRows
             ->pluck('kyuyo_staff_id')
-            ->map(static fn ($value): string => trim((string) $value))
-            ->filter(static fn (string $value): bool => $value !== '')
+            ->map(static fn($value): string => trim((string) $value))
+            ->filter(static fn(string $value): bool => $value !== '')
             ->unique()
             ->values()
             ->all();
@@ -317,11 +316,11 @@ class ReportV2LaborInsuranceService
 
         $countableRows = array_values(array_filter(
             $monthlyRows,
-            static fn (array $row): bool => empty($row['is_bonus'])
+            static fn(array $row): bool => empty($row['is_bonus'])
         ));
 
         $workersSourceTotal = array_sum(array_map(
-            static fn (array $row): int => (int) (
+            static fn(array $row): int => (int) (
                 ($row['left_regular_count'] ?? 0)
                 + ($row['left_executive_count'] ?? 0)
                 + ($row['left_temporary_count'] ?? 0)
@@ -329,7 +328,7 @@ class ReportV2LaborInsuranceService
             $countableRows
         ));
         $employmentWorkersSourceTotal = array_sum(array_map(
-            static fn (array $row): int => (int) (
+            static fn(array $row): int => (int) (
                 ($row['right_regular_count'] ?? 0)
                 + ($row['right_executive_count'] ?? 0)
             ),
@@ -643,7 +642,7 @@ class ReportV2LaborInsuranceService
             'bucket' => $detailBucket,
             'label' => $this->detailLabel($detailMonth, $detailBucket, $detailKind),
             'rows' => $rows,
-            'total_amount' => array_sum(array_map(static fn (array $row): float => (float) $row['amount'], $rows)),
+            'total_amount' => array_sum(array_map(static fn(array $row): float => (float) $row['amount'], $rows)),
             'total_count' => count($rows),
         ];
     }
@@ -695,7 +694,7 @@ class ReportV2LaborInsuranceService
                         'amount' => (float) ($row['amount'] ?? 0),
                     ];
                 }, $rows),
-                'total_amount' => array_sum(array_map(static fn (array $row): float => (float) $row['amount'], $rows)),
+                'total_amount' => array_sum(array_map(static fn(array $row): float => (float) $row['amount'], $rows)),
                 'total_count' => count($rows),
             ];
         }

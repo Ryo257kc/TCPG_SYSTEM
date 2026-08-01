@@ -1,4 +1,5 @@
 .payroll-sheet-wrap { width: 100%; }
+.payroll-filter-row { margin-bottom: 12px; }
 .payroll-sheet-title { text-align: center; margin: 10px 0 6px; }
 .payroll-sheet-title h2 { margin: 0; font-size: 24px; }
 .payroll-sheet-subtitle {
@@ -32,8 +33,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.payroll-sheet-table td:empty::before,
-.payroll-sheet-table th:empty::before { content: "\\00a0"; }
 .payroll-sheet-table th { background: #fff4e8; }
 .payroll-sheet-sum-row td { font-weight: 700; background: #fff4e8; }
 .payroll-sheet-memo {
@@ -55,6 +54,14 @@
 .payroll-sheet-empty { text-align: center; color: #8f5d36; padding: 24px 0; }
 
 @media print {
+    @page { size: A4 portrait; margin: 10mm; }
+    body { background: #fff; padding: 0; color: #000; }
+    * { color: #000 !important; background: transparent !important; box-shadow: none !important; text-shadow: none !important; }
+    .container { width: 100%; max-width: none; margin: 0; display: block; gap: 0; }
+    .panel { border: 0; border-radius: 0; background: #fff; box-shadow: none; backdrop-filter: none; padding: 0; }
+    .app-header-panel,
+    .payroll-filter-row,
+    .home-visit-counter-footer { display: none !important; }
     .payroll-sheet-title h2 { font-size: 20px; }
     .payroll-sheet-subtitle,
     .payroll-sheet-table,
@@ -67,4 +74,23 @@
     .payroll-sheet-memo { font-size: 11px; border-color: #000 !important; }
     .payroll-sheet-sum-row td { background: transparent !important; }
     .payroll-sheet-transfer { font-size: 20px; color: #000 !important; }
+}
+@media (max-width: 768px) {
+    .payroll-sheet-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .payroll-sheet-table {
+        width: max-content;
+        min-width: 700px;
+        table-layout: auto;
+    }
+
+    .payroll-sheet-table th,
+    .payroll-sheet-table td {
+        overflow: visible;
+        text-overflow: clip;
+    }
 }

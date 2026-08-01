@@ -22,6 +22,14 @@
         <span>会社住所</span>
         <div class="company-display-value {{ $selectedRow['company_address'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['company_address'] !== '' ? $selectedRow['company_address'] : '---' }}</div>
       </div>
+      <div class="detail-field">
+        <span>銀行名</span>
+        <div class="company-display-value {{ ($selectedRow['bank_name'] ?? '') === '' ? 'detail-value-empty' : '' }}">{{ ($selectedRow['bank_name'] ?? '') !== '' ? $selectedRow['bank_name'] : '---' }}</div>
+      </div>
+      <div class="detail-field detail-field-wide">
+        <span>口座情報</span>
+        <div class="company-display-value {{ ($selectedRow['bank_account'] ?? '') === '' ? 'detail-value-empty' : '' }}">{{ ($selectedRow['bank_account'] ?? '') !== '' ? $selectedRow['bank_account'] : '---' }}</div>
+      </div>
 
       <div class="detail-field">
         <span>TEL</span>
@@ -81,6 +89,14 @@
       <label class="detail-field detail-field-wide">
         <span>会社住所</span>
         <input type="text" name="company_address" value="{{ $selectedRow['company_address'] }}">
+      </label>
+      <label class="detail-field">
+        <span>銀行名</span>
+        <input type="text" name="bank_name" value="{{ $selectedRow['bank_name'] ?? '' }}">
+      </label>
+      <label class="detail-field detail-field-wide">
+        <span>口座情報</span>
+        <input type="text" name="bank_account" value="{{ $selectedRow['bank_account'] ?? '' }}">
       </label>
 
       <label class="detail-field">

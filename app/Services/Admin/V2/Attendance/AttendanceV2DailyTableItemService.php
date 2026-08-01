@@ -8,8 +8,7 @@ class AttendanceV2DailyTableItemService
 {
     public function __construct(
         private readonly AttendanceV2DailyService $dailyService,
-    ) {
-    }
+    ) {}
 
     /**
      * @param list<string> $timeCardKeys
@@ -68,7 +67,7 @@ class AttendanceV2DailyTableItemService
                     'label' => $value,
                 ];
             })
-            ->filter(static fn (array $row): bool => $row['value'] !== '')
+            ->filter(static fn(array $row): bool => $row['value'] !== '')
             ->unique('value')
             ->values()
             ->all();

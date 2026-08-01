@@ -13,7 +13,7 @@ class SalesV2Service
     public function summary(string $targetMonth, string $companyId): array
     {
         $normalizedMonth = $this->normalizeTargetMonth($targetMonth);
-        $start = CarbonImmutable::createFromFormat('Y-m', $normalizedMonth)->startOfMonth();
+        $start = CarbonImmutable::createFromFormat('Y-m-d', $normalizedMonth . '-01')->startOfMonth();
         $end = $start->addMonth();
 
         $insuranceExpr = implode(' + ', [
@@ -27,13 +27,13 @@ class SalesV2Service
         $expenseExpr = "SUM(CASE WHEN je.credit_item_name = N'店舗経費' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
         $personalTransferExpr = "SUM(CASE WHEN je.credit_account_title = N'窓口収入' AND je.credit_item_name = N'個人振込' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
         $totalExpr = implode(' + ', [$insuranceExpr, $counterExpr, $selfPayExpr, $personalTransferExpr]);
-        $generalLabel = "\u{4E00}\u{822C}\u{4FDD}\u{967A}\u{8ACB}\u{6C42}";
-        $lateElderlyLabel = "\u{5F8C}\u{671F}\u{9AD8}\u{9F62}\u{4FDD}\u{967A}\u{8ACB}\u{6C42}";
-        $aidLabel = "\u{533B}\u{7642}\u{52A9}\u{6210}\u{8ACB}\u{6C42}";
-        $counterTitle = "\u{7A93}\u{53E3}\u{53CE}\u{5165}";
-        $personalTransferLabel = "\u{500B}\u{4EBA}\u{632F}\u{8FBC}";
-        $selfPayLabel = "\u{81EA}\u{8CBB}";
-        $expenseLabel = "\u{5E97}\u{8217}\u{7D4C}\u{8CBB}";
+        $generalLabel = "一般保険請求";
+        $lateElderlyLabel = "後期高齢保険請求";
+        $aidLabel = "医療助成請求";
+        $counterTitle = "窓口収入";
+        $personalTransferLabel = "個人振込";
+        $selfPayLabel = "自費";
+        $expenseLabel = "店舗経費";
 
         $generalExpr = "SUM(CASE WHEN je.debit_item_name = N'{$generalLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
         $lateElderlyExpr = "SUM(CASE WHEN je.debit_item_name = N'{$lateElderlyLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
@@ -41,9 +41,9 @@ class SalesV2Service
         $insuranceExpr = implode(' + ', [$generalExpr, $lateElderlyExpr, $aidExpr]);
         $counterExpr = "SUM(CASE WHEN je.credit_account_title = N'{$counterTitle}' AND je.credit_item_name <> N'{$personalTransferLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
         $personalTransferExpr = "SUM(CASE WHEN je.credit_account_title = N'{$counterTitle}' AND je.credit_item_name = N'{$personalTransferLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $selfPayExpr = "SUM(CASE WHEN je.credit_item_name = N'{$selfPayLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
+        $selfPayExpr = "SUM(CASE WHEN je.credit_account_title = N'自費収入' AND je.debit_account_title = N'現金' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
         $expenseExpr = "SUM(CASE WHEN je.credit_item_name = N'{$expenseLabel}' THEN ISNULL(je.credit_amount, 0) ELSE 0 END)";
-        $bankDepositExpr = "{$counterExpr} + {$personalTransferExpr} + {$selfPayExpr} - {$expenseExpr}";
+        $bankDepositExpr = "{$counterExpr} + {$personalTransferExpr} + {$selfPayExpr} - {$expenseExpr} - {$personalTransferExpr}";
         $totalExpr = implode(' + ', [$insuranceExpr, $counterExpr, $selfPayExpr, $personalTransferExpr]);
 
         $query = DB::connection('sqlsrv')
@@ -60,7 +60,11 @@ class SalesV2Service
             })
             ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 's.company_id')
             ->where('je.month_date', '>=', $start->format('Y-m-d'))
-            ->where('je.month_date', '<', $end->format('Y-m-d'));
+            ->where('je.month_date', '<', $end->format('Y-m-d'))
+            ->where(function ($query): void {
+                $query->where('d.has_receipt', true)
+                    ->orWhere('d.has_receipt', 1);
+            });
 
         if ($companyId !== '') {
             $query->whereRaw('LTRIM(RTRIM(CAST(c.company_id AS NVARCHAR(255)))) = ?', [$companyId]);
@@ -100,12 +104,13 @@ class SalesV2Service
                     'total_amount' => (float) ($row->total_amount ?? 0),
                 ];
             })
+            ->filter(static fn(array $row): bool => !($row['department_name'] === '' && (float) $row['total_amount'] === 0.0))
             ->values()
             ->all();
 
         $grandTotal = array_reduce(
             $rows,
-            static fn (float $carry, array $row): float => $carry + (float) ($row['total_amount'] ?? 0),
+            static fn(float $carry, array $row): float => $carry + (float) ($row['total_amount'] ?? 0),
             0.0
         );
 
@@ -157,7 +162,7 @@ class SalesV2Service
         }
 
         try {
-            return CarbonImmutable::createFromFormat('Y-m', $value)->format('Y-m');
+            return CarbonImmutable::createFromFormat('Y-m-d', $value . '-01')->format('Y-m');
         } catch (\Throwable) {
             return now()->format('Y-m');
         }

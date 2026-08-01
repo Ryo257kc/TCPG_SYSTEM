@@ -4,6 +4,7 @@ namespace App\Services\Admin\V2\Master;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class StaffV2Service
 {
@@ -13,16 +14,26 @@ class StaffV2Service
     /** @var array<string, bool> */
     private array $columnExistsCache = [];
 
-    public function list(string $keyword, string $employmentFilter = 'active'): array
+    /** @var list<array{value:string,key:string,label:string,mayor:string,company_id:string,company_name:string}>|null */
+    private ?array $residentSubmissionOptions = null;
+
+    /** @var array<string, bool> */
+    private array $tableColumnExistsCache = [];
+
+    public function list(string $keyword, string $employmentFilter = 'active', string $companyFilter = ''): array
     {
+        $companyFilter = trim($companyFilter);
         $query = DB::connection('sqlsrv')->table('dbo.mx_staffs as ms')
             ->leftJoin('dbo.mx_stores as st', 'ms.section', '=', 'st.store_code')
+            ->leftJoin('dbo.mx_companies as co', 'st.company_id', '=', 'co.company_id')
             ->select([
                 DB::raw('ms.staff_id as staff_id'),
                 'ms.staff_name',
                 DB::raw('ms.staff_name_furi as staff_name_kana'),
                 DB::raw('ms.section as store_code'),
                 DB::raw('st.store_name as store_name'),
+                DB::raw('st.company_id as company_id'),
+                DB::raw('co.company_name as company_name'),
                 DB::raw('ms.employment as employment_status'),
                 DB::raw('ms.is_store_management_user as is_store_manager'),
                 'ms.is_daily_report_user',
@@ -45,12 +56,18 @@ class StaffV2Service
                 ->whereDate('ms.tai_date', '<', now()->toDateString());
         }
 
+        if ($companyFilter !== '') {
+            $query->whereRaw('LTRIM(RTRIM(CAST(st.company_id AS nvarchar(50)))) = ?', [$companyFilter]);
+        }
+
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword): void {
-                $q->where('ms.staff_code', 'like', '%' . $keyword . '%')
-                    ->orWhere('ms.staff_id', 'like', '%' . $keyword . '%')
+                $q->where('ms.staff_id', 'like', '%' . $keyword . '%')
                     ->orWhere('ms.staff_name', 'like', '%' . $keyword . '%')
-                    ->orWhere('ms.section', 'like', '%' . $keyword . '%');
+                    ->orWhere('ms.staff_name_furi', 'like', '%' . $keyword . '%')
+                    ->orWhere('ms.section', 'like', '%' . $keyword . '%')
+                    ->orWhere('st.store_name', 'like', '%' . $keyword . '%')
+                    ->orWhere('co.company_name', 'like', '%' . $keyword . '%');
             });
         }
 
@@ -60,6 +77,8 @@ class StaffV2Service
             'staff_name_kana' => (string) ($r->staff_name_kana ?? ''),
             'store_code' => (string) ($r->store_code ?? ''),
             'store_name' => (string) ($r->store_name ?? ''),
+            'company_id' => (string) ($r->company_id ?? ''),
+            'company_name' => (string) ($r->company_name ?? ''),
             'employment_status' => (string) ($r->employment_status ?? ''),
             'is_store_manager' => (int) ($r->is_store_manager ?? 0),
             'is_daily_report_user' => (int) ($r->is_daily_report_user ?? 0),
@@ -107,6 +126,23 @@ class StaffV2Service
         return $detail;
     }
 
+    public function blankDetail(): array
+    {
+        $columns = Schema::connection('sqlsrv')->getColumnListing('mx_staffs');
+
+        $detail = [];
+        foreach ($columns as $column) {
+            $detail[$column] = '';
+            $detail['_raw_' . $column] = '';
+        }
+        $detail['employment_status'] = '';
+        $detail['_store_name'] = '';
+        $detail['_company_name'] = '';
+        $detail['_age'] = '';
+
+        return $detail;
+    }
+
     /** @return list<array{store_code:string,store_name:string}> */
     public function storeOptions(): array
     {
@@ -129,6 +165,50 @@ class StaffV2Service
             ->all();
     }
 
+    /** @return list<array{value:string,key:string,label:string,mayor:string,company_id:string,company_name:string}> */
+    public function residentSubmissionOptions(): array
+    {
+        if ($this->residentSubmissionOptions !== null) {
+            return $this->residentSubmissionOptions;
+        }
+
+        $companies = DB::connection('sqlsrv')
+            ->table('dbo.mx_companies')
+            ->select(['company_id', 'company_name'])
+            ->get()
+            ->mapWithKeys(static fn ($row): array => [
+                trim((string) ($row->company_id ?? '')) => trim((string) ($row->company_name ?? '')),
+            ]);
+
+        $this->residentSubmissionOptions = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_mayor')
+            ->select(['mayor_no', 'mayor', 'office_no'])
+            ->orderBy('mayor')
+            ->orderBy('office_no')
+            ->get()
+            ->map(function ($row) use ($companies): array {
+                $value = trim((string) ($row->mayor_no ?? ''));
+                $companyId = trim((string) ($row->office_no ?? ''));
+                $mayor = trim((string) ($row->mayor ?? ''));
+                $companyName = trim((string) ($companies[$companyId] ?? ''));
+                $companyLabel = $companyName !== '' ? $companyName : $companyId;
+
+                return [
+                    'value' => $value,
+                    'key' => $this->normalizeMayorKey($value),
+                    'label' => $companyLabel !== '' ? $mayor . ' / ' . $companyLabel : $mayor,
+                    'mayor' => $mayor,
+                    'company_id' => $companyId,
+                    'company_name' => $companyName,
+                ];
+            })
+            ->filter(static fn (array $row): bool => $row['value'] !== '' && $row['mayor'] !== '')
+            ->values()
+            ->all();
+
+        return $this->residentSubmissionOptions;
+    }
+
     public function update(array $values): void
     {
         $staffId = trim((string) ($values['staff_id'] ?? ''));
@@ -142,12 +222,23 @@ class StaffV2Service
                 continue;
             }
 
-            if (in_array($column, ['syaho', 'koyou', 'spouse', 'trial', 'yukyu', 'has_fixed_term', 'oushin_staff', 'front_staff', 'is_accounting_user', 'is_payment_check_user', 'is_visit_management_user', 'is_view_only_user', 'is_store_management_user', 'is_daily_report_user'], true)) {
+            if ($column === 'submission' && !array_key_exists('submission', $values)) {
+                continue;
+            }
+            if (in_array($column, $this->staffInsuranceColumns(), true) && !array_key_exists($column, $values)) {
+                continue;
+            }
+
+            if (in_array($column, $this->booleanColumns(), true)) {
                 $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
                 continue;
             }
 
-            $payload[$column] = $this->nullable($values[$column] ?? null);
+            $value = $this->nullable($values[$column] ?? null);
+            if ($value !== null && in_array($column, $this->numericLikeColumns(), true)) {
+                $value = str_replace(',', '', $value);
+            }
+            $payload[$column] = $value;
         }
 
         if ($payload === []) {
@@ -158,6 +249,90 @@ class StaffV2Service
             ->table('dbo.mx_staffs')
             ->where('staff_id', $staffId)
             ->update($payload);
+    }
+
+    public function create(array $values): void
+    {
+        $staffId = trim((string) ($values['staff_id'] ?? ''));
+        if ($staffId === '') {
+            return;
+        }
+
+        $exists = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('staff_id', $staffId)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages(['staff_id' => 'このスタッフIDは既に登録されています。']);
+        }
+
+        $payload = [];
+        if ($this->hasColumn('staff_id')) {
+            $payload['staff_id'] = $staffId;
+        }
+
+        foreach ($this->editableColumns() as $column) {
+            if (!$this->hasColumn($column)) {
+                continue;
+            }
+
+            if ($column === 'submission' && !array_key_exists('submission', $values)) {
+                continue;
+            }
+            if (in_array($column, $this->staffInsuranceColumns(), true) && !array_key_exists($column, $values)) {
+                continue;
+            }
+
+            if (in_array($column, $this->booleanColumns(), true)) {
+                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
+                continue;
+            }
+
+            $value = $this->nullable($values[$column] ?? null);
+            if ($value !== null && in_array($column, $this->numericLikeColumns(), true)) {
+                $value = str_replace(',', '', $value);
+            }
+            $payload[$column] = $value;
+        }
+
+        DB::connection('sqlsrv')->table('dbo.mx_staffs')->insert($payload);
+    }
+
+    public function updateSubmission(array $values): void
+    {
+        $this->updateStaffColumns($values, ['submission', 'addressee_no']);
+    }
+
+    public function updateInsurance(array $values): void
+    {
+        $this->updateStaffColumns($values, $this->staffInsuranceColumns());
+    }
+
+    private function updateStaffColumns(array $values, array $columns): void
+    {
+        $staffId = trim((string) ($values['staff_id'] ?? ''));
+        if ($staffId === '') {
+            return;
+        }
+
+        $payload = [];
+        foreach ($columns as $column) {
+            if (!$this->hasColumn($column)) {
+                continue;
+            }
+
+            if (in_array($column, $this->booleanColumns(), true)) {
+                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
+                continue;
+            }
+
+            $payload[$column] = $this->nullable($values[$column] ?? null);
+        }
+
+        if ($payload !== []) {
+            DB::connection('sqlsrv')->table('dbo.mx_staffs')->where('staff_id', $staffId)->update($payload);
+        }
     }
 
     public function relatedRows(string $staffId, string $table, array $orderColumns = []): array
@@ -189,98 +364,202 @@ class StaffV2Service
         return ['columns' => $columns, 'rows' => $rows];
     }
 
-    public function fieldLabels(): array
+    public function basicShiftRows(string $staffId): array
+    {
+        return $this->tableRows('mx_kihon_shifts', $staffId, ['shift_no'], 'sqlsrv', 'staff_name');
+    }
+
+    public function kihonRows(string $staffId): array
+    {
+        return $this->tableRows('mx_kihon', $staffId, ['decision_date', 'kihon_no'], 'sqlsrv_payroll');
+    }
+
+    public function shahoRows(string $staffId): array
+    {
+        return $this->tableRows('mx_staff_shou', $staffId, ['raise_year', 'staff_shou_id'], 'sqlsrv_payroll');
+    }
+
+    public function residentRows(string $staffId): array
+    {
+        return $this->tableRows('mx_resident', $staffId, ['target_month', 'resident_no'], 'sqlsrv_payroll');
+    }
+
+    public function fuyoRows(string $staffId): array
+    {
+        return $this->tableRows('mx_fuyo', $staffId, ['registration_date', 'fuyo_no'], 'sqlsrv_payroll');
+    }
+
+    public function createKihon(array $values): void
+    {
+        $this->insertRow('mx_kihon', $values, $this->kihonColumns(), 'sqlsrv_payroll');
+    }
+
+    public function updateKihon(array $values): void
+    {
+        $this->updateRow('mx_kihon', 'kihon_no', $values['kihon_no'] ?? '', $values, $this->kihonColumns(), 'sqlsrv_payroll');
+    }
+
+    public function deleteKihon(array $values): void
+    {
+        $this->deleteRow('mx_kihon', 'kihon_no', $values['kihon_no'] ?? '', 'sqlsrv_payroll');
+    }
+
+    public function createShaho(array $values): void
+    {
+        $this->insertRow('mx_staff_shou', $values, $this->shahoColumns(), 'sqlsrv_payroll');
+    }
+
+    public function updateShaho(array $values): void
+    {
+        $this->updateRow('mx_staff_shou', 'staff_shou_id', $values['staff_shou_id'] ?? '', $values, $this->shahoColumns(), 'sqlsrv_payroll');
+    }
+
+    public function deleteShaho(array $values): void
+    {
+        $this->deleteRow('mx_staff_shou', 'staff_shou_id', $values['staff_shou_id'] ?? '', 'sqlsrv_payroll');
+    }
+
+    public function createResident(array $values): void
+    {
+        $this->insertRow('mx_resident', $this->residentValues($values), $this->residentColumns(), 'sqlsrv_payroll');
+    }
+
+    public function updateResident(array $values): void
+    {
+        $this->updateRow('mx_resident', 'resident_no', $values['resident_no'] ?? '', $this->residentValues($values), $this->residentColumns(), 'sqlsrv_payroll');
+    }
+
+    public function deleteResident(array $values): void
+    {
+        $this->deleteRow('mx_resident', 'resident_no', $values['resident_no'] ?? '', 'sqlsrv_payroll');
+    }
+
+    public function createFuyo(array $values): void
+    {
+        $this->insertRow('mx_fuyo', $values, $this->fuyoColumns(), 'sqlsrv_payroll');
+    }
+
+    public function updateFuyo(array $values): void
+    {
+        $this->updateRow('mx_fuyo', 'fuyo_no', $values['fuyo_no'] ?? '', $values, $this->fuyoColumns(), 'sqlsrv_payroll');
+    }
+
+    public function deleteFuyo(array $values): void
+    {
+        $this->deleteRow('mx_fuyo', 'fuyo_no', $values['fuyo_no'] ?? '', 'sqlsrv_payroll');
+    }
+
+    public function createBasicShift(array $values): void
+    {
+        $this->insertRow('mx_kihon_shifts', $this->basicShiftValues($values), $this->basicShiftColumns(), 'sqlsrv');
+    }
+
+    public function updateBasicShift(array $values, bool $clear): void
+    {
+        $payload = $clear ? array_fill_keys(['shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section'], null) : $this->basicShiftValues($values);
+        $this->updateRow('mx_kihon_shifts', 'shift_no', $values['shift_no'] ?? '', $payload, array_keys($payload), 'sqlsrv');
+    }
+
+    private function tableRows(string $table, string $staffId, array $orderColumns, string $connection, string $staffColumn = 'staff_id'): array
+    {
+        if (!Schema::connection($connection)->hasTable($table)) {
+            return [];
+        }
+
+        $columns = Schema::connection($connection)->getColumnListing($table);
+        if (!in_array($staffColumn, $columns, true)) {
+            return [];
+        }
+
+        $query = DB::connection($connection)->table('dbo.' . $table)->where($staffColumn, $staffId);
+        foreach ($orderColumns as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderByDesc($column);
+            }
+        }
+
+        return $query->get()->map(function ($row) use ($columns): array {
+            $mapped = [];
+            foreach ($columns as $column) {
+                $rawValue = $row->{$column} ?? null;
+                $mapped[$column] = $this->normalizeValue($rawValue);
+                $mapped['_raw_' . $column] = $this->rawValue($rawValue);
+            }
+            return $mapped;
+        })->all();
+    }
+
+    private function insertRow(string $table, array $values, array $columns, string $connection): void
+    {
+        $payload = $this->payloadFor($table, $values, $columns, $connection, true);
+        if ($payload !== []) {
+            DB::connection($connection)->table('dbo.' . $table)->insert($payload);
+        }
+    }
+
+    private function updateRow(string $table, string $idColumn, mixed $idValue, array $values, array $columns, string $connection): void
+    {
+        $idValue = trim((string) $idValue);
+        if ($idValue === '') {
+            return;
+        }
+
+        $payload = $this->payloadFor($table, $values, $columns, $connection, false);
+        if ($payload !== []) {
+            DB::connection($connection)->table('dbo.' . $table)->where($idColumn, $idValue)->update($payload);
+        }
+    }
+
+    private function deleteRow(string $table, string $idColumn, mixed $idValue, string $connection): void
+    {
+        $idValue = trim((string) $idValue);
+        if ($idValue !== '') {
+            DB::connection($connection)->table('dbo.' . $table)->where($idColumn, $idValue)->delete();
+        }
+    }
+
+    private function payloadFor(string $table, array $values, array $columns, string $connection, bool $includeStaffId): array
+    {
+        $payload = [];
+        foreach ($columns as $column) {
+            if (!$this->tableHasColumn($connection, $table, $column)) {
+                continue;
+            }
+            if ($column === 'staff_id' && !$includeStaffId) {
+                continue;
+            }
+
+            if (in_array($column, ['deduction_target', 'widow'], true)) {
+                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
+                continue;
+            }
+
+            $value = $this->nullable($values[$column] ?? null);
+            if ($value !== null && in_array($column, $this->numericLikeColumns(), true)) {
+                $value = str_replace(',', '', $value);
+            }
+            $payload[$column] = $value;
+        }
+
+        return $payload;
+    }
+
+    private function residentValues(array $values): array
+    {
+        $values['target_month'] = $this->normalizeMonthStart($values['target_month'] ?? null);
+        return $values;
+    }
+
+    private function basicShiftValues(array $values): array
     {
         return [
-            'submission' => '住民税提出先',
-            'is_accounting_user' => '経理',
-            'is_payment_check_user' => '入金確認',
-            'is_visit_management_user' => '往診管理',
-            'is_view_only_user' => '閲覧権限',
-            'staff_id' => 'スタッフID',
-            'staff_code' => 'スタッフコード',
-            'staff_name' => '氏名',
-            'staff_name_furi' => '氏名カナ',
-            'display_name' => '表示名',
-            'display_name_ja' => '表示名',
-            'section' => '店舗コード',
-            '_store_name' => '店舗名',
-            '_company_name' => '会社名',
-            'employment' => '就業状況',
-            'employment_status' => '就業状況',
-            'staff_division' => '雇用区分',
-            'tai_date' => '退社日',
-            'joining_date' => '入社日',
-            'nyu_date' => '入社日',
-            'is_store_management_user' => '店舗管理',
-            'is_daily_report_user' => '店舗施術者',
-            'oushin_staff' => '往診スタッフ',
-            'front_staff' => '店舗システム',
-            'mail' => 'メール',
-            'tel' => '電話番号',
-            'home_tel' => '電話番号',
-            'mobile' => '携帯番号',
-            'mobile_tel' => '携帯番号',
-            'birthday' => '生年月日',
-            '_age' => '年齢',
-            'sex' => '性別',
-            'my_number' => 'マイナンバー',
-            'head_house' => '世帯主',
-            'relationship' => '続柄',
-            'spouse' => '配偶者',
-            'post_num' => '郵便番号',
-            'address_furi' => '住所カナ',
-            'address' => '住所',
-            'address1' => '住所1',
-            'address2' => '住所2',
-            'address_kana' => '住所カナ',
-            'prefecture' => '都道府県',
-            'city' => '市区町村',
-            'building' => '建物名',
-            'bank_name_1' => '銀行名1',
-            'bank_branch_1' => '支店名1',
-            'account_type' => '口座種別1',
-            'account_num' => '口座番号1',
-            'bank_name_2' => '銀行名2',
-            'bank_branch_2' => '支店名2',
-            'account_type2' => '口座種別2',
-            'account_num2' => '口座番号2',
-            'transfer_purpose' => '振込先',
-            'tax_amount' => '税額',
-            'syaho_num' => '健康保険番号',
-            'syaho_seiri_num' => '健保被保険者番号',
-            'kiso_nenkin_num' => '基礎年金番号',
-            'koyou_num' => '雇用保険番号',
-            'syaho' => '社保加入',
-            'koyou' => '雇保加入',
-            'syaho_date' => '社保加入日',
-            'koyou_date' => '雇保加入日',
-            'yukyu_month' => '有休加算月',
-            'yukyu' => '有休あり',
-            'trial' => '試用期間',
-            'has_fixed_term' => '期間の定めあり',
-            'fixed_term_detail' => '期間の定め',
-            'work_schedule_1' => '勤務時間1',
-            'work_schedule_2' => '勤務時間2',
-            'car_km' => '車通勤片道',
-            'traffic_day' => '日額交通費',
-            'traffic_day_tuika' => 'ひなた交通費日額',
-            'working_time' => '所定労働時間（日）',
-            'weekly_working_time' => '所定労働時間（週）',
-            'year_working_time' => '所定労働時間（月）',
-            'business_content' => '業務内容',
-            'percentage_1' => '業務委託割合1',
-            'percentage_2' => '業務委託割合2',
-            'password' => 'パスワード',
-            'memo' => 'メモ',
-            'decision_date' => '決定日',
-            'raise_year' => '改定年',
-            'registration_date' => '登録日',
-            'change_history' => '変更履歴',
-            'target_month' => '対象月',
-            'remaining_day' => '残日数',
-            'date_use' => '使用日',
-            'days_used' => '使用日数',
+            'staff_name' => $values['staff_id'] ?? '',
+            'week' => $values['week'] ?? '',
+            'shift_in' => $values['shift_start'] ?? null,
+            'shift_exit' => $values['shift_exit'] ?? null,
+            'shift_entry' => $values['shift_in_out'] ?? null,
+            'shift_out' => $values['shift_end'] ?? null,
+            'section' => $values['shop_code'] ?? null,
         ];
     }
 
@@ -343,6 +622,7 @@ class StaffV2Service
             'account_type2',
             'account_num2',
             'change_history',
+            'is_admin',
             'oushin_staff',
             'front_staff',
             'is_accounting_user',
@@ -353,6 +633,78 @@ class StaffV2Service
             'is_daily_report_user',
             'memo',
         ];
+    }
+
+    /** @return list<string> */
+    private function staffInsuranceColumns(): array
+    {
+        return ['syaho_num', 'koyou_num', 'syaho_seiri_num', 'kiso_nenkin_num', 'syaho', 'koyou', 'syaho_date', 'koyou_date'];
+    }
+
+    /** @return list<string> */
+    private function booleanColumns(): array
+    {
+        return ['syaho', 'koyou', 'spouse', 'trial', 'yukyu', 'has_fixed_term', 'is_admin', 'oushin_staff', 'front_staff', 'is_accounting_user', 'is_payment_check_user', 'is_visit_management_user', 'is_view_only_user', 'is_store_management_user', 'is_daily_report_user'];
+    }
+
+    /** @return list<string> */
+    private function numericLikeColumns(): array
+    {
+        return ['monthly_salary', 'hourly_pay', 'hourly_salary', 'executive_remu', 'position_allow', 'duties_allow', 'qualification_allow', 'claim_allow', 'traffic_pay', 'adjustment_add', 'rent_subsidies', 'rent_pay', 'adjustment_pay', 'fixed_overtime', 'kenpo_monthly_amo', 'kounen_monthly_amo', 'resident_tax1', 'resident_tax2', 'resident_tax3', 'resident_tax4', 'resident_tax5', 'resident_tax6', 'resident_tax7', 'resident_tax8', 'resident_tax9', 'resident_tax10', 'resident_tax11', 'resident_tax12', 'tax_amount'];
+    }
+
+    /** @return list<string> */
+    private function kihonColumns(): array
+    {
+        return ['staff_id', 'decision_date', 'monthly_salary', 'hourly_pay', 'hourly_salary', 'executive_remu', 'position_allow', 'duties_allow', 'qualification_allow', 'claim_allow', 'traffic_pay', 'adjustment_add', 'rent_subsidies', 'rent_pay', 'adjustment_pay', 'fixed_overtime'];
+    }
+
+    /** @return list<string> */
+    private function shahoColumns(): array
+    {
+        return ['staff_id', 'raise_year', 'kenpo_monthly_amo', 'kounen_monthly_amo', 'kenpo_toukyu', 'kounen_toukyu'];
+    }
+
+    /** @return list<string> */
+    private function residentColumns(): array
+    {
+        return ['staff_id', 'target_month', 'resident_tax1', 'resident_tax2', 'resident_tax3', 'resident_tax4', 'resident_tax5', 'resident_tax6', 'resident_tax7', 'resident_tax8', 'resident_tax9', 'resident_tax10', 'resident_tax11', 'resident_tax12', 'memo'];
+    }
+
+    /** @return list<string> */
+    private function fuyoColumns(): array
+    {
+        return ['staff_id', 'deduction_target', 'fuyo_name_furi', 'fuyo_name', 'fuyo_relationship', 'kyojyu', 'fuyo_address', 'failure_notebook', 'failure_judgment', 'fuyo_birthday', 'fuyo_sex', 'fuyo_my_number', 'fuyo_shunyu', 'registration_date', 'widow'];
+    }
+
+    /** @return list<string> */
+    private function basicShiftColumns(): array
+    {
+        return ['staff_name', 'week', 'shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section'];
+    }
+
+    private function tableHasColumn(string $connection, string $table, string $column): bool
+    {
+        $key = $connection . '.' . $table . '.' . $column;
+        if (!array_key_exists($key, $this->tableColumnExistsCache)) {
+            $this->tableColumnExistsCache[$key] = Schema::connection($connection)->hasColumn($table, $column);
+        }
+
+        return $this->tableColumnExistsCache[$key];
+    }
+
+    private function normalizeMonthStart(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}$/', $value) === 1) {
+            return $value . '-01';
+        }
+
+        return $value;
     }
 
     private function hasColumn(string $column): bool

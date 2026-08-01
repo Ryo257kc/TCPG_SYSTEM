@@ -116,14 +116,24 @@ body.landing-page {
 }
 
 .landing-page .btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 18px;
+    line-height: 1;
+    box-sizing: border-box;
+
     text-decoration: none;
     border-radius: 12px;
-    padding: 12px 18px;
     font-weight: 700;
     border: 0;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+        font-size: 16px;
+    line-height: 1.2;
+    font-weight: 700;
 }
 
 .landing-page .btn-primary {

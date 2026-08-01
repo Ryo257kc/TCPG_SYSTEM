@@ -12,6 +12,12 @@ class PayrollV2OvertimeDeductionService
     ) {
     }
 
+    /**
+     * 残業手当・深夜手当・休日勤務手当・遅早控除・欠勤控除の正本。
+     *
+     * 手当名ごとの保存先列は mx_allowance の amount_column_key を使う。
+     * 計算後は PayrollV2UpdateService::refreshTotals() で最終合計を作り直す。
+     */
     public function recalculate(string $staffId, int $year, int $month, ?string $companyName = null): int
     {
         $staffId = trim($staffId);
@@ -44,6 +50,8 @@ class PayrollV2OvertimeDeductionService
         $isOfficer = mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡') !== false || mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡鬮ｯ諛ｶ・ｽ・｣郢晢ｽｻ繝ｻ・ｱ鬯ｯ・ｩ雋翫ｑ・ｽ・ｽ繝ｻ・ｬ') !== false;
 
         if ($isOfficer) {
+            // Officers do not receive overtime or deduction calculations.
+            $payload = $this->buildPayload(0, 0, 0, 0, 0, $summary, $companyName);
             $updated = (int) DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
@@ -55,9 +63,9 @@ class PayrollV2OvertimeDeductionService
 
         $kihon = $this->kihonService->map($year, $month)[$staffId] ?? [];
 
-        $hourlyRate = $this->num($kihon['hourly_pay'] ?? 0);
+        $hourlyRate = $this->num($kihon['hourly_salary'] ?? 0);
         if ($hourlyRate <= 0) {
-            $hourlyRate = $this->num($kihon['hourly_salary'] ?? 0);
+            $hourlyRate = $this->num($kihon['hourly_pay'] ?? 0);
         }
 
         $monthlySalary = $this->num($kihon['monthly_salary'] ?? 0);
@@ -198,8 +206,8 @@ class PayrollV2OvertimeDeductionService
         $payload[$targets['overtime']] = $this->toInt($overtimeAmount);
         $payload[$targets['night']] = $this->toInt($nightAmount);
         $payload[$targets['holiday']] = $this->toInt($holidayAmount);
-        $payload[$targets['late']] = $this->toInt($lateDeduction);
-        $payload[$targets['absence']] = $this->toInt($absenceDeduction);
+        $payload[$targets['late']] = $this->toNegativeInt($lateDeduction);
+        $payload[$targets['absence']] = $this->toNegativeInt($absenceDeduction);
 
         // Avoid invalid-column update if key is not an actual summary column.
         $safe = [];
@@ -314,5 +322,10 @@ class PayrollV2OvertimeDeductionService
     private function toInt(float $v): int
     {
         return (int) round(max(0.0, $v), 0, PHP_ROUND_HALF_UP);
+    }
+
+    private function toNegativeInt(float $v): int
+    {
+        return -1 * (int) round(max(0.0, $v), 0, PHP_ROUND_HALF_UP);
     }
 }

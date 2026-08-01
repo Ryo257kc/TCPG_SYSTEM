@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Schema;
 
 class AttendanceV2ConfirmedStateService
 {
+    // 勤怠確定済みかどうかを判定するサービス。
+    // 給与側の編集可否判定でも使うため、確定状態の読み取りはここを入口にする。
     public function __construct(
         private readonly AttendanceV2AttendanceStaffService $attendanceStaffService,
     ) {

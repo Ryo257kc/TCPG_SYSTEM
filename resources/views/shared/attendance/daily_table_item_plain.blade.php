@@ -1,18 +1,18 @@
 @php
-    $rows = $rows ?? [];
-    $tableClass = trim((string) ($tableClass ?? 'data-table'));
-    $wrapClass = trim((string) ($wrapClass ?? 'table-wrap'));
-    $rowClassResolver = $rowClassResolver ?? null;
-    $showPaidLeaveUsed = (bool) ($showPaidLeaveUsed ?? false);
-    $showActualScheduled = (bool) ($showActualScheduled ?? false);
-    $showShiftScheduled = (bool) ($showShiftScheduled ?? false);
-    $showChangeScheduled = (bool) ($showChangeScheduled ?? false);
-    $showNightOvertime = (bool) ($showNightOvertime ?? false);
+$rows = $rows ?? [];
+$tableClass = trim((string) ($tableClass ?? 'data-table'));
+$wrapClass = trim((string) ($wrapClass ?? 'table-wrap'));
+$rowClassResolver = $rowClassResolver ?? null;
+$showPaidLeaveUsed = (bool) ($showPaidLeaveUsed ?? false);
+$showActualScheduled = (bool) ($showActualScheduled ?? false);
+$showShiftScheduled = (bool) ($showShiftScheduled ?? false);
+$showChangeScheduled = (bool) ($showChangeScheduled ?? false);
+$showNightOvertime = (bool) ($showNightOvertime ?? false);
 @endphp
 <div class="{{ $wrapClass }}">
-    <table class="{{ $tableClass }}">
+    <table class="{{ $tableClass }} f_size13">
         <colgroup>
-            <col style="width: 60px;">
+            <col style="width: 70px;">
             <col style="width: 40px;">
             <col style="width: 40px;">
             <col style="width: 40px;">
@@ -35,38 +35,47 @@
             <col style="width: 100px;">
         </colgroup>
         <thead>
-        <tr>
-            <th rowspan="2">日付</th>
-            <th colspan="{{ $showPaidLeaveUsed ? 4 : 4 }}"  class="f-sen">勤怠</th>
-            <th colspan="4" class="f-sen">打刻</th>
-            <th colspan="4" class="f-sen">シフト</th>
-            <th colspan="6" class="f-sen">変更実績</th>
-            <th rowspan="2">店舗</th>
-            <th rowspan="2" class="remark-col">備考</th>
-        </tr>
-        <tr>
-            <th>休日<br>区分</th>
-            <th class="att-col-kubun">区分</th>
-            <th class="att-col-time">時間</th>
-            <th class="att-col-paid f-sen">有休</th>
-            <th>始業</th><th>退出</th><th>入出</th><th class="f-sen">終業</th>
-            <th>始業</th><th>退出</th><th>入出</th><th class="f-sen">終業</th>
-            <th>始業</th><th>退出</th><th>入出</th><th>終業</th>
-            <th>残業</th>
-            <th class="f-sen">所定</th>
-        </tr>
+            <tr>
+                <th rowspan="2">日付</th>
+                <th colspan="{{ $showPaidLeaveUsed ? 4 : 4 }}" class="f-sen">勤怠</th>
+                <th colspan="4" class="f-sen">打刻</th>
+                <th colspan="4" class="f-sen">シフト</th>
+                <th colspan="6" class="f-sen">変更実績</th>
+                <th rowspan="2">店舗</th>
+                <th rowspan="2" class="remark-col">備考</th>
+            </tr>
+            <tr>
+                <th>休日<br>区分</th>
+                <th class="att-col-kubun">区分</th>
+                <th class="att-col-time">時間</th>
+                <th class="att-col-paid f-sen">有休</th>
+                <th>始業</th>
+                <th>退出</th>
+                <th>入出</th>
+                <th class="f-sen">終業</th>
+                <th>始業</th>
+                <th>退出</th>
+                <th>入出</th>
+                <th class="f-sen">終業</th>
+                <th>始業</th>
+                <th>退出</th>
+                <th>入出</th>
+                <th>終業</th>
+                <th>残業</th>
+                <th class="f-sen">所定</th>
+            </tr>
         </thead>
         <tbody>
-        @foreach ($rows as $row)
+            @foreach ($rows as $row)
             @php
-                $resolvedRowClass = is_callable($rowClassResolver) ? $rowClassResolver($row) : '';
+            $resolvedRowClass = is_callable($rowClassResolver) ? $rowClassResolver($row) : '';
             @endphp
-            <tr @class([$resolvedRowClass => $resolvedRowClass !== ''])>
+            <tr @class([$resolvedRowClass=> $resolvedRowClass !== ''])>
                 <td>
                     @if (!empty($row['date_url']))
-                        <a href="{{ $row['date_url'] }}">{{ $row['date_label'] ?? '' }}</a>
+                    <a class="btn btn_small" href="{{ $row['date_url'] }}">{{ $row['date_label'] ?? '' }}</a>
                     @else
-                        {{ $row['date_label'] ?? '' }}
+                    {{ $row['date_label'] ?? '' }}
                     @endif
                 </td>
                 <td>{{ $row['holiday_category'] ?? '' }}</td>
@@ -90,7 +99,7 @@
                 <td>{{ $row['work_store'] ?? '' }}</td>
                 <td class="remark-col">{{ $row['timecard_note'] ?? '' }}</td>
             </tr>
-        @endforeach
+            @endforeach
         </tbody>
     </table>
 </div>

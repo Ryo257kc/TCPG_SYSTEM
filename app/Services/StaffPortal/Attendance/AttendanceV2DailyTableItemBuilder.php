@@ -2,6 +2,8 @@
 
 namespace App\Services\StaffPortal\Attendance;
 
+use App\Support\AttendanceTime;
+
 use DateInterval;
 use DatePeriod;
 use DateTimeImmutable;
@@ -66,7 +68,7 @@ class AttendanceV2DailyTableItemBuilder
                     'label' => $value,
                 ];
             })
-            ->filter(static fn (array $row): bool => $row['value'] !== '')
+            ->filter(static fn(array $row): bool => $row['value'] !== '')
             ->unique('value')
             ->values()
             ->all();
@@ -79,9 +81,9 @@ class AttendanceV2DailyTableItemBuilder
     public function rows(array $staffKeys, int $year, int $month): array
     {
         $staffKeys = array_values(array_unique(array_filter(array_map(
-            static fn ($staffKey): string => trim((string) $staffKey),
+            static fn($staffKey): string => trim((string) $staffKey),
             $staffKeys
-        ), static fn (string $staffKey): bool => $staffKey !== '')));
+        ), static fn(string $staffKey): bool => $staffKey !== '')));
 
         if ($staffKeys === [] || $year < 2000 || $month < 1 || $month > 12) {
             return [];
@@ -186,7 +188,7 @@ class AttendanceV2DailyTableItemBuilder
                 'actual_leave' => $this->formatTime($card->actual_leave ?? null),
                 'actual_break_out' => $this->formatTime($card->actual_break_out ?? null),
                 'actual_end' => $this->formatTime($card->actual_end ?? null),
-                'actual_scheduled' => $this->calculateScheduled(
+                'actual_scheduled_old' => $this->calculateScheduled(
                     $card->actual_start ?? null,
                     $card->actual_leave ?? null,
                     $card->actual_break_out ?? null,
@@ -206,6 +208,7 @@ class AttendanceV2DailyTableItemBuilder
                 'night_overtime' => $this->formatNumber($card->night_overtime ?? null),
                 'timecard_note' => trim((string) ($card->timecard_note ?? '')),
                 'return_note' => trim((string) ($card->return_note ?? '')),
+                'is_returned' => ((int) ($card->is_returned ?? 0)) === 1,
                 'staff_request' => trim((string) ($card->staff_request ?? '')),
                 'has_staff_approval' => $this->hasApprovalValue($card->staff_request ?? null) ? '1' : '0',
                 'has_manager_approval' => $this->hasApprovalValue($card->manager_approval ?? null) ? '1' : '0',
@@ -285,6 +288,9 @@ class AttendanceV2DailyTableItemBuilder
         if ($text === '') {
             return '';
         }
+        if (AttendanceTime::isZeroPlaceholder($text)) {
+            return '';
+        }
 
         if (preg_match('/^\d+(\.\d+)?$/', $text) === 1) {
             return $this->formatNumber($value);
@@ -326,43 +332,7 @@ class AttendanceV2DailyTableItemBuilder
 
     private function parseTimeMinutes(mixed $value): ?int
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        if (preg_match('/^\d+(\.\d+)?$/', $text) === 1) {
-            $numeric = (float) $text;
-            if ($numeric <= 24) {
-                return (int) round($numeric * 60);
-            }
-
-            $digitsOnly = preg_replace('/\D+/', '', $text);
-            if ($digitsOnly !== null && preg_match('/^\d{3,4}$/', $digitsOnly) === 1) {
-                $hours = (int) substr($digitsOnly, 0, -2);
-                $minutes = (int) substr($digitsOnly, -2);
-                if ($hours < 24 && $minutes < 60) {
-                    return ($hours * 60) + $minutes;
-                }
-            }
-
-            return null;
-        }
-
-        $normalized = str_ireplace(['AM', 'PM'], [' AM ', ' PM '], $text);
-        $ts = strtotime('2000-01-01 ' . $normalized);
-        if ($ts === false) {
-            $ts = strtotime($normalized);
-        }
-        if ($ts === false) {
-            return null;
-        }
-
-        return ((int) date('G', $ts) * 60) + (int) date('i', $ts);
+        return AttendanceTime::parseMinutes($value);
     }
 
     private function minutesBetween(int $startMinutes, int $endMinutes): int

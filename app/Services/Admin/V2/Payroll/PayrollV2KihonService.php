@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 class PayrollV2KihonService
 {
     /** @return array<string, array<string, mixed>> */
+
+    // 基本マスタ表示
     public function map(?int $year = null, ?int $month = null): array
     {
         $rows = DB::connection('sqlsrv_payroll')
@@ -23,43 +25,39 @@ class PayrollV2KihonService
             }
             $groups[$staffId][] = $row;
         }
-
-        $targetSep = $this->targetSeptember($year, $month);
+        $targetDate = $this->targetPaymentMonthStart($year, $month);
 
         $map = [];
         foreach ($groups as $staffId => $list) {
-            $map[$staffId] = $this->pickByDecisionDate($list, $targetSep);
+            $map[$staffId] = $this->pickByDecisionDate($list, $targetDate);
         }
 
         return $map;
     }
 
     /** @param list<array<string,mixed>> $rows */
-    private function pickByDecisionDate(array $rows, ?\DateTimeImmutable $targetSep): array
+    private function pickByDecisionDate(array $rows, ?\DateTimeImmutable $targetDate): array
     {
         if ($rows === []) {
             return [];
         }
-        if ($targetSep === null) {
+
+        if ($targetDate === null) {
             return $rows[0];
         }
 
-        $anchor = null;
         foreach ($rows as $row) {
             $d = $this->toDate($row['decision_date'] ?? null);
             if ($d === null) {
                 continue;
             }
-            if ((int)$d->format('Y') === (int)$targetSep->format('Y') && (int)$d->format('n') === 9) {
+
+            if ($d->format('Y-m-d') < $targetDate->format('Y-m-d')) {
                 return $row;
-            }
-            if ($d->format('Y-m-d') <= $targetSep->format('Y-m-d')) {
-                $anchor = $row;
-                break;
             }
         }
 
-        return $anchor ?? $rows[0];
+        return $rows[0];
     }
 
     private function targetSeptember(?int $year, ?int $month): ?\DateTimeImmutable
@@ -71,6 +69,14 @@ class PayrollV2KihonService
         return new \DateTimeImmutable(sprintf('%04d-09-30', $y));
     }
 
+    private function targetPaymentMonthStart(?int $year, ?int $month): ?\DateTimeImmutable
+    {
+        if ($year === null || $month === null) {
+            return null;
+        }
+
+        return new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+    }
     private function toDate(mixed $v): ?\DateTimeImmutable
     {
         if ($v === null) {

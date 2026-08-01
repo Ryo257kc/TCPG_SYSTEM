@@ -27,6 +27,7 @@ class PaidLeaveV2Controller extends Controller
                 DB::raw('LTRIM(RTRIM(CAST(ms.staff_id as nvarchar(50)))) as staff_id'),
                 'ms.staff_name',
                 'ms.staff_division',
+                'ms.yukyu',
                 DB::raw('st.store_name as store_name'),
                 DB::raw('ms.nyu_date as join_date'),
                 DB::raw('ms.tai_date as retire_date'),
@@ -43,7 +44,10 @@ class PaidLeaveV2Controller extends Controller
             })
             ->whereNotNull('ms.staff_division')
             ->where(DB::raw("LTRIM(RTRIM(CAST(ms.staff_division as nvarchar(50))))"), '<>', '')
-            ->where(DB::raw("LTRIM(RTRIM(CAST(ms.staff_division as nvarchar(50))))"), 'not like', '%業務委託%')
+            ->whereNotIn(
+                DB::raw("LOWER(LTRIM(RTRIM(CAST(ISNULL(ms.yukyu, '') as nvarchar(50)))))"),
+                ['', '0', 'false', 'no', 'off', 'なし', '無', 'null']
+            )
             ->where(DB::raw("LTRIM(RTRIM(CAST(ms.staff_division as nvarchar(50))))"), '<>', '役員')
             ->orderByRaw("
                 CASE
@@ -59,7 +63,9 @@ class PaidLeaveV2Controller extends Controller
                 $staffName = trim((string) ($row->staff_name ?? ''));
                 $storeName = trim((string) ($row->store_name ?? ''));
                 $retireDate = trim((string) ($row->retire_date ?? ''));
+                $division = trim((string) ($row->staff_division ?? ''));
                 $isRetired = $retireDate !== '';
+                $isOutsource = str_contains($division, '業務委託');
 
                 $label = $staffName !== '' ? $staffName : $staffId;
                 if ($staffId !== '') {
@@ -68,7 +74,7 @@ class PaidLeaveV2Controller extends Controller
                 if ($storeName !== '') {
                     $label .= ' / ' . $storeName;
                 }
-                $label .= $isRetired ? '（退職）' : '（在職）';
+                $label .= $isOutsource ? '（業務委託）' : ($isRetired ? '（退職）' : '（在職）');
 
                 return [
                     'staff_id' => $staffId,

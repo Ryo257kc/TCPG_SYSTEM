@@ -21,7 +21,10 @@ class PayrollV2FuyoService
             return 0;
         }
 
-        $targetYear = (int) substr($paymentDate, 0, 4);
+        $targetWorkMonth = (new \DateTimeImmutable($paymentDate))
+            ->modify('first day of previous month');
+
+        $targetYear = (int) $targetWorkMonth->format('Y');
         $columns = Schema::connection($connection)->getColumnListing('mx_fuyo');
         if ($columns === []) {
             return 0;
@@ -36,7 +39,7 @@ class PayrollV2FuyoService
             ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->when(
                 $registrationDateColumn !== null,
-                fn ($query) => $query->whereRaw('YEAR([' . $registrationDateColumn . ']) = ?', [$targetYear])
+                fn($query) => $query->whereRaw('YEAR([' . $registrationDateColumn . ']) = ?', [$targetYear])
             )
             ->get();
 

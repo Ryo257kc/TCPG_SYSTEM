@@ -11,6 +11,12 @@ class PayrollV2IncomeTaxService
         return (int) ($this->recalculateWithTrace($staffId, $year, $month)['updated'] ?? 0);
     }
 
+    /**
+     * 月給の所得税を計算する正本。
+     *
+     * 税額は現在の給与明細にある課税合計・社保・雇用保険・扶養人数から計算する。
+     * 呼び出し元は更新後に PayrollV2UpdateService::refreshTotals() を通して控除合計を作り直す。
+     */
     public function recalculateWithTrace(string $staffId, int $year, int $month): array
     {
         $staffId = trim($staffId);
@@ -29,10 +35,12 @@ class PayrollV2IncomeTaxService
             ->first([
                 'kyuyo_sho_no',
                 'taxation_sum',
+                'syaho_sum',
                 'kenpo',
                 'kaigo',
                 'kounen',
                 'koyou',
+                'child_support_funds',
                 'fuyo_sum',
             ]);
 
@@ -52,10 +60,12 @@ class PayrollV2IncomeTaxService
         $kaigo = (float) ($row->kaigo ?? 0);
         $kounen = (float) ($row->kounen ?? 0);
         $koyou = (float) ($row->koyou ?? 0);
+        $childSupportFunds = (float) ($row->child_support_funds ?? 0);
         $taxationSum = (float) ($row->taxation_sum ?? 0);
         $fuyoNum = (int) ($row->fuyo_sum ?? 0);
 
-        $syahoSum = $kenpo + $kaigo + $kounen + $koyou;
+        $fieldSyahoSum = $kenpo + $kaigo + $childSupportFunds + $kounen + $koyou;
+        $syahoSum = is_numeric($row->syaho_sum ?? null) ? (float) $row->syaho_sum : $fieldSyahoSum;
         $syahoDeductionSum = $taxationSum - $syahoSum;
         if ($syahoDeductionSum < 0) {
             $syahoDeductionSum = 0;
@@ -71,13 +81,15 @@ class PayrollV2IncomeTaxService
             'kaigo' => $kaigo,
             'kounen' => $kounen,
             'koyou' => $koyou,
+            'child_support_funds' => $childSupportFunds,
+            'field_syaho_sum' => $fieldSyahoSum,
             'syaho_sum' => $syahoSum,
             'syaho_deduction_sum' => $syahoDeductionSum,
             'fuyo_sum' => $fuyoNum,
         ];
 
         $incomeTax = 0;
-        if (mb_strpos($division, '業務委託') === false) {
+        if (!str_contains($division, '業務委託')) {
             if (mb_strpos($taxAmount, '乙欄') !== false) {
                 $calc = $this->calcOtsu($syahoDeductionSum);
                 $incomeTax = (int) ($calc['tax'] ?? 0);

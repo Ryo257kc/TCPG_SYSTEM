@@ -1,0 +1,27 @@
+.data-table {
+    width: 100%;
+    /* min-width: 1180px; */
+    border-collapse: collapse;
+    /* font-size: 13px; */
+}
+.data-table th,
+.data-table td {
+    border-bottom: 1px solid #e7eef8;
+    padding: 4px 4px;
+    /* vertical-align: top; */
+    white-space: nowrap;
+}
+.data-table th {
+    background: #f8fbff;
+    color: var(--primary);
+    /* text-align: left; */
+    /* font-size: 12px; */
+}
+.data-table td.num,
+.data-table th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.data-table tr:hover td {
+    background: #fbfdff;
+}

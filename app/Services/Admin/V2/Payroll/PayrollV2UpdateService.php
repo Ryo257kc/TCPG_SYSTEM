@@ -10,10 +10,15 @@ class PayrollV2UpdateService
 {
     public function __construct(
         private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
-    ) {
-    }
+    ) {}
 
-    /** @param array<string,mixed> $values */
+    /**
+     * 給与明細の値を保存し、同じ更新内で最終合計も再計算する。
+     *
+     * 手入力保存や各種反映サービスから呼ぶ入口。ここを通すと rebuildTotals() の合計式も必ず反映される。
+     *
+     * @param array<string,mixed> $values
+     */
     public function save(string $staffId, int $year, int $month, array $values, ?string $companyName = null, bool $bonus = false): int
     {
         $staffId = trim($staffId);
@@ -39,8 +44,11 @@ class PayrollV2UpdateService
             ->first() ?? []);
 
         $merged = array_merge($current, $payload);
+        $commutingCorrections = $this->fixedCommutingCorrections($merged, $payload);
+        $outsourceCorrections = $this->outsourcePayrollCorrections($merged);
+        $merged = array_merge($merged, $commutingCorrections, $outsourceCorrections);
         $derived = $this->rebuildTotals($merged, $companyName);
-        $updatePayload = array_merge($payload, $derived);
+        $updatePayload = array_merge($payload, $commutingCorrections, $outsourceCorrections, $derived);
 
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
@@ -48,6 +56,11 @@ class PayrollV2UpdateService
             ->update($updatePayload);
     }
 
+    /**
+     * 既存の給与明細行を読み直して、最終合計だけを再計算する。
+     *
+     * 雇用保険・所得税など、明細の一部だけを直接更新した後の仕上げとして使う。
+     */
     public function refreshTotals(string $staffId, int $year, int $month, ?string $companyName = null, bool $bonus = false): int
     {
         $staffId = trim($staffId);
@@ -70,12 +83,57 @@ class PayrollV2UpdateService
             return 0;
         }
 
+        $outsourceCorrections = $this->outsourcePayrollCorrections($current);
+        $current = array_merge($current, $outsourceCorrections);
         $derived = $this->rebuildTotals($current, $companyName);
 
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('kyuyo_sho_no', $rowId)
-            ->update($derived);
+            ->update(array_merge($outsourceCorrections, $derived));
+    }
+
+    /**
+     * 賞与明細の値を保存し、同じ更新内で賞与用の最終合計も再計算する。
+     *
+     * 賞与の合計式を変えるときは rebuildBonusTotals() を正本として見る。
+     *
+     * @param array<string,mixed> $values
+     */
+    public function saveBonus(string $staffId, int $year, int $month, array $values): int
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '' || $year < 2000 || $month < 1 || $month > 12) {
+            return 0;
+        }
+
+        $payload = $this->sanitizePayload($values);
+        $row = $this->targetRow($staffId, $year, $month, true);
+        if (!$row || !isset($row->kyuyo_sho_no)) {
+            return 0;
+        }
+
+        $rowId = (int) $row->kyuyo_sho_no;
+        $current = (array) (DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('kyuyo_sho_no', $rowId)
+            ->first() ?? []);
+
+        $merged = array_merge($current, $payload);
+        $outsourceCorrections = $this->outsourcePayrollCorrections($merged);
+        $merged = array_merge($merged, $outsourceCorrections);
+        $derived = $this->rebuildBonusTotals($merged);
+        $updatePayload = array_merge($payload, $outsourceCorrections, $derived);
+
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('kyuyo_sho_no', $rowId)
+            ->update($updatePayload);
+    }
+
+    public function refreshBonusTotals(string $staffId, int $year, int $month): int
+    {
+        return $this->saveBonus($staffId, $year, $month, []);
     }
 
     public function isAttendanceChecked(string $staffId, int $year, int $month): bool
@@ -120,6 +178,7 @@ class PayrollV2UpdateService
         $allowed = array_flip($this->updatableColumns());
         $aliases = $this->columnAliases();
         $textColumns = ['kyuyo_memo'];
+        $negativeEarningColumns = ['late_deduction', 'absence_deduction', 'leave_allowance'];
         $out = [];
 
         foreach ($values as $key => $raw) {
@@ -149,7 +208,11 @@ class PayrollV2UpdateService
                 continue;
             }
 
-            $out[$column] = str_contains($v, '.') ? (float) $v : (int) $v;
+            $amount = str_contains($v, '.') ? (float) $v : (int) $v;
+            if (in_array($column, $negativeEarningColumns, true)) {
+                $amount = -abs($amount);
+            }
+            $out[$column] = $amount;
         }
 
         return $out;
@@ -165,19 +228,26 @@ class PayrollV2UpdateService
         ];
     }
 
-    /** @param array<string,mixed> $row @return array<string,mixed> */
+    // 給与計算フォーム
+    /**
+     * 給与明細の最終合計を作る正本。
+     *
+     * 支給合計、控除合計、課税/非課税、社保控除後、固定賃金・労保対象・社保対象はここで再計算する。
+     * 給与明細を更新する処理は、最後に save() または refreshTotals() を通してこの式に集約する。
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
     private function rebuildTotals(array $row, ?string $companyName = null): array
     {
         $meta = $this->allowanceMetaMap($companyName);
 
-        $manualYakuin = ['officer_com', 'executive_reward', 'allowance_amo_2'];
-        $deductionLikeAllowanceKeys = ['late_deduction', 'absence_deduction', 'leave_allowance'];
+        $manualYakuin = ['allowance_amo_2'];
+        $taxableFallbackAllowanceKeys = ['allowance_amo_4'];
+        $negativeEarningKeys = ['late_deduction', 'absence_deduction', 'leave_allowance'];
 
         $earningKeys = [];
         foreach (array_keys($meta) as $key) {
-            if (in_array($key, $deductionLikeAllowanceKeys, true)) {
-                continue;
-            }
             $earningKeys[$key] = true;
         }
 
@@ -190,6 +260,9 @@ class PayrollV2UpdateService
 
         foreach (array_keys($earningKeys) as $key) {
             $amount = $this->num($row[$key] ?? 0);
+            if (in_array($key, $negativeEarningKeys, true)) {
+                $amount = -abs($amount);
+            }
             if (abs($amount) < 0.0000001) {
                 continue;
             }
@@ -203,6 +276,18 @@ class PayrollV2UpdateService
             $koteiWage = (int) ($flags['kotei_wage'] ?? 0);
             $rouTarget = (int) ($flags['rou_target'] ?? 0);
             $syahoTargetFlag = (int) ($flags['syaho_target'] ?? 0);
+
+            if (
+                in_array($key, $taxableFallbackAllowanceKeys, true)
+                && $taxTarget !== 1
+                && $koteiWage !== 1
+                && $rouTarget !== 1
+                && $syahoTargetFlag !== 1
+            ) {
+                $taxTarget = 1;
+                $rouTarget = 1;
+                $syahoTargetFlag = 1;
+            }
 
             if ($taxTarget !== 1 && $koteiWage !== 1 && $rouTarget !== 1 && $syahoTargetFlag !== 1) {
                 continue;
@@ -228,20 +313,15 @@ class PayrollV2UpdateService
             }
         }
 
-        $syaho = $this->num($row['kenpo'] ?? 0)
-            + $this->num($row['kaigo'] ?? 0)
-            + $this->num($row['kounen'] ?? 0)
-            + $this->num($row['koyou'] ?? 0);
-
-        $deduction = $syaho
-            + $this->num($row['income_tax'] ?? 0)
-            + $this->num($row['resident_tax'] ?? 0)
-            + $this->num($row['rent_cost'] ?? 0)
-            + $this->num($row['adjustment_cost'] ?? 0)
-            + $this->num($row['koujyo_1'] ?? 0);
+        $syaho = $this->socialInsuranceSum($row);
+        $deduction = $this->deductionSum($row, $syaho);
 
         $taxable = max(0.0, round($taxable, 0));
         $nonTaxable = max(0.0, round($nonTaxable, 0));
+        if ($this->isOutsourcePayrollRow($row)) {
+            $rouhoTarget = 0.0;
+            $syahoTarget = 0.0;
+        }
 
         return [
             'taxation_sum' => (int) $taxable,
@@ -257,6 +337,56 @@ class PayrollV2UpdateService
         ];
     }
 
+    /**
+     * 賞与明細の最終合計を作る正本。
+     *
+     * 月給と同じく、賞与側も支給合計・控除合計・社保控除後をここに集約する。
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function rebuildBonusTotals(array $row): array
+    {
+        $bonusAmount = $this->num($row['bonus_amo'] ?? 0);
+        $taxationSum = max(0.0, round($bonusAmount, 0));
+        $notTaxationSum = 0.0;
+        $supplySum = $taxationSum + $notTaxationSum;
+        $isOutsource = $this->isOutsourcePayrollRow($row);
+        $rouhoTargetSum = $isOutsource ? 0.0 : $taxationSum;
+        $syahoSum = $isOutsource ? 0.0 : $this->socialInsuranceSum($row);
+        $deductionSum = $this->deductionSum($row, $syahoSum);
+
+        return [
+            'taxation_sum' => (int) $taxationSum,
+            'not_taxation_sum' => (int) $notTaxationSum,
+            'supply_sum' => (int) $supplySum,
+            'rouho_target_sum' => (int) $rouhoTargetSum,
+            'syaho_sum' => (int) round($syahoSum, 0),
+            'deduction_sum' => (int) round($deductionSum, 0),
+            'syaho_deduction_sum' => (int) round(max(0.0, $taxationSum - $syahoSum), 0),
+        ];
+    }
+
+    /** @param array<string,mixed> $row */
+    private function socialInsuranceSum(array $row): float
+    {
+        return $this->num($row['kenpo'] ?? 0)
+            + $this->num($row['kaigo'] ?? 0)
+            + $this->num($row['child_support_funds'] ?? 0)
+            + $this->num($row['kounen'] ?? 0)
+            + $this->num($row['koyou'] ?? 0);
+    }
+
+    /** @param array<string,mixed> $row */
+    private function deductionSum(array $row, float $socialInsuranceSum): float
+    {
+        return $socialInsuranceSum
+            + $this->num($row['income_tax'] ?? 0)
+            + $this->num($row['resident_tax'] ?? 0)
+            + $this->num($row['rent_cost'] ?? 0)
+            + $this->num($row['adjustment_cost'] ?? 0)
+            + $this->num($row['koujyo_1'] ?? 0);
+    }
     /** @return array<string,array{tax_target:int,kotei_wage:int,rou_target:int,syaho_target:int}> */
     private function allowanceMetaMap(?string $companyName = null): array
     {
@@ -341,6 +471,107 @@ class PayrollV2UpdateService
         return is_numeric($s) ? (float) $s : 0.0;
     }
 
+    /** @param array<string,mixed> $row @return array<string,int> */
+    private function fixedCommutingCorrections(array $row, array $manualPayload = []): array
+    {
+        $staffId = trim((string) ($row['kyuyo_staff_id'] ?? ''));
+        $paymentDate = $this->toDate($row['supply_month'] ?? null);
+        if ($staffId === '' || $paymentDate === null) {
+            return [];
+        }
+
+        $kihon = $this->kihonForPaymentDate($staffId, $paymentDate);
+        $fixedCommuting = $this->num($kihon['traffic_pay'] ?? 0);
+        if ($fixedCommuting <= 0) {
+            return [];
+        }
+        if (array_key_exists('allowance_amo_6', $manualPayload) || array_key_exists('allowance_amo_10', $manualPayload)) {
+            return [];
+        }
+
+        return [
+            'allowance_amo_6' => (int) round($fixedCommuting, 0),
+            'allowance_amo_10' => 0,
+        ];
+    }
+
+    /** @param array<string,mixed> $row @return array<string,int> */
+    private function outsourcePayrollCorrections(array $row): array
+    {
+        if (!$this->isOutsourcePayrollRow($row)) {
+            return [];
+        }
+
+        return [
+            'kenpo' => 0,
+            'kaigo' => 0,
+            'kounen' => 0,
+            'koyou' => 0,
+            'income_tax' => 0,
+            'koyou_office' => 0,
+            'jidou_office' => 0,
+            'rousai_office' => 0,
+            'child_support_funds' => 0,
+            'rouho_target_sum' => 0,
+            'syaho_target_sum' => 0,
+        ];
+    }
+
+    /** @param array<string,mixed> $row */
+    private function isOutsourcePayrollRow(array $row): bool
+    {
+        $staffId = trim((string) ($row['kyuyo_staff_id'] ?? ''));
+        if ($staffId === '') {
+            return false;
+        }
+
+        $division = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
+            ->value('staff_division');
+
+        return str_contains(trim((string) $division), '業務委託');
+    }
+
+    /** @return array<string,mixed> */
+    private function kihonForPaymentDate(string $staffId, \DateTimeImmutable $paymentDate): array
+    {
+        $targetDate = $paymentDate->modify('first day of this month')->format('Y-m-d');
+        $base = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kihon')
+            ->whereRaw('LTRIM(RTRIM(CAST(staff_id as nvarchar(50)))) = ?', [$staffId]);
+
+        $row = (clone $base)
+            ->whereRaw('CONVERT(date, decision_date) < ?', [$targetDate])
+            ->orderByDesc('decision_date')
+            ->first();
+
+        if (!$row) {
+            $row = $base->orderByDesc('decision_date')->first();
+        }
+
+        return (array) ($row ?? []);
+    }
+
+    private function toDate(mixed $value): ?\DateTimeImmutable
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return \DateTimeImmutable::createFromInterface($value);
+        }
+
+        $text = trim((string) ($value ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        $timestamp = strtotime($text);
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable())->setTimestamp($timestamp);
+    }
+
     /** @return list<string> */
     private function updatableColumns(): array
     {
@@ -359,8 +590,8 @@ class PayrollV2UpdateService
         ];
 
         $cached = array_values(array_filter(
-            array_map(static fn ($c) => (string) $c, $columns),
-            static fn ($c) => !in_array($c, $deny, true)
+            array_map(static fn($c) => (string) $c, $columns),
+            static fn($c) => !in_array($c, $deny, true)
         ));
 
         return $cached;

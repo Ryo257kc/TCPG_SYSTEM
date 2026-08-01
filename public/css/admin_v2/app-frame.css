@@ -5,7 +5,12 @@ body {
     color: #1f2937;
     font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
 }
-
+.container {
+    width: min(100%, 1440px);
+    margin: 0 auto;
+    display: grid;
+    gap: 14px;
+}
 .wrap {
     width: min(1440px, 96vw);
     margin: 6px auto 18px;
@@ -35,4 +40,156 @@ body {
     border: 1px solid #d3dff0;
     border-radius: 14px;
     padding: 16px;
+}
+/* ダッシュボード以外で使用 */
+.admin-viewport-panel {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 150px);
+    min-height: 0;
+}
+
+/* input[type="month"],
+input[type="date"],
+input[type="text"],
+input[type="time"],
+textarea,
+select {
+    /* height: 34px; */
+    /* width: 120px; */
+    /* border: 1px solid #c7d2df;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0 10px; */
+    /* min-width: 128px; */
+/* }  */
+.edit-input {
+    /* width: 120px; */
+    max-width: 100%;
+    height: 26px;
+    border: 1px solid #c7d2df;
+    border-radius: 6px;
+    padding: 0 6px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    background: #fff;
+    color: #1f2f46;
+}
+.edit-input.text {
+    text-align: left;
+}
+.edit-only {
+    display: none;
+}
+
+/* ===============================
+   ■ ユーティリティ（使い回し）
+================================ */
+
+/* 余白 */
+.margin_l20 {
+    margin-left: 20px;
+}
+.margin_t20 {
+    margin-top: 20px;
+}
+.margin_b20 {
+    margin-bottom: 20px;
+}
+.margin_r20 {
+    margin-right: 20px;
+}
+
+/* フォントサイズ */
+.f_size11 {
+    font-size: 11px;
+}
+.f_size12 {
+    font-size: 12px;
+}
+.f_size13 {
+    font-size: 13px;
+}
+.f_size14 {
+    font-size: 14px;
+}
+.f_size15 {
+    font-size: 15px;
+}
+
+.f_weight{
+    font-weight: bolder;
+}
+
+/* テキスト配置 */
+.center {
+    text-align: center;
+}
+.left {
+    text-align: left;
+}
+.right {
+    text-align: right;
+}
+
+.f-sen {
+    border-right: 2px solid #1e1a61 !important;
+}
+
+/* ===============================
+   ■ メッセージ系（共通化）
+================================ */
+.status,
+.error,
+.status-message {
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid #e7b286;
+    background: #fff3e4;
+    color: #8f4c1f;
+    font-weight: 700;
+}
+
+/* 成功メッセージ */
+.status {
+    border: 1px solid #7fb58b;
+    background: #eef9f0;
+    color: #1f6b32;
+    margin: 10px 0;
+}
+
+/* エラー */
+.error {
+    border: 1px solid #d66b6b;
+    background: #fff0f0;
+    color: #9b1c1c;
+    margin: 10px 0;
+}
+
+/* 件数なしメッセージ */
+.empty {
+    padding: 16px;
+    color: #596683;
+}
+
+/* 説明 */
+.notice {
+    margin: 0 0 10px;
+    color: #c53030;
+    font-weight: 700;
+    line-height: 1.5;
+    font-size: 13px;
+}
+
+.applied-text {
+    color: #b42318;
+    font-size: 19px;
+    font-weight: 800;
+}
+
+.approved-text {
+    color: #0f766e;
+    font-size: 18px;
+    font-weight: 800;
+    margin-top: 8px;
 }

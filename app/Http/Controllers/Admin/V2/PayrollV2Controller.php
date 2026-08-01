@@ -10,23 +10,28 @@ use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2AttendanceReflectService;
 use App\Services\Admin\V2\Payroll\PayrollV2BonusIncomeTaxCalcService;
 use App\Services\Admin\V2\Payroll\PayrollV2BonusSocialInsuranceService;
+use App\Services\Admin\V2\Payroll\PayrollV2CalculationFlowService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
 use App\Services\Admin\V2\Payroll\PayrollV2DeleteService;
 use App\Services\Admin\V2\Payroll\PayrollV2EmploymentInsuranceService;
 use App\Services\Admin\V2\Payroll\PayrollV2FuyoService;
+use App\Services\Admin\V2\Payroll\PayrollV2HomeVisitAllowanceService;
 use App\Services\Admin\V2\Payroll\PayrollV2IncomeTaxService;
 use App\Services\Admin\V2\Payroll\PayrollV2KihonService;
 use App\Services\Admin\V2\Payroll\PayrollV2MonthService;
 use App\Services\Admin\V2\Payroll\PayrollV2OvertimeDeductionService;
 use App\Services\Admin\V2\Payroll\PayrollV2RecalculateService;
 use App\Services\Admin\V2\Payroll\PayrollV2ResidentService;
+use App\Services\Admin\V2\Payroll\PayrollV2SalesImportService;
+use App\Services\Admin\V2\Payroll\PayrollV2SocialInsuranceAmountService;
 use App\Services\Admin\V2\Payroll\PayrollV2ShahoService;
 use App\Services\Admin\V2\Payroll\PayrollV2StaffMasterService;
 use App\Services\Admin\V2\Payroll\PayrollV2StaffService;
 use App\Services\Admin\V2\Payroll\PayrollV2SummaryService;
 use App\Services\Admin\V2\Payroll\PayrollV2UpdateService;
+use App\Support\JapaneseDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +53,9 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2StaffMasterService $staffMasterService,
         private readonly PayrollV2ShahoService $shahoService,
         private readonly PayrollV2ResidentService $residentService,
+        private readonly PayrollV2SalesImportService $salesImportService,
         private readonly PayrollV2AllowanceLabelService $allowanceLabelService,
+        private readonly PayrollV2CalculationFlowService $calculationFlowService,
         private readonly PayrollV2AttendanceReflectService $attendanceReflectService,
         private readonly AttendanceV2AttendanceStaffService $attendanceStaffService,
         private readonly AttendanceV2ListSummaryService $attendanceListSummaryService,
@@ -58,7 +65,9 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2EmploymentInsuranceService $employmentInsuranceService,
         private readonly PayrollV2FuyoService $fuyoService,
         private readonly PayrollV2IncomeTaxService $incomeTaxService,
+        private readonly PayrollV2SocialInsuranceAmountService $socialInsuranceAmountService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
+        private readonly PayrollV2HomeVisitAllowanceService $homeVisitAllowanceService,
     ) {
     }
 
@@ -76,6 +85,11 @@ class PayrollV2Controller extends Controller
 
         $allowanceEntries = $this->allowanceLabelService->entries();
         $labelOverrides = $this->allowanceLabelService->labelMap();
+        $attendanceLinkMonth = '';
+        $paymentTimestamp = strtotime($selectedPaymentDate);
+        if ($paymentTimestamp !== false) {
+            $attendanceLinkMonth = date('Y-m', strtotime('-1 month', $paymentTimestamp));
+        }
 
         return view('admin_v2.work.payroll.index', [
             'availablePaymentDates' => $availablePaymentDates,
@@ -84,6 +98,7 @@ class PayrollV2Controller extends Controller
             'companyOptions' => $companyOptions,
             'selectedCompanyId' => $selectedCompanyId,
             'selectedStaffId' => $selectedStaffId,
+            'attendanceLinkMonth' => $attendanceLinkMonth,
             'staffRows' => $staffRows,
             'rows' => $rows,
             'allowanceEntries' => $allowanceEntries,
@@ -427,6 +442,9 @@ class PayrollV2Controller extends Controller
 
             $transferAmount = $this->num($summary['supply_sum'] ?? 0)
                 - $this->num($summary['deduction_sum'] ?? 0)
+                - $this->num($summary['adjustment_year_end'] ?? 0)
+                + $this->num($summary['cost_liquidation'] ?? 0)
+                + $this->num($summary['company_advance_cost'] ?? 0)
                 - $this->num($summary['transfer_balance'] ?? 0);
 
             $ledgerRow = [
@@ -439,7 +457,7 @@ class PayrollV2Controller extends Controller
                 'shaho' => $shaho,
                 'bonus_amount' => $this->num($summary['bonus_amo'] ?? 0),
                 'basic_salary' => $this->num($summary['basic_salary'] ?? 0),
-                'officer_com' => $this->num($summary['officer_com'] ?? 0),
+                'allowance_amo_2' => $this->num($summary['allowance_amo_2'] ?? 0),
                 'position_allowance' => $this->num($summary['position_allow'] ?? 0),
                 'qualification_allowance' => $this->num($summary['qualification_allow'] ?? 0),
                 'duties_allowance' => $this->num($kihon['duties_allow'] ?? 0),
@@ -454,6 +472,7 @@ class PayrollV2Controller extends Controller
                 'supply_sum' => $this->num($summary['supply_sum'] ?? 0),
                 'kenpo' => $this->num($summary['kenpo'] ?? 0),
                 'kaigo' => $this->num($summary['kaigo'] ?? 0),
+                'child_support_funds' => $this->num($summary['child_support_funds'] ?? 0),
                 'kounen' => $this->num($summary['kounen'] ?? 0),
                 'koyou' => $this->num($summary['koyou'] ?? 0),
                 'kenpo_monthly_amo' => $shaho['kenpo_monthly_amo'] ?? null,
@@ -553,6 +572,9 @@ class PayrollV2Controller extends Controller
 
             $transferAmount = $this->num($summary['supply_sum'] ?? 0)
                 - $this->num($summary['deduction_sum'] ?? 0)
+                - $this->num($summary['adjustment_year_end'] ?? 0)
+                + $this->num($summary['cost_liquidation'] ?? 0)
+                + $this->num($summary['company_advance_cost'] ?? 0)
                 - $this->num($summary['transfer_balance'] ?? 0);
 
             $ledgerRows[] = [
@@ -565,7 +587,7 @@ class PayrollV2Controller extends Controller
                 'shaho' => $shaho,
                 'bonus_amount' => $this->num($summary['bonus_amo'] ?? 0),
                 'basic_salary' => $this->num($summary['basic_salary'] ?? 0),
-                'officer_com' => $this->num($summary['officer_com'] ?? 0),
+                'allowance_amo_2' => $this->num($summary['allowance_amo_2'] ?? 0),
                 'position_allowance' => $this->num($summary['position_allow'] ?? 0),
                 'qualification_allowance' => $this->num($summary['qualification_allow'] ?? 0),
                 'duties_allowance' => $this->num(($row['kihon']['duties_allow'] ?? 0)),
@@ -580,6 +602,7 @@ class PayrollV2Controller extends Controller
                 'supply_sum' => $this->num($summary['supply_sum'] ?? 0),
                 'kenpo' => $this->num($summary['kenpo'] ?? 0),
                 'kaigo' => $this->num($summary['kaigo'] ?? 0),
+                'child_support_funds' => $this->num($summary['child_support_funds'] ?? 0),
                 'kounen' => $this->num($summary['kounen'] ?? 0),
                 'koyou' => $this->num($summary['koyou'] ?? 0),
                 'kenpo_monthly_amo' => $shaho['kenpo_monthly_amo'] ?? null,
@@ -650,6 +673,730 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function companyBurdenPrint(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+        $selectedMonth = (string) $pageData['selectedMonth'];
+        $rows = (array) $pageData['rows'];
+
+        [$year, $month] = array_map('intval', explode('-', $selectedMonth));
+        $amountKeys = [
+            'kenpo_self',
+            'kenpo_office',
+            'kenpo_total',
+            'kaigo_self',
+            'kaigo_office',
+            'kaigo_total',
+            'kounen_self',
+            'kounen_office',
+            'kounen_total',
+            'jidou_office',
+            'child_support_funds',
+            'self_total',
+            'office_total',
+            'grand_total',
+        ];
+
+        $groupedStores = [];
+        $grandTotals = array_fill_keys($amountKeys, 0.0);
+
+        foreach ($rows as $row) {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            if ($staffId === '') {
+                continue;
+            }
+
+            if (trim((string) ($row['division'] ?? '')) === '業務委託') {
+                continue;
+            }
+
+            $summary = (array) ($row['summary'] ?? []);
+            if ($summary === []) {
+                continue;
+            }
+
+            $staffMaster = (array) ($row['staff_master'] ?? []);
+            $shaho = array_merge(
+                (array) ($row['shaho'] ?? []),
+                $this->socialInsuranceAmountService->loadRatesForStaff($staffId, $selectedPaymentDate)
+            );
+            $amounts = $this->socialInsuranceAmountService->statementAmounts(
+                $summary,
+                $shaho,
+                $this->socialInsuranceAmountService->toDate($staffMaster['birthday'] ?? null),
+                $year,
+                $month
+            );
+
+            if (
+                $this->num($amounts['self_total'] ?? 0) <= 0
+            ) {
+                continue;
+            }
+
+            $companyName = trim((string) ($row['company_name'] ?? ''));
+            $storeCode = trim((string) ($row['store_code'] ?? ''));
+            $storeName = trim((string) ($row['store_name'] ?? ''));
+            $groupKey = $companyName . "\n" . $storeCode . "\n" . $storeName;
+
+            if (!isset($groupedStores[$groupKey])) {
+                $groupedStores[$groupKey] = [
+                    'company_name' => $companyName,
+                    'store_code' => $storeCode,
+                    'store_name' => $storeName,
+                    'rows' => [],
+                    'totals' => array_fill_keys($amountKeys, 0.0),
+                ];
+            }
+
+            $printRow = [
+                'staff_id' => $staffId,
+                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
+                'kenpo_standard' => $amounts['kenpo_standard'],
+                'kounen_standard' => $amounts['kounen_standard'],
+            ] + $amounts;
+
+            $groupedStores[$groupKey]['rows'][] = $printRow;
+
+            foreach ($amountKeys as $key) {
+                $value = $this->num($amounts[$key] ?? 0);
+                $groupedStores[$groupKey]['totals'][$key] += $value;
+                $grandTotals[$key] += $value;
+            }
+        }
+
+        uasort($groupedStores, static function (array $a, array $b): int {
+            return [$a['company_name'], $a['store_code'], $a['store_name']]
+                <=> [$b['company_name'], $b['store_code'], $b['store_name']];
+        });
+
+        return view('admin_v2.work.payroll.company_burden_print', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedCompanyId' => $selectedCompanyId,
+            'selectedMonth' => $selectedMonth,
+            'companyLabel' => $this->resolveCompanyLabel($rows),
+            'groupedStores' => array_values($groupedStores),
+            'grandTotals' => $grandTotals,
+        ]);
+    }
+
+    public function homeVisitSalesPrint(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+        $selectedMonth = (string) $pageData['selectedMonth'];
+
+        [$payrollYear, $payrollMonth] = array_map('intval', explode('-', $selectedMonth));
+        [$salesYear, $salesMonth] = $this->previousYearMonth($payrollYear, $payrollMonth);
+
+        $staffMap = [];
+        foreach ($this->allStaffOptions() as $staff) {
+            $staffId = str_pad(trim((string) ($staff['staff_id'] ?? '')), 3, '0', STR_PAD_LEFT);
+            if ($staffId === '') {
+                continue;
+            }
+
+            $staffMap[$staffId] = [
+                'staff_id' => $staffId,
+                'staff_name' => trim((string) (($staff['staff_name'] ?? '') ?: ($staff['display_name_ja'] ?? ''))),
+                'sakura_private' => 0.0,
+                'sakura_insurance' => 0.0,
+                'sakura_insurance_count' => 0,
+                'sakura_private_count' => 0,
+                'hinata_private' => 0.0,
+                'hinata_insurance' => 0.0,
+                'hinata_insurance_count' => 0,
+                'hinata_private_count' => 0,
+                'home_visit_count' => 0,
+                'home_visit_sales' => 0.0,
+            ];
+        }
+
+        $clinicRows = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_患者名日報 as p')
+            ->join('dbo.T_先生別日報 as d', 'p.患者No', '=', 'd.患者No_t')
+            ->selectRaw("
+            RIGHT('000' + LTRIM(RTRIM(CAST(d.[担当者ID] as nvarchar(20)))), 3) as staff_id,
+            SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN ISNULL(d.[自費], 0) ELSE 0 END) as sakura_private,
+            SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN ISNULL(d.[請求金額], 0) ELSE 0 END) as sakura_insurance,
+            SUM(CASE WHEN (ISNULL(d.[請求金額], 0) + ISNULL(d.[保険負担], 0)) <> 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN 1 ELSE 0 END) as sakura_insurance_count,
+            SUM(CASE WHEN p.[割合] = N'自' AND p.[店舗] = N'さくら鍼灸整骨院' THEN 1 ELSE 0 END) as sakura_private_count,
+            SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN ISNULL(d.[自費], 0) ELSE 0 END) as hinata_private,
+            SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN ISNULL(d.[請求金額], 0) ELSE 0 END) as hinata_insurance,
+            SUM(CASE WHEN (ISNULL(d.[請求金額], 0) + ISNULL(d.[保険負担], 0)) <> 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN 1 ELSE 0 END) as hinata_insurance_count,
+            SUM(CASE WHEN p.[割合] = N'自' AND p.[店舗] = N'ひなた鍼灸整骨院' THEN 1 ELSE 0 END) as hinata_private_count
+        ")
+            ->whereRaw('YEAR(p.[日付]) = ?', [$salesYear])
+            ->whereRaw('MONTH(p.[日付]) = ?', [$salesMonth])
+            ->groupByRaw("RIGHT('000' + LTRIM(RTRIM(CAST(d.[担当者ID] as nvarchar(20)))), 3)")
+            ->get();
+
+        foreach ($clinicRows as $clinicRow) {
+            $staffId = trim((string) ($clinicRow->staff_id ?? ''));
+            if ($staffId === '') {
+                continue;
+            }
+
+            if (!isset($staffMap[$staffId])) {
+                $staffMap[$staffId] = [
+                    'staff_id' => $staffId,
+                    'staff_name' => '',
+                    'sakura_private' => 0.0,
+                    'sakura_insurance' => 0.0,
+                    'sakura_insurance_count' => 0,
+                    'sakura_private_count' => 0,
+                    'hinata_private' => 0.0,
+                    'hinata_insurance' => 0.0,
+                    'hinata_insurance_count' => 0,
+                    'hinata_private_count' => 0,
+                    'home_visit_count' => 0,
+                    'home_visit_sales' => 0.0,
+                ];
+            }
+
+            $staffMap[$staffId]['sakura_private'] = $this->num($clinicRow->sakura_private ?? 0);
+            $staffMap[$staffId]['sakura_insurance'] = $this->num($clinicRow->sakura_insurance ?? 0);
+            $staffMap[$staffId]['sakura_insurance_count'] = (int) $this->num($clinicRow->sakura_insurance_count ?? 0);
+            $staffMap[$staffId]['sakura_private_count'] = (int) $this->num($clinicRow->sakura_private_count ?? 0);
+            $staffMap[$staffId]['hinata_private'] = $this->num($clinicRow->hinata_private ?? 0);
+            $staffMap[$staffId]['hinata_insurance'] = $this->num($clinicRow->hinata_insurance ?? 0);
+            $staffMap[$staffId]['hinata_insurance_count'] = (int) $this->num($clinicRow->hinata_insurance_count ?? 0);
+            $staffMap[$staffId]['hinata_private_count'] = (int) $this->num($clinicRow->hinata_private_count ?? 0);
+        }
+
+        foreach ($this->salesImportService->totalsByStaff(array_keys($staffMap), $payrollYear, $payrollMonth) as $homeVisitRow) {
+            $staffId = str_pad(trim((string) ($homeVisitRow['staff_id'] ?? '')), 3, '0', STR_PAD_LEFT);
+            if ($staffId === '' || !isset($staffMap[$staffId])) {
+                continue;
+            }
+
+            $staffMap[$staffId]['home_visit_count'] = (int) ($homeVisitRow['people_count'] ?? 0);
+            $staffMap[$staffId]['home_visit_sales'] = $this->salesImportService->homeVisitSalesTotal($homeVisitRow);
+        }
+
+        $rows = [];
+        foreach ($staffMap as $row) {
+            $storeInsuranceTotal = $row['sakura_insurance'] + $row['hinata_insurance'];
+            $storePrivateTotal = $row['sakura_private'] + $row['hinata_private'];
+            $storeSalesTotal = $storeInsuranceTotal + $storePrivateTotal;
+            $salesTotal = $storeSalesTotal + $row['home_visit_sales'];
+
+            if (
+                abs($salesTotal) < 0.0000001
+                && $row['sakura_insurance_count'] === 0
+                && $row['sakura_private_count'] === 0
+                && $row['hinata_insurance_count'] === 0
+                && $row['hinata_private_count'] === 0
+            ) {
+                continue;
+            }
+
+            $row['store_insurance_total'] = $storeInsuranceTotal;
+            $row['store_private_total'] = $storePrivateTotal;
+            $row['store_sales_total'] = $storeSalesTotal;
+            $row['sales_total'] = $salesTotal;
+            $rows[] = $row;
+        }
+
+        usort($rows, static fn(array $a, array $b): int => $b['sales_total'] <=> $a['sales_total']);
+
+        $totals = [];
+        foreach (['sakura_private', 'sakura_insurance', 'sakura_insurance_count', 'sakura_private_count', 'hinata_private', 'hinata_insurance', 'hinata_insurance_count', 'hinata_private_count', 'store_insurance_total', 'store_private_total', 'home_visit_count', 'home_visit_sales', 'sales_total'] as $key) {
+            $totals[$key] = array_sum(array_map(static fn(array $row): float|int => $row[$key], $rows));
+        }
+
+        return view('admin_v2.work.payroll.home_visit_sales_print', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedCompanyId' => $selectedCompanyId,
+            'salesYear' => $salesYear,
+            'salesMonth' => $salesMonth,
+            'rows' => $rows,
+            'totals' => $totals,
+        ]);
+    }
+
+
+    // 委託メニュー売上
+
+    public function outsourceMenuSalesPrint(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+        $selectedMonth = (string) $pageData['selectedMonth'];
+        $payrollRows = (array) $pageData['rows'];
+
+        [$payrollYear, $payrollMonth] = array_map('intval', explode('-', $selectedMonth));
+        [$salesYear, $salesMonth] = $this->previousYearMonth($payrollYear, $payrollMonth);
+        $fromDate = sprintf('%04d-%02d-01', $salesYear, $salesMonth);
+        $toDate = date('Y-m-t', strtotime($fromDate));
+
+        $staffMap = [];
+        foreach ($payrollRows as $row) {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            $division = trim((string) ($row['division'] ?? ''));
+            if ($staffId === '' || $division !== '業務委託') {
+                continue;
+            }
+
+            $staffMap[$staffId] = [
+                'staff_id' => $staffId,
+                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
+            ];
+        }
+
+        $staffIds = array_keys($staffMap);
+        $rows = [];
+        if ($staffIds !== []) {
+            $queryRows = DB::connection('sqlsrv_dailyreport')
+                ->table('dbo.T_施術メニュー as menu')
+                ->join('dbo.T_先生別日報 as teacher', 'menu.メニュー', '=', 'teacher.メニュー')
+                ->join('dbo.T_患者名日報 as patient', 'patient.患者No', '=', 'teacher.患者No_t')
+                ->selectRaw("
+                    CONVERT(date, patient.[日付]) as sales_date,
+                    teacher.[メニュー] as menu_name,
+                    LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20)))) as staff_id,
+                    SUM(ISNULL(teacher.[自費], 0)) as private_total,
+                    COUNT(patient.[患者No]) as patient_count,
+                    menu.[歩合割合] as commission_rate,
+                    COUNT(CASE WHEN ISNULL(teacher.[請求金額], 0) <> 0 THEN 1 ELSE NULL END) as insurance_count,
+                    SUM(ISNULL(teacher.[請求金額], 0)) as claim_total
+                ")
+                ->whereBetween(DB::raw('CONVERT(date, patient.[日付])'), [$fromDate, $toDate])
+                ->whereIn(DB::raw('LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20))))'), $staffIds)
+                ->whereNotNull('teacher.メニュー')
+                ->whereNotNull('menu.歩合割合')
+                ->where('teacher.先生別外', 0)
+                ->groupByRaw('CONVERT(date, patient.[日付]), teacher.[メニュー], LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20)))), menu.[歩合割合], teacher.[先生別外]')
+                ->orderByRaw('LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20))))')
+                ->orderByRaw('CONVERT(date, patient.[日付])')
+                ->orderBy('teacher.メニュー')
+                ->get();
+
+            foreach ($queryRows as $queryRow) {
+                $staffId = trim((string) ($queryRow->staff_id ?? ''));
+                if ($staffId === '' || !isset($staffMap[$staffId])) {
+                    continue;
+                }
+
+                $insuranceCount = (int) $this->num($queryRow->insurance_count ?? 0);
+                $privateTotal = $this->num($queryRow->private_total ?? 0);
+                $insuranceCommission = $insuranceCount * 700;
+                $privateCommission = $privateTotal / 2;
+
+                $rows[] = [
+                    'sales_date' => date('m/d', strtotime((string) $queryRow->sales_date)),
+                    'staff_id' => $staffId,
+                    'staff_name' => $staffMap[$staffId]['staff_name'],
+                    'menu_name' => trim((string) ($queryRow->menu_name ?? '')),
+                    'insurance_count' => $insuranceCount,
+                    'claim_total' => $this->num($queryRow->claim_total ?? 0),
+                    'insurance_commission' => $insuranceCommission,
+                    'patient_count' => (int) $this->num($queryRow->patient_count ?? 0),
+                    'private_total' => $privateTotal,
+                    'private_commission' => $privateCommission,
+                    'row_total' => $insuranceCommission + $privateCommission,
+                ];
+            }
+        }
+
+        $groupedRows = [];
+        foreach ($rows as $row) {
+            $staffId = (string) $row['staff_id'];
+            if (!isset($groupedRows[$staffId])) {
+                $groupedRows[$staffId] = [
+                    'staff_id' => $staffId,
+                    'staff_name' => (string) $row['staff_name'],
+                    'rows' => [],
+                    'totals' => [
+                        'insurance_count' => 0,
+                        'claim_total' => 0.0,
+                        'insurance_commission' => 0,
+                        'patient_count' => 0,
+                        'private_total' => 0.0,
+                        'private_commission' => 0.0,
+                        'row_total' => 0.0,
+                    ],
+                ];
+            }
+
+            $groupedRows[$staffId]['rows'][] = $row;
+            foreach (array_keys($groupedRows[$staffId]['totals']) as $key) {
+                $groupedRows[$staffId]['totals'][$key] += $row[$key];
+            }
+        }
+
+        $totals = [];
+        foreach (['insurance_count', 'claim_total', 'insurance_commission', 'patient_count', 'private_total', 'private_commission', 'row_total'] as $key) {
+            $totals[$key] = array_sum(array_map(static fn(array $row): float|int => $row[$key], $rows));
+        }
+
+        return view('admin_v2.work.payroll.outsource_menu_sales_print', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedCompanyId' => $selectedCompanyId,
+            'salesYear' => $salesYear,
+            'salesMonth' => $salesMonth,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'rows' => $rows,
+            'groupedRows' => array_values($groupedRows),
+            'totals' => $totals,
+        ]);
+    }
+
+    // 往診売上詳細
+
+    public function homeVisitSalesDetailPrint(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+        $selectedMonth = (string) $pageData['selectedMonth'];
+        $payrollRows = (array) $pageData['rows'];
+
+        [$payrollYear, $payrollMonth] = array_map('intval', explode('-', $selectedMonth));
+        [$salesYear, $salesMonth] = $this->previousYearMonth($payrollYear, $payrollMonth);
+        $fromDate = sprintf('%04d-%02d-01', $salesYear, $salesMonth);
+        $toDate = date('Y-m-t', strtotime($fromDate));
+        $nextDate = date('Y-m-d', strtotime($toDate . ' +1 day'));
+
+        $staffMap = [];
+        foreach ($payrollRows as $row) {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            if ($staffId === '') {
+                continue;
+            }
+
+            $staffMap[$staffId] = [
+                'staff_id' => $staffId,
+                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
+            ];
+        }
+
+        foreach ($this->allStaffOptions() as $row) {
+            $staffId = trim((string) ($row['staff_id'] ?? ''));
+            if ($staffId === '' || isset($staffMap[$staffId])) {
+                continue;
+            }
+
+            $staffMap[$staffId] = [
+                'staff_id' => $staffId,
+                'staff_name' => trim((string) (($row['staff_name'] ?? '') ?: ($row['display_name_ja'] ?? ''))),
+            ];
+        }
+
+        $staffIds = array_keys($staffMap);
+        $rows = [];
+        if ($staffIds !== []) {
+            foreach ($this->salesImportService->detailRows($staffIds, $payrollYear, $payrollMonth) as $queryRow) {
+                $staffId = trim((string) ($queryRow['staff_id'] ?? ''));
+                if ($staffId === '' || !isset($staffMap[$staffId])) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'staff_id' => $staffId,
+                    'staff_name' => $staffMap[$staffId]['staff_name'],
+                    'treatment_date' => JapaneseDate::monthDayWithWeekday($queryRow['treatment_date'] ?? null),
+                ] + $queryRow;
+            }
+        }
+
+        $groupedRows = [];
+        foreach ($rows as $row) {
+            $staffId = (string) $row['staff_id'];
+            if (!isset($groupedRows[$staffId])) {
+                $groupedRows[$staffId] = [
+                    'staff_id' => $staffId,
+                    'staff_name' => (string) $row['staff_name'],
+                    'rows' => [],
+                    'totals' => [
+                        'people_count' => 0,
+                        'distance_total' => 0.0,
+                        'kitazaike_total' => 0.0,
+                        'higashi_kakogawa_total' => 0.0,
+                        'harima_total' => 0.0,
+                        'sakura_total' => 0.0,
+                        'orita_total' => 0.0,
+                        'miyamoto_total' => 0.0,
+                        'yokoi_total' => 0.0,
+                        'private_fee_total' => 0.0,
+                        'uncollected_total' => 0.0,
+                        'store_total' => 0.0,
+                        'store_total_with_hari' => 0.0,
+                    ],
+                ];
+            }
+
+            $groupedRows[$staffId]['rows'][] = $row;
+            foreach (array_keys($groupedRows[$staffId]['totals']) as $key) {
+                $groupedRows[$staffId]['totals'][$key] += $row[$key];
+            }
+        }
+
+        $totals = [];
+        foreach (['people_count', 'distance_total', 'kitazaike_total', 'higashi_kakogawa_total', 'harima_total', 'sakura_total', 'orita_total', 'miyamoto_total', 'yokoi_total', 'private_fee_total', 'uncollected_total', 'store_total', 'store_total_with_hari'] as $key) {
+            $totals[$key] = array_sum(array_map(static fn(array $row): float|int => $row[$key], $rows));
+        }
+
+        return view('admin_v2.work.payroll.home_visit_sales_detail_print', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedCompanyId' => $selectedCompanyId,
+            'salesYear' => $salesYear,
+            'salesMonth' => $salesMonth,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'groupedRows' => array_values($groupedRows),
+            'totals' => $totals,
+        ]);
+    }
+
+    public function outsourceRewardLedgerPrint(Request $request): View
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $selectedMonth = (string) $pageData['selectedMonth'];
+        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
+
+        $rows = [];
+        foreach ((array) $pageData['rows'] as $row) {
+            $summary = (array) ($row['summary'] ?? []);
+            $salesTotal = $this->num($summary['kitazaike'] ?? 0)
+                + $this->num($summary['higashi_kakogawa'] ?? 0)
+                + $this->num($summary['tsubasa_harima'] ?? 0)
+                + $this->num($summary['sakura_hari'] ?? 0)
+                + $this->num($summary['orita_hari'] ?? 0)
+                + $this->num($summary['miyamoto_hari'] ?? 0)
+                + $this->num($summary['yokoi_hari'] ?? 0)
+                + $this->num($summary['own_cost'] ?? 0)
+                + $this->num($summary['unpaid_amo'] ?? 0);
+
+            $hasHomeVisit = abs($salesTotal) > 0.0000001
+                || abs($this->num($summary['peple_num'] ?? 0)) > 0.0000001
+                || abs($this->num($summary['km'] ?? 0)) > 0.0000001;
+
+            if (trim((string) ($row['division'] ?? '')) !== '業務委託' && !$hasHomeVisit) {
+                continue;
+            }
+
+            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
+                - $this->num($summary['deduction_sum'] ?? 0)
+                - $this->num($summary['adjustment_year_end'] ?? 0)
+                + $this->num($summary['cost_liquidation'] ?? 0)
+                + $this->num($summary['company_advance_cost'] ?? 0)
+                - $this->num($summary['transfer_balance'] ?? 0);
+
+            $rows[] = array_merge($summary, [
+                'staff_id' => trim((string) ($row['staff_id'] ?? '')),
+                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
+                'store_name' => trim((string) ($row['store_name'] ?? '')),
+                'division' => trim((string) ($row['division'] ?? '')),
+                'transfer_amount' => $transferAmount,
+                'sales_total' => $salesTotal,
+            ]);
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return [$a['store_name'] ?? '', $a['staff_id'] ?? '', $a['staff_name'] ?? '']
+                <=> [$b['store_name'] ?? '', $b['staff_id'] ?? '', $b['staff_name'] ?? ''];
+        });
+
+        $totals = [];
+        foreach ($rows as $row) {
+            foreach ($row as $key => $value) {
+                if (is_numeric($value)) {
+                    $totals[$key] = ($totals[$key] ?? 0) + (float) $value;
+                }
+            }
+        }
+
+        return view('admin_v2.work.payroll.outsource_reward_ledger_print', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedMonth' => $selectedMonth,
+            'selectedCompanyId' => $selectedCompanyId,
+            'rows' => $rows,
+            'totals' => $totals,
+        ]);
+    }
+
+    public function personalWageLedger(Request $request): View
+    {
+        $availablePaymentDates = $this->monthService->availablePaymentDates(false);
+        $selectedPaymentDate = $this->monthService->normalizePaymentDate((string) $request->query('payment_date', ''), $availablePaymentDates);
+        $selectedStartDate = date('Y-m-01', strtotime($selectedPaymentDate));
+        $selectedStartMonthText = date('Y/m', strtotime($selectedStartDate));
+        $selectedStaffId = trim((string) $request->query('staff_id', ''));
+        $allowanceEntries = $this->allowanceLabelService->entries();
+
+        $staffInfo = [
+            'staff_id' => $selectedStaffId,
+            'staff_name' => '',
+            'division' => '',
+            'store_code' => '',
+            'store_name' => '',
+            'company_name' => '',
+        ];
+
+        foreach ($this->staffService->staffs('') as $staff) {
+            if ($selectedStaffId !== '' && trim((string) ($staff['staff_id'] ?? '')) === $selectedStaffId) {
+                $staffInfo = $staff;
+                break;
+            }
+        }
+
+        $ledgerRows = [];
+        if ($selectedStaffId !== '') {
+            $records = DB::connection('sqlsrv_payroll')
+                ->table('dbo.mx_kyuyo_shou')
+                ->whereRaw('LTRIM(RTRIM(CAST(kyuyo_staff_id as nvarchar(50)))) = ?', [$selectedStaffId])
+                ->whereIn('bonus', [0, 1])
+                ->where('edit_lock', 1)
+                ->whereNotNull('supply_month')
+                ->whereRaw('CONVERT(date, [supply_month]) >= ?', [$selectedStartDate])
+                ->orderByRaw('CONVERT(date, [supply_month]) asc')
+                ->orderBy('bonus')
+                ->orderBy('kyuyo_sho_no')
+                ->get();
+
+            $shahoMaps = [];
+            foreach ($records as $record) {
+                $summary = $this->normalizePayrollSummaryRow((array) $record);
+                $paymentDate = trim((string) ($summary['supply_month'] ?? ''));
+                $paymentTime = strtotime($paymentDate);
+                if ($paymentTime === false) {
+                    continue;
+                }
+
+                $year = (int) date('Y', $paymentTime);
+                $month = (int) date('n', $paymentTime);
+                $monthKey = sprintf('%04d-%02d', $year, $month);
+                if (!isset($shahoMaps[$monthKey])) {
+                    $shahoMaps[$monthKey] = $this->shahoService->map($year, $month);
+                }
+
+                $ledgerRows[] = $this->personalWageLedgerRow(
+                    $summary,
+                    $staffInfo,
+                    $shahoMaps[$monthKey][$selectedStaffId] ?? [],
+                    $allowanceEntries
+                );
+            }
+        }
+
+        return view('admin_v2.work.wage_ledger.personal', [
+            'selectedPaymentDate' => $selectedPaymentDate,
+            'selectedStartDate' => $selectedStartDate,
+            'selectedStartMonthText' => $selectedStartMonthText,
+            'selectedStaffId' => $selectedStaffId,
+            'staffInfo' => $staffInfo,
+            'ledgerRows' => $ledgerRows,
+            'allowanceEntries' => $allowanceEntries,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $summary
+     * @param array<string,mixed> $staffInfo
+     * @param array<string,mixed> $shaho
+     * @param list<array<string,mixed>> $allowanceEntries
+     * @return array<string,mixed>
+     */
+    private function personalWageLedgerRow(array $summary, array $staffInfo, array $shaho, array $allowanceEntries): array
+    {
+        $isBonus = ((int) ($summary['bonus'] ?? 0)) === 1;
+        $otherSum = $isBonus
+            ? 0.0
+            : $this->num($summary['cost_liquidation'] ?? 0)
+                - $this->num($summary['adjustment_year_end'] ?? 0)
+                + $this->num($summary['company_advance_cost'] ?? 0);
+
+        $transferAmount =
+            $this->num($summary['supply_sum'] ?? 0)
+            - $this->num($summary['deduction_sum'] ?? 0)
+            + $otherSum
+            - $this->num($summary['transfer_balance'] ?? 0);
+
+        $paymentDate = trim((string) ($summary['supply_month'] ?? ''));
+        $paymentTime = strtotime($paymentDate);
+        $paymentMonth = $paymentTime === false ? '' : date('Y/m', $paymentTime);
+        $paymentDateText = $paymentTime === false ? $paymentDate : date('Y/m/d', $paymentTime);
+
+        $row = [
+            'payment_date' => $paymentDateText,
+            'payment_month' => $paymentMonth,
+            'payment_type' => $isBonus ? '賞与' : '給与',
+            'column_label' => trim($paymentMonth . ' ' . ($isBonus ? '賞与' : '給与')),
+            'company_name' => trim((string) ($staffInfo['company_name'] ?? '')),
+            'store_code' => trim((string) ($staffInfo['store_code'] ?? '')),
+            'store_name' => trim((string) ($staffInfo['store_name'] ?? '')),
+            'staff_id' => trim((string) ($staffInfo['staff_id'] ?? '')),
+            'staff_name' => trim((string) ($staffInfo['staff_name'] ?? '')),
+            'division' => trim((string) ($staffInfo['division'] ?? '')),
+            'bonus_amount' => $this->num($summary['bonus_amo'] ?? 0),
+            'basic_salary' => $this->num($summary['basic_salary'] ?? 0),
+            'allowance_amo_2' => $this->num($summary['allowance_amo_2'] ?? 0),
+            'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
+            'not_taxation_sum' => $this->num($summary['not_taxation_sum'] ?? 0),
+            'supply_sum' => $this->num($summary['supply_sum'] ?? 0),
+            'kenpo' => $this->num($summary['kenpo'] ?? 0),
+            'kaigo' => $this->num($summary['kaigo'] ?? 0),
+            'child_support_funds' => $this->num($summary['child_support_funds'] ?? 0),
+            'kounen' => $this->num($summary['kounen'] ?? 0),
+            'koyou' => $this->num($summary['koyou'] ?? 0),
+            'kenpo_monthly_amo' => $shaho['kenpo_monthly_amo'] ?? null,
+            'kounen_monthly_amo' => $shaho['kounen_monthly_amo'] ?? null,
+            'syaho_sum' => $this->num($summary['syaho_sum'] ?? 0),
+            'income_tax' => $this->num($summary['income_tax'] ?? 0),
+            'resident_tax' => $this->num($summary['resident_tax'] ?? 0),
+            'koujyo_1' => $this->num($summary['koujyo_1'] ?? 0),
+            'late_deduction' => $this->num($summary['late_deduction'] ?? 0),
+            'absence_deduction' => $this->num($summary['absence_deduction'] ?? 0),
+            'deduction_sum' => $this->num($summary['deduction_sum'] ?? 0),
+            'adjustment_year_end' => $this->num($summary['adjustment_year_end'] ?? 0),
+            'cost_liquidation' => $this->num($summary['cost_liquidation'] ?? 0),
+            'transfer_amount' => $transferAmount,
+            'work_in_num' => $this->num($summary['work_in_num'] ?? 0),
+            'work_time' => $this->num($summary['work_time'] ?? 0),
+            'late_time' => $this->num($summary['late_time'] ?? 0),
+            'overtime' => $this->num($summary['overtime'] ?? 0),
+            'work_holiday_num' => $this->num($summary['work_holiday_num'] ?? ($summary['work_horiday_num'] ?? 0)),
+            'holiday_work_time' => $this->num($summary['work_time_num'] ?? 0),
+            'holiday_true' => $this->num($summary['holiday_true'] ?? 0),
+            'holiday_true_num' => $this->num($summary['holiday_true_num'] ?? ($summary['horiday_true_num'] ?? 0)),
+            'absence_num' => $this->num($summary['absence_num'] ?? 0),
+        ];
+
+        foreach ($allowanceEntries as $entry) {
+            $entryKey = trim((string) ($entry['key'] ?? ''));
+            if ($entryKey !== '') {
+                $row[$entryKey] = $this->num($summary[$entryKey] ?? 0);
+            }
+        }
+
+        return $row;
+    }
+
+    /** @param array<string,mixed> $row @return array<string,mixed> */
+    private function normalizePayrollSummaryRow(array $row): array
+    {
+        $aliases = [
+            'work_holiday_num' => 'work_horiday_num',
+            'holiday_true' => 'horiday_true',
+            'holiday_true_num' => 'horiday_true_num',
+        ];
+
+        foreach ($aliases as $canonical => $legacy) {
+            if (!array_key_exists($canonical, $row) && array_key_exists($legacy, $row)) {
+                $row[$canonical] = $row[$legacy];
+            }
+        }
+
+        return $row;
+    }
+
     public function update(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -700,7 +1447,7 @@ class PayrollV2Controller extends Controller
         ]);
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
-        $updated = $this->recalculateService->recalculate(
+        $updated = $this->calculationFlowService->recalculateMonthly(
             (string) $v['staff_id'],
             $year,
             $month,
@@ -711,6 +1458,25 @@ class PayrollV2Controller extends Controller
             'ok' => true,
             'updated' => $updated,
         ]);
+    }
+
+    public function calcHomeVisitAllowance(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:20'],
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $result = $this->homeVisitAllowanceService->calculate(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            (string) ($v['company_id'] ?? '')
+        );
+
+        return response()->json(array_merge(['ok' => true], $result));
     }
 
     public function bonusRecalculate(Request $request): JsonResponse
@@ -760,6 +1526,97 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function salesSummary(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'payment_date' => ['required', 'date_format:Y-m-d'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        [$salesYear, $salesMonth] = $this->previousYearMonth($year, $month);
+        $company = trim((string) ($v['company_id'] ?? ''));
+        $staffRows = $this->staffService->staffs('');
+        $summaryMap = $this->summaryService->summaryMapByPaymentDate((string) $v['payment_date'], false);
+        $staffMap = [];
+        foreach ($staffRows as $staff) {
+            $staffId = trim((string) ($staff['staff_id'] ?? ''));
+            if ($staffId !== '') {
+                $staffMap[$staffId] = $staff;
+            }
+        }
+        $staffIds = array_column($staffRows, 'staff_id');
+        $salesMap = $this->salesImportService->summaries($staffIds, $year, $month);
+        $storeSalesMap = $this->storeSalesByStaff([], $salesYear, $salesMonth);
+
+        $displayStaffIds = array_values(array_unique(array_merge($staffIds, array_keys($storeSalesMap))));
+        sort($displayStaffIds);
+
+        $rows = [];
+        foreach ($displayStaffIds as $staffId) {
+            $homeVisitSales = isset($salesMap[$staffId])
+                ? $this->salesImportService->homeVisitSalesTotal($salesMap[$staffId])
+                : 0.0;
+            $storeSales = $this->num($storeSalesMap[$staffId] ?? 0);
+
+            if (abs($homeVisitSales + $storeSales) < 0.0000001) {
+                continue;
+            }
+
+            $staff = (array) ($staffMap[$staffId] ?? []);
+            $summary = (array) ($summaryMap[$staffId] ?? []);
+
+            $rows[] = [
+                'staff_id' => $staffId,
+                'staff_name' => (string) ($staff['staff_name'] ?? ''),
+                'has_payroll' => isset($summaryMap[$staffId]),
+                'edit_lock' => (int) ($summary['edit_lock'] ?? 0),
+                'sales' => $salesMap[$staffId] ?? null,
+            ];
+        }
+
+        return response()->json([
+            'ok' => true,
+            'rows' => $rows,
+        ]);
+    }
+
+    public function reflectSales(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'payment_date' => ['required', 'date_format:Y-m-d'],
+            'company_id' => ['nullable', 'string', 'max:200'],
+            'staff_ids' => ['required', 'array'],
+            'staff_ids.*' => ['string', 'max:20'],
+        ]);
+
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $company = trim((string) ($v['company_id'] ?? ''));
+        $requestedStaffIds = array_values(array_filter(array_map(
+            static fn($value): string => trim((string) $value),
+            (array) $v['staff_ids']
+        ), static fn(string $value): bool => $value !== ''));
+
+        $summaryMap = $this->summaryService->summaryMapByPaymentDate((string) $v['payment_date'], false);
+        $availableStaffIds = array_values(array_filter(
+            $requestedStaffIds,
+            static fn($staffId): bool => isset($summaryMap[$staffId])
+        ));
+        $staffIds = $availableStaffIds;
+
+        $result = $this->salesImportService->reflect($staffIds, $year, $month, $company);
+
+        return response()->json([
+            'ok' => true,
+            'updated' => (int) ($result['updated'] ?? 0),
+            'locked' => (int) ($result['locked'] ?? 0),
+            'missing' => (int) ($result['missing'] ?? 0),
+            'no_data' => (int) ($result['no_data'] ?? 0),
+        ]);
+    }
+
     public function reflectAttendance(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -769,7 +1626,7 @@ class PayrollV2Controller extends Controller
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
         $updated = $this->attendanceReflectService->reflect((string) $v['staff_id'], $year, $month);
-        $updated += (int) $this->employmentInsuranceService->recalculate((string) $v['staff_id'], $year, $month);
+        $updated += (int) $this->calculationFlowService->recalculateAfterAttendanceReflect((string) $v['staff_id'], $year, $month);
 
         return response()->json([
             'ok' => true,
@@ -782,10 +1639,16 @@ class PayrollV2Controller extends Controller
         $v = $request->validate([
             'staff_id' => ['required', 'string', 'max:20'],
             'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
         ]);
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
-        $updated = $this->employmentInsuranceService->recalculate((string) $v['staff_id'], $year, $month);
+        $updated = $this->calculationFlowService->recalculateEmploymentInsurance(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            (string) ($v['company_id'] ?? '')
+        );
 
         return response()->json([
             'ok' => true,
@@ -802,18 +1665,12 @@ class PayrollV2Controller extends Controller
         ]);
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
-        $companyId = (string) ($v['company_id'] ?? '');
-
-        $updated = 0;
-        $updated += (int) $this->overtimeDeductionService->recalculate(
+        $updated = $this->calculationFlowService->recalculateAmountsAfterInputChange(
             (string) $v['staff_id'],
             $year,
             $month,
-            $companyId
+            (string) ($v['company_id'] ?? '')
         );
-        $updated += (int) $this->employmentInsuranceService->recalculate((string) $v['staff_id'], $year, $month);
-        $updated += (int) $this->incomeTaxService->recalculate((string) $v['staff_id'], $year, $month);
-        $updated += (int) $this->updateService->refreshTotals((string) $v['staff_id'], $year, $month, $companyId);
 
         return response()->json([
             'ok' => true,
@@ -826,10 +1683,16 @@ class PayrollV2Controller extends Controller
         $v = $request->validate([
             'staff_id' => ['required', 'string', 'max:20'],
             'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'company_id' => ['nullable', 'string', 'max:200'],
         ]);
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
-        $result = $this->incomeTaxService->recalculateWithTrace((string) $v['staff_id'], $year, $month);
+        $result = $this->calculationFlowService->recalculateIncomeTaxWithTrace(
+            (string) $v['staff_id'],
+            $year,
+            $month,
+            (string) ($v['company_id'] ?? '')
+        );
 
         return response()->json([
             'ok' => true,
@@ -1020,6 +1883,35 @@ class PayrollV2Controller extends Controller
         ]);
     }
 
+    public function bonusConfirm(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:20'],
+            'payment_date' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 1)
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [(string) $v['staff_id']])
+            ->whereRaw('CONVERT(date, [supply_month]) = ?', [(string) $v['payment_date']])
+            ->orderByDesc('kyuyo_sho_no')
+            ->first(['kyuyo_sho_no', 'edit_lock']);
+
+        if (!$row) {
+            return response()->json(['ok' => false, 'message' => '対象の賞与データがありません。'], 404);
+        }
+
+        $next = ((int) ($row->edit_lock ?? 0)) === 1 ? 0 : 1;
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
+            ->update(['edit_lock' => $next]);
+
+        return response()->json(['ok' => true, 'edit_lock' => $next]);
+    }
+
     public function confirm(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -1105,10 +1997,20 @@ class PayrollV2Controller extends Controller
             $month,
             $selectedCompanyId
         );
+        [$attendanceYear, $attendanceMonth] = $month <= 1
+            ? [$year - 1, 12]
+            : [$year, $month - 1];
+        $attendanceCheckedMap = $this->confirmedStateService->mapByStaffIds(
+            array_column($staffRows, 'staff_id'),
+            $attendanceYear,
+            $attendanceMonth
+        );
 
-        $rows = array_map(static function (array $row) use ($attendanceRecordExistsMap): array {
+        $rows = array_map(static function (array $row) use ($attendanceRecordExistsMap, $attendanceCheckedMap): array {
             $staffId = trim((string) ($row['staff_id'] ?? ''));
             $row['attendance_record_exists'] = (bool) ($attendanceRecordExistsMap[$staffId] ?? false);
+            $row['summary'] = (array) ($row['summary'] ?? []);
+            $row['summary']['attendance_checked'] = !empty($attendanceCheckedMap[$staffId]) ? 1 : 0;
             return $row;
         }, $rows);
 
@@ -1162,6 +2064,72 @@ class PayrollV2Controller extends Controller
     }
 
     /** @param list<array<string, mixed>> $rows */
+    private function previousYearMonth(int $year, int $month): array
+    {
+        if ($month <= 1) {
+            return [$year - 1, 12];
+        }
+
+        return [$year, $month - 1];
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+
+    /** @return list<array<string,mixed>> */
+    private function storeSalesByStaff(array $staffIds, int $salesYear, int $salesMonth): array
+    {
+        $staffIds = array_values(array_filter(array_map(
+            static fn($value): string => trim((string) $value),
+            $staffIds
+        ), static fn(string $value): bool => $value !== ''));
+
+        $rows = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_患者名日報 as p')
+            ->join('dbo.T_先生別日報 as d', 'p.患者No', '=', 'd.患者No_t')
+            ->selectRaw("
+                LTRIM(RTRIM(CAST(d.[担当者ID] as nvarchar(20)))) as staff_id,
+                SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN ISNULL(d.[自費], 0) ELSE 0 END) as sakura_private,
+                SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN ISNULL(d.[請求金額], 0) ELSE 0 END) as sakura_insurance,
+                SUM(CASE WHEN (ISNULL(d.[請求金額], 0) + ISNULL(d.[保険負担], 0)) <> 0 AND p.[店舗] = N'さくら鍼灸整骨院' THEN 1 ELSE 0 END) as sakura_insurance_count,
+                SUM(CASE WHEN p.[割合] = N'自' AND p.[店舗] = N'さくら鍼灸整骨院' THEN 1 ELSE 0 END) as sakura_private_count,
+                SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN ISNULL(d.[自費], 0) ELSE 0 END) as hinata_private,
+                SUM(CASE WHEN d.[先生別外] = 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN ISNULL(d.[請求金額], 0) ELSE 0 END) as hinata_insurance,
+                SUM(CASE WHEN (ISNULL(d.[請求金額], 0) + ISNULL(d.[保険負担], 0)) <> 0 AND p.[店舗] = N'ひなた鍼灸整骨院' THEN 1 ELSE 0 END) as hinata_insurance_count,
+                SUM(CASE WHEN p.[割合] = N'自' AND p.[店舗] = N'ひなた鍼灸整骨院' THEN 1 ELSE 0 END) as hinata_private_count
+            ")
+            ->whereRaw('YEAR(p.[日付]) = ?', [$salesYear])
+            ->whereRaw('MONTH(p.[日付]) = ?', [$salesMonth]);
+
+        if ($staffIds !== []) {
+            $rows->whereIn(DB::raw('LTRIM(RTRIM(CAST(d.[担当者ID] as nvarchar(20))))'), $staffIds);
+        }
+
+        $rows = $rows
+            ->groupByRaw('LTRIM(RTRIM(CAST(d.[担当者ID] as nvarchar(20))))')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $staffId = trim((string) ($row->staff_id ?? ''));
+            if ($staffId !== '') {
+                $map[$staffId] =
+                    $this->num($row->sakura_private ?? 0)
+                    + $this->num($row->sakura_insurance ?? 0)
+                    + $this->num($row->hinata_private ?? 0)
+                    + $this->num($row->hinata_insurance ?? 0);
+            }
+        }
+
+        return $map;
+    }
+
+    /** @return array{0:int,1:int} */
+
+    private function allStaffOptions(): array
+    {
+        return $this->staffService->staffs('');
+    }
+
     private function resolveCompanyLabel(array $rows): string
     {
         $companies = array_values(array_unique(array_filter(array_map(
@@ -1312,110 +2280,8 @@ class PayrollV2Controller extends Controller
     /** @param array<string,mixed> $values */
     private function updateBonusSummary(string $staffId, int $year, int $month, array $values): int
     {
-        $row = $this->loadBonusSummaryRow($staffId, $year, $month);
-        if ($row === null) {
-            return 0;
-        }
-
-        $current = (array) $row;
-        $payload = $this->sanitizeBonusValues($values);
-        $merged = array_merge($current, $payload);
-
-        $bonusAmount = $this->num($merged['bonus_amo'] ?? 0);
-        $taxationSum = max(0.0, round($bonusAmount, 0));
-        $notTaxationSum = 0.0;
-        $supplySum = $taxationSum + $notTaxationSum;
-        $rouhoTargetSum = $taxationSum;
-        $syahoSum = $this->num($merged['kenpo'] ?? 0)
-            + $this->num($merged['kaigo'] ?? 0)
-            + $this->num($merged['kounen'] ?? 0)
-            + $this->num($merged['koyou'] ?? 0);
-        $deductionSum = $syahoSum
-            + $this->num($merged['income_tax'] ?? 0)
-            + $this->num($merged['resident_tax'] ?? 0)
-            + $this->num($merged['rent_cost'] ?? 0)
-            + $this->num($merged['adjustment_cost'] ?? 0)
-            + $this->num($merged['koujyo_1'] ?? 0);
-
-        $payload['taxation_sum'] = (int) $taxationSum;
-        $payload['not_taxation_sum'] = (int) $notTaxationSum;
-        $payload['supply_sum'] = (int) $supplySum;
-        $payload['rouho_target_sum'] = (int) $rouhoTargetSum;
-        $payload['syaho_sum'] = (int) round($syahoSum, 0);
-        $payload['deduction_sum'] = (int) round($deductionSum, 0);
-        $payload['syaho_deduction_sum'] = (int) round(max(0.0, $taxationSum - $syahoSum), 0);
-
-        return DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
-            ->update($payload);
+        return $this->updateService->saveBonus($staffId, $year, $month, $values);
     }
-
-    private function loadBonusSummaryRow(string $staffId, int $year, int $month): ?object
-    {
-        return DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('bonus', 1)
-            ->whereRaw('YEAR([supply_month]) = ?', [$year])
-            ->whereRaw('MONTH([supply_month]) = ?', [$month])
-            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [trim($staffId)])
-            ->orderByDesc('kyuyo_sho_no')
-            ->first();
-    }
-
-    /** @param array<string,mixed> $values @return array<string,mixed> */
-    private function sanitizeBonusValues(array $values): array
-    {
-        $numericColumns = [
-            'bonus_amo',
-            'kenpo',
-            'kaigo',
-            'kounen',
-            'koyou',
-            'income_tax',
-            'resident_tax',
-            'rent_cost',
-            'adjustment_cost',
-            'koujyo_1',
-            'transfer_balance',
-            'fuyo_sum',
-            'rouho_target_sum',
-        ];
-        $textColumns = ['kyuyo_memo'];
-        $payload = [];
-
-        foreach ($values as $key => $raw) {
-            $column = trim((string) $key);
-            if ($column === '') {
-                continue;
-            }
-
-            if (in_array($column, $textColumns, true)) {
-                $payload[$column] = trim((string) $raw);
-                continue;
-            }
-
-            if (!in_array($column, $numericColumns, true)) {
-                continue;
-            }
-
-            $value = trim((string) $raw);
-            if ($value === '') {
-                $payload[$column] = null;
-                continue;
-            }
-
-            $value = str_replace([',', ' '], '', $value);
-            if (!is_numeric($value)) {
-                continue;
-            }
-
-            $payload[$column] = str_contains($value, '.') ? (float) $value : (int) $value;
-        }
-
-        return $payload;
-    }
-
     /** @return array<string, array{mayor:string,specified_num:string}> */
     private function mayorMetaMap(): array
     {

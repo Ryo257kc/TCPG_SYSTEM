@@ -25,7 +25,7 @@ class AllowanceV2Service
             ->whereRaw("LTRIM(RTRIM(company_id)) <> ''")
             ->orderBy('company_id')
             ->get()
-            ->map(fn ($r) => [
+            ->map(fn($r) => [
                 'company_id' => (string) ($r->company_id ?? ''),
                 'company_name' => (string) ($r->company_name ?? ''),
             ])
@@ -35,13 +35,13 @@ class AllowanceV2Service
         $query = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_allowance')
             ->orderBy('office_name')
-            ->orderBy('allowance_no');
+            ->orderBy('display_order');
 
         if ($officeName !== '') {
             $query->where('office_name', $officeName);
         }
 
-        $rows = $query->get()->map(fn ($r) => [
+        $rows = $query->get()->map(fn($r) => [
             'allowance_no' => (int) ($r->allowance_no ?? 0),
             'allowance_name' => (string) ($r->allowance_name ?? ''),
             'office_name' => (string) ($r->office_name ?? ''),
@@ -87,6 +87,6 @@ class AllowanceV2Service
             ->where('allowance_no', $allowanceNo)
             ->update($payload);
 
-        return 'Updated.';
+        return '更新しました。';
     }
 }

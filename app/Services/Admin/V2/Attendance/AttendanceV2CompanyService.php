@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2CompanyService
 {
+    // 勤怠画面の会社選択肢を取得するサービス。
+    // 計算式は持たず、表示・絞り込み用のマスタ取得だけを担当する。
     /** @return list<string> */
     public function companies(): array
     {

@@ -3,6 +3,12 @@
     gap: 16px;
 }
 
+.sales-panel.staff-viewport-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
 .sales-filter-row {
     display: grid;
     grid-template-columns: minmax(170px, 220px) minmax(240px, 360px) auto;
@@ -21,7 +27,10 @@
     font-weight: 600;
 }
 
-.sales-field input,
+.panel-title {
+    font-size: 18px;
+}
+/* .sales-field input,
 .sales-field select {
     height: 40px;
     padding: 0 12px;
@@ -31,7 +40,7 @@
     color: #1f2937;
     font-size: 13px;
     box-sizing: border-box;
-}
+} */
 
 .sales-company-field {
     min-width: 0;
@@ -57,6 +66,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    margin-bottom: -20px;
 }
 
 .sales-head-meta {
@@ -72,11 +82,27 @@
     line-height: 1;
 }
 
+.sales-table-card .meta-count,
+.sales-table-card .sales-grand-total,
+.sales-table-card .num {
+    text-align: right;
+}
+
 .sales-table-wrap {
     overflow-x: auto;
     border: 1px solid #d9e0ea;
     border-radius: 10px;
     background: #fff;
+}
+
+.sales-uncollected-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.sales-uncollected-table {
+    min-width: 1580px;
 }
 
 .sales-table {

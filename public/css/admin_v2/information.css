@@ -1,0 +1,127 @@
+.information-page-panel {
+    display: grid;
+    gap: 18px;
+}
+
+.information-section {
+    display: grid;
+    gap: 12px;
+}
+
+.information-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.information-count {
+    font-size: 12px;
+    color: #5b6474;
+    font-weight: 700;
+}
+
+.information-form,
+.information-entry-card {
+    display: grid;
+    gap: 14px;
+}
+
+.information-entry-card {
+    padding: 14px;
+    border: 1px solid #d9e0ea;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.information-form-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.information-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.information-field-full {
+    grid-column: 1 / -1;
+}
+
+.information-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #5b6474;
+}
+
+.information-check-field {
+    align-content: start;
+}
+
+.information-check-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+}
+
+.information-field input[type="date"],
+.information-field input[type="text"],
+.information-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.information-field textarea {
+    min-height: 96px;
+    resize: vertical;
+}
+
+.information-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.information-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #5b6474;
+}
+
+.information-list {
+    display: grid;
+    gap: 12px;
+}
+
+.information-empty {
+    padding: 24px 18px;
+    border: 1px dashed #c8d4e4;
+    border-radius: 10px;
+    background: #fbfcfe;
+    color: #5b6474;
+    text-align: center;
+}
+
+@media (max-width: 1080px) {
+    .information-form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    .information-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .information-actions,
+    .information-section-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

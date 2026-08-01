@@ -53,7 +53,7 @@ class PayrollV2ResidentService
             }
         }
 
-        return $rows[0];
+        return [];
     }
 
     private function injectResidentTax(array $row, ?int $monthIndex): array

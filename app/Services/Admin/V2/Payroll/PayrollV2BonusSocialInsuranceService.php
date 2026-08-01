@@ -9,8 +9,7 @@ class PayrollV2BonusSocialInsuranceService
 {
     public function __construct(
         private readonly PayrollV2ShahoService $shahoService,
-    ) {
-    }
+    ) {}
 
     public function recalculate(string $staffId, string $paymentDate): int
     {
@@ -43,11 +42,30 @@ class PayrollV2BonusSocialInsuranceService
         $currentStandard = floor($gross / 1000) * 1000;
         $targets = $this->resolveTargetStandards($staffId, (int) $row->kyuyo_sho_no, $paymentDate, $currentStandard);
 
-        $kenpo = $this->insuranceAmount($targets['kenpo_target_standard'], $bonusRates['kenpo_shoyo'] ?? null);
-        $kaigo = $this->shouldApplyKaigo($birthday, $year, $month)
-            ? $this->insuranceAmount($targets['kenpo_target_standard'], $bonusRates['kaigo_shoyo'] ?? null)
-            : 0;
-        $kounen = $this->insuranceAmount($targets['kounen_target_standard'], $bonusRates['kou_shoyo'] ?? null);
+        $kenpo = $this->employeeInsuranceAmount(
+            $targets['kenpo_target_standard'],
+            $bonusRates['kenpo_rate'] ?? 0
+        );
+
+        $kaigo = 0;
+        if ($this->shouldApplyKaigo($birthday, $year, $month)) {
+            $kenpoKaigoTotal = $this->employeeInsuranceAmount(
+                $targets['kenpo_target_standard'],
+                $bonusRates['kaigo_rate'] ?? 0
+            );
+
+            $kaigo = max(0, $kenpoKaigoTotal - $kenpo);
+        }
+
+        $kounen = $this->employeeInsuranceAmount(
+            $targets['kounen_target_standard'],
+            $bonusRates['kounen_rate'] ?? 0
+        );
+
+        $childSupportFunds = $this->employeeInsuranceAmount(
+            $targets['kenpo_target_standard'],
+            $bonusRates['kodomo_shien'] ?? 0
+        );
 
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
@@ -56,7 +74,7 @@ class PayrollV2BonusSocialInsuranceService
                 'kenpo' => $kenpo,
                 'kaigo' => $kaigo,
                 'kounen' => $kounen,
-                'syaho_sum' => $kenpo + $kaigo + $kounen + $this->num($this->loadCurrentValue((int) $row->kyuyo_sho_no, 'koyou')),
+                'child_support_funds' => $childSupportFunds,
             ]);
     }
 
@@ -121,21 +139,11 @@ class PayrollV2BonusSocialInsuranceService
             'kounen_target_standard' => $kounenTargetStandard,
         ];
     }
-
-    private function insuranceAmount(float $targetStandard, mixed $rate): int
-    {
-        $rateNum = $this->num($rate);
-        if ($targetStandard <= 0 || $rateNum <= 0) {
-            return 0;
-        }
-
-        return (int) ceil($targetStandard * ($rateNum / 1000));
-    }
-
-    /** @return array{kenpo_shoyo:float,kaigo_shoyo:float,kou_shoyo:float} */
+    /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float} */
     private function loadBonusRates(string $companyId, string $paymentDate): array
     {
         $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_syaho');
+
         if ($companyId !== '' && $this->hasPayrollColumn('mx_syaho', 'office_no')) {
             $query->whereRaw('LTRIM(RTRIM(CAST(office_no AS nvarchar(50)))) = ?', [$companyId]);
         }
@@ -144,17 +152,20 @@ class PayrollV2BonusSocialInsuranceService
             ->orderByDesc('syaho_no')
             ->get([
                 'kenpo_apply_date',
-                'kenpo_shoyo',
+                'kenpo_rate',
                 'kaigo_apply_date',
-                'kaigo_shoyo',
+                'kaigo_rate',
                 'kou_apply_date',
-                'kou_shoyo',
+                'kounen_rate',
+                'kodomo_shien',
+                'kodomo_shien_date',
             ]);
 
         return [
-            'kenpo_shoyo' => $this->pickApplicableRate($rows, 'kenpo_apply_date', 'kenpo_shoyo', $paymentDate),
-            'kaigo_shoyo' => $this->pickApplicableRate($rows, 'kaigo_apply_date', 'kaigo_shoyo', $paymentDate),
-            'kou_shoyo' => $this->pickApplicableRate($rows, 'kou_apply_date', 'kou_shoyo', $paymentDate),
+            'kenpo_rate' => $this->pickApplicableRate($rows, 'kenpo_apply_date', 'kenpo_rate', $paymentDate),
+            'kaigo_rate' => $this->pickApplicableRate($rows, 'kaigo_apply_date', 'kaigo_rate', $paymentDate),
+            'kounen_rate' => $this->pickApplicableRate($rows, 'kou_apply_date', 'kounen_rate', $paymentDate),
+            'kodomo_shien' => $this->pickApplicableRate($rows, 'kodomo_shien_date', 'kodomo_shien', $paymentDate),
         ];
     }
 
@@ -174,17 +185,6 @@ class PayrollV2BonusSocialInsuranceService
 
         return 0.0;
     }
-
-    private function loadCurrentValue(int $rowId, string $column): mixed
-    {
-        $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_kyuyo_shou')
-            ->where('kyuyo_sho_no', $rowId)
-            ->first([$column]);
-
-        return $row?->{$column} ?? 0;
-    }
-
     private function loadBirthday(string $staffId): ?\DateTimeImmutable
     {
         $row = DB::connection('sqlsrv')
@@ -267,5 +267,14 @@ class PayrollV2BonusSocialInsuranceService
 
         $text = str_replace([',', ' '], '', $text);
         return is_numeric($text) ? (float) $text : 0.0;
+    }
+
+    private function employeeInsuranceAmount(float $standard, float $ratePercent): int
+    {
+        if ($standard <= 0 || $ratePercent <= 0) {
+            return 0;
+        }
+        $total = (int) ceil($standard * ($ratePercent / 100));
+        return (int) ceil($total / 2);
     }
 }

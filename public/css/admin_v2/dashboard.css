@@ -6,7 +6,7 @@
     --muted: #667085;
     --primary: #1f4f8f;
     --primary-soft: #eaf1fb;
-    --shadow: 0 14px 34px rgba(31, 79, 143, 0.10);
+    --shadow: 0 14px 34px rgba(31, 79, 143, 0.1);
 }
 
 * {
@@ -19,10 +19,19 @@ body {
     font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
     color: var(--text);
     background:
-        radial-gradient(880px 280px at 8% -8%, rgba(184, 206, 240, 0.85) 0%, transparent 62%),
+        radial-gradient(
+            880px 280px at 8% -8%,
+            rgba(184, 206, 240, 0.85) 0%,
+            transparent 62%
+        ),
         linear-gradient(180deg, #f7faff 0%, var(--bg) 100%);
 }
-
+.container {
+    width: min(100%, 1440px);
+    margin: 0 auto;
+    display: grid;
+    gap: 14px;
+}
 .page-shell {
     padding: 14px 18px 24px;
 }
@@ -46,7 +55,11 @@ body {
 .hero-card {
     padding: 22px 24px;
     background:
-        linear-gradient(135deg, rgba(31, 79, 143, 0.08), rgba(31, 79, 143, 0.00) 55%),
+        linear-gradient(
+            135deg,
+            rgba(31, 79, 143, 0.08),
+            rgba(31, 79, 143, 0) 55%
+        ),
         var(--panel);
 }
 
@@ -59,7 +72,7 @@ body {
     color: var(--primary);
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: .04em;
+    letter-spacing: 0.04em;
 }
 
 .hero h1 {
@@ -86,7 +99,7 @@ body {
     color: var(--muted);
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: .06em;
+    letter-spacing: 0.06em;
 }
 
 .session-name {
@@ -133,7 +146,7 @@ body {
     margin: 0 0 12px;
     font-size: 14px;
     color: var(--muted);
-    letter-spacing: .05em;
+    letter-spacing: 0.05em;
 }
 
 .menu-list {
@@ -152,7 +165,10 @@ body {
     text-decoration: none;
     color: var(--text);
     background: #fbfdff;
-    transition: border-color .15s ease, transform .15s ease, background .15s ease;
+    transition:
+        border-color 0.15s ease,
+        transform 0.15s ease,
+        background 0.15s ease;
 }
 
 .menu-link:hover {

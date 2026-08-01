@@ -7,6 +7,12 @@ use Illuminate\Support\Facades\Schema;
 
 class PayrollV2EmploymentInsuranceService
 {
+    /**
+     * 月給の雇用保険・会社負担分を計算する正本。
+     *
+     * このサービスは雇用保険系の項目だけを更新する。
+     * 呼び出し元は更新後に PayrollV2UpdateService::refreshTotals() を通して控除合計を作り直す。
+     */
     public function recalculate(string $staffId, int $year, int $month): int
     {
         $staffId = trim($staffId);
@@ -54,7 +60,7 @@ class PayrollV2EmploymentInsuranceService
         }
         $syaho = $syahoQuery
             ->orderByDesc('jidou_apply_date')
-            ->first(['jidou_kyuyo']);
+            ->first(['jidou_rate']);
 
         $rouhoRow = (array) ($rouho ?? []);
         $generalSt = (float) ($rouhoRow['general_st'] ?? 0);
@@ -66,20 +72,30 @@ class PayrollV2EmploymentInsuranceService
             'rousai_general',
             'general_rousai',
         ]);
-        $jidouRitu = (float) ($syaho->jidou_kyuyo ?? 0);
+        $jidouRitu = (float) ($syaho->jidou_rate ?? 0);
         $target = (float) ($current->rouho_target_sum ?? 0);
 
         $staffShahoRows = $conn->table('dbo.mx_staff_shou')
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
             ->orderByDesc('raise_year')
             ->get()
-            ->map(static fn ($row): array => (array) $row)
+            ->map(static fn($row): array => (array) $row)
             ->all();
         $staffShaho = $this->pickStaffShahoByMonth($staffShahoRows, $year, $month);
 
         $division = trim((string) ($staff->staff_division ?? ''));
         $hasKoyou = ((int) ($staff->koyou ?? 0)) === 1;
         $storeCode = trim((string) ($staff->section ?? ''));
+        if (str_contains($division, '業務委託')) {
+            return $conn->table('dbo.mx_kyuyo_shou')
+                ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
+                ->update([
+                    'koyou' => 0,
+                    'koyou_office' => 0,
+                    'jidou_office' => 0,
+                    'rousai_office' => 0,
+                ]);
+        }
 
         $isExcluded =
             $staffId === '001'
@@ -122,6 +138,11 @@ class PayrollV2EmploymentInsuranceService
             ]);
     }
 
+    /**
+     * 賞与の雇用保険・会社負担分を計算する正本。
+     *
+     * 賞与側もこのサービスでは雇用保険系の項目だけを更新する。
+     */
     public function recalculateBonus(string $staffId, string $paymentDate): int
     {
         $staffId = trim($staffId);
@@ -189,7 +210,7 @@ class PayrollV2EmploymentInsuranceService
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
             ->orderByDesc('raise_year')
             ->get()
-            ->map(static fn ($row): array => (array) $row)
+            ->map(static fn($row): array => (array) $row)
             ->all();
         $year = (int) substr($paymentDate, 0, 4);
         $month = (int) substr($paymentDate, 5, 2);
@@ -198,6 +219,16 @@ class PayrollV2EmploymentInsuranceService
         $division = trim((string) ($staff->staff_division ?? ''));
         $hasKoyou = ((int) ($staff->koyou ?? 0)) === 1;
         $storeCode = trim((string) ($staff->section ?? ''));
+        if (str_contains($division, '業務委託')) {
+            return $conn->table('dbo.mx_kyuyo_shou')
+                ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
+                ->update([
+                    'koyou' => 0,
+                    'koyou_office' => 0,
+                    'jidou_office' => 0,
+                    'rousai_office' => 0,
+                ]);
+        }
 
         $isExcluded =
             $staffId === '001'

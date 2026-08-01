@@ -16,7 +16,10 @@ input[type="button"] {
     line-height: 1;
     text-decoration: none;
     cursor: pointer;
-    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
 }
 
 .btn:hover,
@@ -42,17 +45,32 @@ input[type="button"]:hover {
     color: #fff;
 }
 
+.btn-small {
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1.2;
+    min-height: 25px;
+}
+
+/* 戻るボタン */
+.btn_back {
+    background: #918f8f;
+    color: #fff;
+    margin-top: 20px;
+}
+
+input[type="month"],
+input[type="date"],
 input[type="text"],
 input[type="number"],
-input[type="date"],
-input[type="password"],
-select,
-textarea {
+input[type="time"],
+textarea,
+select {
     border: 1px solid #c7d2df;
     border-radius: 10px;
     background: #fff;
     color: #253043;
-    font-size: 13px;
+    /* font-size: 13px; */
     line-height: 1.4;
 }
 
@@ -61,8 +79,8 @@ input[type="number"],
 input[type="date"],
 input[type="password"],
 select {
-    min-height: 38px;
-    padding: 0 12px;
+    /* min-height: 38px; */
+    padding: 4px 2px;
 }
 
 textarea {

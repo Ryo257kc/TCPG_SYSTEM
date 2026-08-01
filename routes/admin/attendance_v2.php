@@ -9,4 +9,5 @@ Route::post('/attendance/create-shifts', [AttendanceV2Controller::class, 'create
 Route::post('/attendance/delete-shifts', [AttendanceV2Controller::class, 'deleteShifts'])->name('admin.attendance.delete-shifts');
 Route::post('/attendance/update-daily', [AttendanceV2Controller::class, 'updateDaily'])->name('admin.attendance.update-daily');
 Route::post('/attendance/confirm', [AttendanceV2Controller::class, 'confirmAttendance'])->name('admin.attendance.confirm');
+Route::post('/attendance/cancel-confirm', [AttendanceV2Controller::class, 'cancelConfirmAttendance'])->name('admin.attendance.cancel-confirm');
 Route::post('/attendance/reflect', [AttendanceV2Controller::class, 'reflectAttendance'])->name('admin.attendance.reflect');

@@ -10,11 +10,6 @@
     --card-accent: linear-gradient(135deg, #ffd8ae, #ffc38b);
 }
 
-.dashboard-page .container {
-    display: grid;
-    gap: 16px;
-}
-
 .dashboard-info-panel,
 .dashboard-office-panel {
     padding: 18px 20px 20px;

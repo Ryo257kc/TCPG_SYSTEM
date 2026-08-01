@@ -1,0 +1,126 @@
+.journal-entries-panel {
+    display: grid;
+    gap: 12px;
+}
+
+.journal-entries-filter-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 1.35fr) minmax(180px, 220px) minmax(180px, 220px) auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.journal-entries-filter-group {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.journal-entries-filter-label {
+    font-size: 12px;
+    color: #5b6474;
+    font-weight: 700;
+}
+
+.journal-entries-filter-group select,
+.journal-entries-filter-group input[type="date"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.journal-entries-date-range {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+}
+
+.journal-entries-date-range span {
+    color: #5b6474;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.journal-entries-filter-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: end;
+}
+
+.journal-entries-meta {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.journal-entries-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #d9e0ea;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.journal-entries-table {
+    min-width: 1540px;
+}
+
+.journal-entries-group-row th {
+    text-align: center;
+    font-size: 11px;
+    background: #edf4fd;
+    color: #46638a;
+    border-bottom: 1px solid #d6e2f2;
+}
+
+.journal-entries-table th,
+.journal-entries-table td {
+    vertical-align: top;
+}
+
+.journal-entries-flag-cell {
+    width: 48px;
+    font-weight: 700;
+}
+
+.journal-entries-stack-cell,
+.journal-entries-note-cell,
+.journal-entries-summary-cell {
+    white-space: normal !important;
+    line-height: 1.45;
+}
+
+.journal-entries-stack-cell {
+    min-width: 220px;
+}
+
+.journal-entries-stack-main {
+    font-weight: 700;
+    color: #23354d;
+}
+
+.journal-entries-stack-sub {
+    color: #5b6474;
+    font-size: 11px;
+}
+
+.journal-entries-note-cell {
+    min-width: 150px;
+}
+
+.journal-entries-note-sub {
+    color: #5b6474;
+    font-size: 11px;
+}
+
+.journal-entries-summary-cell {
+    min-width: 220px;
+}
+
+@media (max-width: 1080px) {
+    .journal-entries-filter-row {
+        grid-template-columns: 1fr;
+    }
+
+    .journal-entries-filter-actions {
+        justify-content: flex-start;
+    }
+}

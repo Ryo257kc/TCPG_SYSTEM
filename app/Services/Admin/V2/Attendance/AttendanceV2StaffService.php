@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2StaffService
 {
+    // シフト作成候補用のスタッフ取得サービス。
+    // 勤怠一覧の対象者取得は AttendanceV2AttendanceStaffService を使う。
     /**
      * @return list<array{staff_id:string,staff_name:string,division:string,store_name:string,company_name:string}>
      */

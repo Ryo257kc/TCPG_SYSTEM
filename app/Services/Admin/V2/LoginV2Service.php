@@ -12,7 +12,7 @@ class LoginV2Service
 
         return DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->select(['staff_id', 'staff_name', 'password', 'employment', 'is_daily_report_user'])
+            ->select(['staff_id', 'staff_name', 'password', 'employment', 'is_admin'])
             ->whereRaw('LTRIM(RTRIM(CAST(staff_id as nvarchar(50)))) = ?', [$normalizedStaffId])
             ->first();
     }
@@ -24,9 +24,14 @@ class LoginV2Service
         return $normalized !== '' && mb_strpos($normalized, '退職') !== false;
     }
 
-    public function isAllowedStaff(object $staff): bool
+    public function isAdmin(object $staff): bool
     {
-        return (int) ($staff->is_daily_report_user ?? 0) === 1;
+        return (int) ($staff->is_admin ?? 0) === 1;
+    }
+
+    public function isAdminLogin(object $staff): bool
+    {
+        return (int) ($staff->is_admin ?? 0) === 1;
     }
 
     public function verifyPassword(object $staff, string $password): bool

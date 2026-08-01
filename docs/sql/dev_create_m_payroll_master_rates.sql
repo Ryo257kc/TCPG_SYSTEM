@@ -78,7 +78,7 @@ BEGIN
     )
     SELECT
         TRY_CONVERT(date, jidou_apply_date) AS apply_date,
-        TRY_CONVERT(decimal(18,4), jidou_kyuyo) AS child_contribution_rate
+        TRY_CONVERT(decimal(18,4), jidou_rate) AS child_contribution_rate
     FROM dbo.t_syaho
     WHERE TRY_CONVERT(date, jidou_apply_date) IS NOT NULL;
 END;

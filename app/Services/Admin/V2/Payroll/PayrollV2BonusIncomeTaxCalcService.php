@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollV2BonusIncomeTaxCalcService
 {
+
+    // 賞与所得税計算
     public function recalculate(string $staffId, string $paymentDate): int
     {
         $staffId = trim($staffId);
@@ -27,6 +29,7 @@ class PayrollV2BonusIncomeTaxCalcService
                 'kaigo',
                 'kounen',
                 'koyou',
+                'child_support_funds',
                 'fuyo_sum',
             ]);
 
@@ -42,7 +45,7 @@ class PayrollV2BonusIncomeTaxCalcService
         $division = trim((string) ($staff->staff_division ?? ''));
         $taxAmount = trim((string) ($staff->tax_amount ?? ''));
 
-        if (mb_strpos($division, '讌ｭ蜍吝ｧ碑ｨ・') !== false) {
+        if (mb_strpos($division, '業務委託') !== false) {
             return (int) DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $bonusRow->kyuyo_sho_no)
@@ -52,15 +55,16 @@ class PayrollV2BonusIncomeTaxCalcService
         $bonusTaxableBase = max(
             0.0,
             $this->num($bonusRow->bonus_amo ?? 0)
-            - $this->num($bonusRow->kenpo ?? 0)
-            - $this->num($bonusRow->kaigo ?? 0)
-            - $this->num($bonusRow->kounen ?? 0)
-            - $this->num($bonusRow->koyou ?? 0)
+                - $this->num($bonusRow->kenpo ?? 0)
+                - $this->num($bonusRow->kaigo ?? 0)
+                - $this->num($bonusRow->child_support_funds ?? 0)
+                - $this->num($bonusRow->kounen ?? 0)
+                - $this->num($bonusRow->koyou ?? 0)
         );
         $fuyoNum = (int) ($bonusRow->fuyo_sum ?? 0);
         $previousNet = $this->num($this->loadPreviousPayrollRow($staffId, $paymentDate)?->syaho_deduction_sum ?? 0);
 
-        if (mb_strpos($taxAmount, '荵呎ｬ・') !== false) {
+        if (mb_strpos($taxAmount, '乙欄') !== false) {
             $incomeTax = $this->calcBonusOtsu($bonusTaxableBase, $previousNet);
         } else {
             $incomeTax = $this->calcBonusKou($bonusTaxableBase, $previousNet, $fuyoNum);

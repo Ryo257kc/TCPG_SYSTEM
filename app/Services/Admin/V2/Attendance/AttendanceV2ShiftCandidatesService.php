@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2ShiftCandidatesService
 {
+    // シフト作成ダイアログの候補者を作るサービス。
+    // 対象月にすでに勤怠行があるかを見て、作成済みフラグを付ける。
     public function __construct(
         private readonly AttendanceV2StaffService $staffService,
     ) {

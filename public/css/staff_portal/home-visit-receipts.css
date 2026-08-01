@@ -1,0 +1,85 @@
+.receipts-scroll-body {
+    min-width: 0;
+}
+
+.receipts-list-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.receipts-back-row {
+    flex: 0 0 auto;
+}
+
+.receipts-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.receipts-toolbar input,
+.receipts-toolbar select {
+    min-height: 30px;
+}
+
+.receipts-print-select {
+    min-height: 30px;
+    min-width: 150px;
+}
+
+.receipts-summary-head {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.receipts-summary-title {
+    margin: 0;
+    text-align: center;
+    font-size: 22px;
+}
+
+.receipts-summary-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    color: #6b3f1f;
+    font-weight: 700;
+}
+
+.receipts-confirmed {
+    color: #c53030;
+}
+
+.receipts-mismatch {
+    background: #ffb3b3;
+}
+
+.receipts-transfer {
+    background: #ffff66;
+}
+
+.receipts-selected-row {
+    background: #fff8c5;
+}
+
+.receipts-home-visit-row {
+    background: #fff8c5;
+}
+
+@media (max-width: 900px) {
+    .receipts-summary-head {
+        grid-template-columns: 1fr;
+    }
+
+    .receipts-summary-title {
+        order: -1;
+    }
+}

@@ -21,7 +21,7 @@ class PayrollV2MonthService
                 $value = trim((string) ($row->payment_date ?? ''));
                 return $value === '' ? '' : date('Y-m-d', strtotime($value));
             })
-            ->filter(static fn (string $value): bool => $value !== '')
+            ->filter(static fn(string $value): bool => $value !== '')
             ->values()
             ->all();
     }

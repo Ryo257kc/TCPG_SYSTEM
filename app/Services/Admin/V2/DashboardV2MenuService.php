@@ -15,6 +15,7 @@ class DashboardV2MenuService
                 ['key' => 'salary-detail', 'label' => '給与計算', 'url' => '/admin/payroll'],
                 ['key' => 'bonus-detail', 'label' => '賞与計算', 'url' => '/admin/bonus'],
                 ['key' => 'paid-leave-manage', 'label' => '有休管理', 'url' => '/admin/paid-leave'],
+                ['key' => 'year-end-adjustments', 'label' => '年末調整管理', 'url' => '/admin/year-end-adjustments'],
             ],
             '売上' => [
                 ['key' => 'sales-preview', 'label' => '売上', 'url' => '/admin/sales'],
@@ -26,7 +27,7 @@ class DashboardV2MenuService
             '請求・仕訳' => [
                 ['key' => 'journal-entries', 'label' => '仕訳帳', 'url' => '/admin'],
                 ['key' => 'petty-cash-list', 'label' => '小口一覧', 'url' => '/admin'],
-                ['key' => 'billing-list', 'label' => '請求一覧', 'url' => '/admin'],
+                ['key' => 'billing-list', 'label' => '請求一覧', 'url' => '/admin/work/billing-list'],
                 ['key' => 'loan-repayment', 'label' => '借入返済', 'url' => '/admin'],
             ],
             '帳票' => [
@@ -69,6 +70,7 @@ class DashboardV2MenuService
             'salary-detail' => ['title' => '給与計算', 'description' => '給与計算ページへ移動します。'],
             'bonus-detail' => ['title' => '賞与計算', 'description' => '賞与計算ページへ移動します。'],
             'paid-leave-manage' => ['title' => '有休管理', 'description' => '有休の使用・残数確認ページへ移動します。'],
+            'year-end-adjustments' => ['title' => '年末調整管理', 'description' => '年末調整申請の受付・提出状況を確認します。'],
             'sales-preview' => ['title' => '売上', 'description' => '売上ページはこちらから移動してください。'],
             'accounts-receivable' => ['title' => '未収入金', 'description' => '未収入金ページはこちらから移動してください。'],
             'high-cost-medical' => ['title' => '高額療養費', 'description' => '高額療養費ページはこちらから移動してください。'],

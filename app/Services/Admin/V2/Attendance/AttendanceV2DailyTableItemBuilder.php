@@ -2,6 +2,8 @@
 
 namespace App\Services\Admin\V2\Attendance;
 
+use App\Support\AttendanceTime;
+
 use DateInterval;
 use DatePeriod;
 use DateTimeImmutable;
@@ -9,6 +11,12 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2DailyTableItemBuilder
 {
+    // 勤怠のスタッフ別日別テーブルを作るサービス。
+    // 日別画面の下に出す合計も AttendanceV2MonthlySummaryService を使い、一覧や給与反映と同じ式にする。
+    public function __construct(
+        private readonly AttendanceV2MonthlySummaryService $monthlySummaryService,
+    ) {}
+
     /**
      * @param list<string> $timeCardKeys
      * @return array{
@@ -25,7 +33,8 @@ class AttendanceV2DailyTableItemBuilder
 
         return [
             'dailyRows' => $dailyRows,
-            'dailySummary' => $dailyRows === [] ? null : $this->summary($dailyRows),
+            // 日別明細の下の合計も、勤怠一覧・給与反映と同じ月次集計サービスを使う。
+            'dailySummary' => $dailyRows === [] ? null : $this->monthlySummaryService->summaryForTimeCardKeys($timeCardKeys, $year, $month),
             'attendanceCategories' => $this->attendanceCategories(),
             'storeOptions' => $this->storeOptions(),
             'isEditable' => $isEditable,
@@ -61,12 +70,14 @@ class AttendanceV2DailyTableItemBuilder
                     'label' => $value,
                 ];
             })
-            ->filter(static fn (array $row): bool => $row['value'] !== '')
+            ->filter(static fn(array $row): bool => $row['value'] !== '')
             ->unique('value')
             ->values()
             ->all();
     }
 
+
+    // 勤怠管理一覧表の表示
     /**
      * @param list<string> $staffKeys
      * @return list<array<string,string>>
@@ -74,9 +85,9 @@ class AttendanceV2DailyTableItemBuilder
     public function rows(array $staffKeys, int $year, int $month): array
     {
         $staffKeys = array_values(array_unique(array_filter(array_map(
-            static fn ($staffKey): string => trim((string) $staffKey),
+            static fn($staffKey): string => trim((string) $staffKey),
             $staffKeys
-        ), static fn (string $staffKey): bool => $staffKey !== '')));
+        ), static fn(string $staffKey): bool => $staffKey !== '')));
 
         if ($staffKeys === [] || $year < 2000 || $month < 1 || $month > 12) {
             return [];
@@ -84,7 +95,6 @@ class AttendanceV2DailyTableItemBuilder
 
         $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
         $end = $start->modify('first day of next month');
-        $lastDay = $start->modify('last day of this month');
 
         $storeRows = DB::connection('sqlsrv')
             ->table('dbo.mx_stores')
@@ -93,6 +103,7 @@ class AttendanceV2DailyTableItemBuilder
 
         $storeShortNameByCode = [];
         $storeShortNameByName = [];
+
         foreach ($storeRows as $storeRow) {
             $storeCode = trim((string) ($storeRow->store_code ?? ''));
             $storeName = trim((string) ($storeRow->store_name ?? ''));
@@ -136,15 +147,18 @@ class AttendanceV2DailyTableItemBuilder
 
         $rows = [];
         $period = new DatePeriod($start, new DateInterval('P1D'), $end);
+
         foreach ($period as $date) {
             $key = $date->format('Y-m-d');
             $card = $timeCardMap[$key] ?? null;
+
             $shiftScheduled = $this->calculateScheduled(
                 $card->shift_start ?? null,
                 $card->shift_leave ?? null,
                 $card->shift_break_out ?? null,
                 $card->shift_end ?? null,
             );
+
             $changeScheduled = $this->calculateScheduled(
                 $card->change_start ?? null,
                 $card->change_leave ?? null,
@@ -152,16 +166,34 @@ class AttendanceV2DailyTableItemBuilder
                 $card->change_end ?? null,
             );
 
+            $hasChangeRecord = $this->hasAnyTimeValue([
+                $card->change_start ?? null,
+                $card->change_leave ?? null,
+                $card->change_break_out ?? null,
+                $card->change_end ?? null,
+            ]);
+
+            $rawChangeScheduled = trim((string) ($card->change_scheduled ?? ''));
+
+            $displayChangeScheduled = $rawChangeScheduled !== ''
+                ? $this->formatNumber($rawChangeScheduled)
+                : ($hasChangeRecord ? $changeScheduled : $shiftScheduled);
+
+            $isChangeScheduledOver =
+                $rawChangeScheduled !== '' &&
+                $this->toFloat($rawChangeScheduled) > $this->toFloat($shiftScheduled);
+
+            $isHoliday = in_array(
+                trim((string) ($card->holiday_category ?? '')),
+                ['休日', '祝日'],
+                true
+            );
+
             $rows[] = [
                 'time_card_key' => trim((string) ($card->staff_name ?? ($staffKeys[0] ?? ''))),
                 'work_date' => $key,
                 'date_label' => $date->format('n/j') . '(' . $this->jpWeekday($date) . ')',
-                'has_change_record' => $this->hasAnyTimeValue([
-                    $card->change_start ?? null,
-                    $card->change_leave ?? null,
-                    $card->change_break_out ?? null,
-                    $card->change_end ?? null,
-                ]) ? '1' : '0',
+                'has_change_record' => $hasChangeRecord ? '1' : '0',
                 'holiday_category' => trim((string) ($card->holiday_category ?? '')),
                 'attendance_category' => trim((string) ($card->work_type ?? '')),
                 'category_time' => $this->formatNumber($card->work_type_time ?? null),
@@ -180,7 +212,7 @@ class AttendanceV2DailyTableItemBuilder
                 'actual_leave' => $this->formatTime($card->actual_leave ?? null),
                 'actual_break_out' => $this->formatTime($card->actual_break_out ?? null),
                 'actual_end' => $this->formatTime($card->actual_end ?? null),
-                'actual_scheduled' => $this->calculateScheduled(
+                'actual_scheduled_old' => $this->calculateScheduled(
                     $card->actual_start ?? null,
                     $card->actual_leave ?? null,
                     $card->actual_break_out ?? null,
@@ -190,25 +222,31 @@ class AttendanceV2DailyTableItemBuilder
                 'change_leave' => $this->formatTime($card->change_leave ?? null),
                 'change_break_out' => $this->formatTime($card->change_break_out ?? null),
                 'change_end' => $this->formatTime($card->change_end ?? null),
-                'change_scheduled' => $this->hasAnyTimeValue([
-                    $card->change_start ?? null,
-                    $card->change_leave ?? null,
-                    $card->change_break_out ?? null,
-                    $card->change_end ?? null,
-                ]) ? $changeScheduled : $shiftScheduled,
+                'change_scheduled' => $displayChangeScheduled,
+                'is_change_scheduled_over' => $isChangeScheduledOver ? '1' : '0',
+                'is_holiday' => $isHoliday ? '1' : '0',
                 'overtime' => $this->formatNumber($card->overtime ?? null),
                 'night_overtime' => $this->formatNumber($card->night_overtime ?? null),
                 'timecard_note' => trim((string) ($card->timecard_note ?? '')),
                 'return_note' => trim((string) ($card->return_note ?? '')),
                 'has_staff_approval' => $this->hasApprovalValue($card->staff_request ?? null) ? '1' : '0',
                 'has_manager_approval' => $this->hasApprovalValue($card->manager_approval ?? null) ? '1' : '0',
+                'is_returned' => ((int) ($card->is_returned ?? 0)) === 1,
             ];
         }
 
         return $rows;
     }
 
+
+
+    // 日別サマリー
     /**
+     * 未使用の旧サマリー計算。
+     *
+     * 月次集計は AttendanceV2MonthlySummaryService に集約済み。
+     * 後で安全に削除できるよう、旧処理として残している。
+     *
      * @param list<array<string,string>> $rows
      * @return array<string,mixed>
      */
@@ -230,24 +268,32 @@ class AttendanceV2DailyTableItemBuilder
 
         foreach ($rows as $row) {
             $shiftScheduled = $this->toFloat($row['shift_scheduled'] ?? '');
-            $actualScheduled = $this->toFloat($row['actual_scheduled'] ?? '');
-            $changeScheduled = $this->toFloat($row['change_scheduled'] ?? '');
+            $actualScheduled = $this->toFloat($row['actual_scheduled_old'] ?? '');
+            $rawChangeScheduled = trim((string) ($row['change_scheduled'] ?? ''));
+            $changeScheduled = $rawChangeScheduled !== ''
+                ? $this->toFloat($rawChangeScheduled)
+                : $shiftScheduled;
             $overtime = $this->toFloat($row['overtime'] ?? '');
             $nightOvertime = $this->toFloat($row['night_overtime'] ?? '');
             $paidLeave = $this->toFloat($row['paid_leave_used'] ?? '');
             $categoryTime = $this->toFloat($row['category_time'] ?? '');
             $attendanceCategory = trim((string) ($row['attendance_category'] ?? ''));
 
-            if (($row['has_change_record'] ?? '0') === '1' || $shiftScheduled > 0) {
+            $hasWork = $rawChangeScheduled !== ''
+                ? $changeScheduled > 0
+                : $shiftScheduled > 0;
+
+            if ($hasWork) {
                 $summary['work_days']++;
             }
-            if ($attendanceCategory === "\u{6B20}\u{52E4}") {
+
+            if ($attendanceCategory === "欠勤") {
                 $summary['absence_days']++;
             }
-            if ($attendanceCategory === "\u{4F11}\u{51FA}") {
+            if ($attendanceCategory === "休出") {
                 $summary['holiday_work_days']++;
             }
-            if (in_array($attendanceCategory, ["\u{9045}\u{523B}", "\u{65E9}\u{9000}", "\u{9045}\u{65E9}"], true)) {
+            if (in_array($attendanceCategory, ["遅刻", "早退", "遅早"], true)) {
                 $summary['late_early_days']++;
             }
 
@@ -276,6 +322,9 @@ class AttendanceV2DailyTableItemBuilder
 
         $text = trim((string) $value);
         if ($text === '') {
+            return '';
+        }
+        if (AttendanceTime::isZeroPlaceholder($text)) {
             return '';
         }
 
@@ -319,43 +368,7 @@ class AttendanceV2DailyTableItemBuilder
 
     private function parseTimeMinutes(mixed $value): ?int
     {
-        if ($value === null) {
-            return null;
-        }
-
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        if (preg_match('/^\d+(\.\d+)?$/', $text) === 1) {
-            $numeric = (float) $text;
-            if ($numeric <= 24) {
-                return (int) round($numeric * 60);
-            }
-
-            $digitsOnly = preg_replace('/\D+/', '', $text);
-            if ($digitsOnly !== null && preg_match('/^\d{3,4}$/', $digitsOnly) === 1) {
-                $hours = (int) substr($digitsOnly, 0, -2);
-                $minutes = (int) substr($digitsOnly, -2);
-                if ($hours < 24 && $minutes < 60) {
-                    return ($hours * 60) + $minutes;
-                }
-            }
-
-            return null;
-        }
-
-        $normalized = str_ireplace(['AM', 'PM'], [' AM ', ' PM '], $text);
-        $ts = strtotime('2000-01-01 ' . $normalized);
-        if ($ts === false) {
-            $ts = strtotime($normalized);
-        }
-        if ($ts === false) {
-            return null;
-        }
-
-        return ((int) date('G', $ts) * 60) + (int) date('i', $ts);
+        return AttendanceTime::parseMinutes($value);
     }
 
     private function minutesBetween(int $startMinutes, int $endMinutes): int

@@ -115,17 +115,36 @@ return [
 
         'sqlsrv_payroll' => [
             'driver' => 'sqlsrv',
-            'url' => env('PAYROLL_DB_URL'),
-            'host' => env('PAYROLL_DB_HOST', 'localhost'),
+            'host' => env('PAYROLL_DB_HOST'),
             'port' => env('PAYROLL_DB_PORT', '1433'),
-            'database' => env('PAYROLL_DB_DATABASE', 'laravel'),
-            'username' => env('PAYROLL_DB_USERNAME', 'root'),
-            'password' => env('PAYROLL_DB_PASSWORD', ''),
-            'charset' => env('PAYROLL_DB_CHARSET', 'utf8'),
+            'database' => env('PAYROLL_DB_DATABASE'),
+            'username' => env('PAYROLL_DB_USERNAME'),
+            'password' => env('PAYROLL_DB_PASSWORD'),
+            'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            'encrypt' => env('APP_ENV', 'production') === 'local' ? 'no' : env('PAYROLL_DB_ENCRYPT', 'yes'),
-            'trust_server_certificate' => env('PAYROLL_DB_TRUST_SERVER_CERTIFICATE', 'false'),
+
+            'encrypt' => true,
+            'trust_server_certificate' => true,
+
+            'options' => [
+                PDO::SQLSRV_ATTR_ENCODING => PDO::SQLSRV_ENCODING_UTF8,
+            ],
+        ],
+
+        'sqlsrv_dailyreport' => [
+            'driver' => 'sqlsrv',
+            'url' => env('DAILYREPORT_DB_URL'),
+            'host' => env('DAILYREPORT_DB_HOST', 'localhost'),
+            'port' => env('DAILYREPORT_DB_PORT', '1433'),
+            'database' => env('DAILYREPORT_DB_DATABASE', 'laravel'),
+            'username' => env('DAILYREPORT_DB_USERNAME', 'root'),
+            'password' => env('DAILYREPORT_DB_PASSWORD', ''),
+            'charset' => env('DAILYREPORT_DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('APP_ENV', 'production') === 'local' ? 'no' : env('DAILYREPORT_DB_ENCRYPT', 'yes'),
+            'trust_server_certificate' => env('DAILYREPORT_DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
     ],
 
@@ -177,7 +196,7 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-database-'),
+            'prefix' => env('REDIS_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')) . '-database-'),
             'persistent' => env('REDIS_PERSISTENT', false),
         ],
 
@@ -210,4 +229,3 @@ return [
     ],
 
 ];
-

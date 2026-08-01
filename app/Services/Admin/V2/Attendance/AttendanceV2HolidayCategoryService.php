@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 
 class AttendanceV2HolidayCategoryService
 {
+    // シフト作成時の日区分を決めるサービス。
+    // カレンダー休日と基本シフトを見て、平日・休日・祝日などを解決する。
     public const CATEGORY_WEEKDAY = '平日';
     public const CATEGORY_HALF_DAY = '半日';
     public const CATEGORY_HOLIDAY = '休日';

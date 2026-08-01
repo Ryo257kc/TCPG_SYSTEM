@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\DB;
 
 class PaidLeaveV2SummaryService
 {
+    public function __construct(
+        private readonly PaidLeaveV2RemainingService $remainingService,
+    ) {
+    }
+
     public function build(string $staffId, int $selectedYear, int $page = 1, int $perPage = 20): array
     {
         $staffId = trim($staffId);
@@ -74,7 +79,7 @@ class PaidLeaveV2SummaryService
             return $date !== null && (int) $date->format('Y') === (int) $cutoff->format('Y');
         })->sum(fn ($row) => $this->num($row->lost_num ?? null));
 
-        $remainingDays = max(0, $grantTotal - $usedTotal - $lostTotal);
+        $remainingDays = $this->remainingService->remainingDays(trim((string) ($staff['staff_id'] ?? '')));
         $grantCount = (int) $additionRows->count();
 
         return [

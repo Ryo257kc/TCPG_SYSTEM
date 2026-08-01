@@ -1,7 +1,7 @@
 ﻿# Project Guard Rules (Hard Stop)
 
 ## 1) Target Lock
-- This repository is `tcpg_system_admin_laravel`.
+- This repository is `tcpg_system_laravel`.
 - If request targets another project, STOP immediately.
 
 ## 2) No Cross-Project Editing
@@ -11,7 +11,7 @@
 - Before substantial edits, print target project and wait for explicit `OK`.
 
 ## 4) Hard Preflight
-- Before edits, run `scripts/guard-project.ps1 -ExpectedProjectName tcpg_system_admin_laravel`.
+- Before edits, run `scripts/guard-project.ps1 -ExpectedProjectName tcpg_system_laravel`.
 
 ## 5) Freeze Respect
 - Frozen pages/files are read-only until explicit unlock.

@@ -25,6 +25,7 @@ class PayrollController extends Controller
         return $this->renderPayrollPage($request, true);
     }
 
+    // 給与明細表示
     private function renderPayrollPage(Request $request, bool $isBonus): RedirectResponse|View
     {
         $sessionStaffId = (string) $request->session()->get('staff_id', '');
@@ -39,12 +40,21 @@ class PayrollController extends Controller
         $connection = DB::connection('sqlsrv_payroll');
         $staffOptions = $isPayrollManager ? $this->getStaffOptions() : [];
         $visibleFrom = $this->payrollVisibleFromDate();
+        $today = now('Asia/Tokyo')->toDateString();
 
         $availableMonths = $this->buildPayrollBaseQuery($connection, $isBonus, $targetStaffId)
-            ->whereDate('supply_month', '>=', $visibleFrom)
+            ->where('edit_lock', 1)
+            ->where('supply_month', '>=', $visibleFrom)
+            ->where('supply_month', '<=', $today)
             ->orderBy('supply_month', 'desc')
             ->pluck('supply_month')
-            ->map(fn ($v) => Carbon::parse($v)->format('Y-m'))
+            ->map(function ($v) {
+                if ($v instanceof \DateTimeInterface) {
+                    return $v->format('Y-m');
+                }
+
+                return substr(trim((string) $v), 0, 7);
+            })
             ->unique()
             ->values()
             ->all();
@@ -53,33 +63,17 @@ class PayrollController extends Controller
         [$year, $monthNum] = $this->splitMonth($selectedMonth);
 
         $rawRows = $this->buildPayrollBaseQuery($connection, $isBonus, $targetStaffId)
-            ->whereDate('supply_month', '>=', $visibleFrom)
+            ->where('edit_lock', 1)
+            ->where('supply_month', '>=', $visibleFrom)
+            ->where('supply_month', '<=', $today)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
             ->whereRaw('MONTH([supply_month]) = ?', [$monthNum])
             ->orderBy('supply_month', 'desc')
             ->get()
-            ->map(fn ($r) => $this->normalizePayrollRowForDisplay((array) $r))
+            ->map(fn($r) => $this->normalizePayrollRowForDisplay((array) $r))
             ->values();
 
-        logger()->info('staff_portal.payroll.raw_rows_shape', [
-            'staff_id' => $targetStaffId,
-            'month' => $selectedMonth,
-            'is_bonus' => $isBonus,
-            'row_count' => $rawRows->count(),
-            'first_row_keys' => $rawRows->isNotEmpty() ? array_keys((array) $rawRows->first()) : [],
-            'first_row_totals' => $rawRows->isNotEmpty() ? [
-                'sikyu_total_amo' => $rawRows->first()['sikyu_total_amo'] ?? null,
-                'koujyo_total_amo' => $rawRows->first()['koujyo_total_amo'] ?? null,
-                'other_total_amo' => $rawRows->first()['other_total_amo'] ?? null,
-                'sasihiki_sikyu' => $rawRows->first()['sasihiki_sikyu'] ?? null,
-                'sikyu_total' => $rawRows->first()['sikyu_total'] ?? null,
-                'koujyo_total' => $rawRows->first()['koujyo_total'] ?? null,
-                'other_total' => $rawRows->first()['other_total'] ?? null,
-                'sasihiki_total' => $rawRows->first()['sasihiki_total'] ?? null,
-            ] : [],
-        ]);
-
-        $rows = $rawRows->map(fn (array $row, int $index) => $this->buildDisplayRow($row, $index))->values();
+        $rows = $rawRows->map(fn(array $row, int $index) => $this->buildDisplayRow($row, $index))->values();
         $selectedRowIndex = $this->resolveSelectedRowIndex((string) $request->query('row', '0'), $rows->count());
         $selectedRow = $rows->get($selectedRowIndex);
 
@@ -92,7 +86,7 @@ class PayrollController extends Controller
         $allowanceSlotOrder = $this->resolveAllowanceSlotOrder($organization['company_code'] ?? null);
         $allowanceDefinitionsOrdered = $this->resolveAllowanceDefinitionsOrdered($organization['company_code'] ?? null);
 
-        return view($isBonus ? 'staff_portal.payroll.bonus' : 'staff_portal.payroll.payslip', [
+        return view('staff_portal.payroll.list', [
             'pageTitle' => $isBonus ? '賞与明細' : '給与明細',
             'isBonus' => $isBonus,
             'displayName' => $this->resolveDisplayName($staffRow, $sessionStaffId),
@@ -154,11 +148,11 @@ class PayrollController extends Controller
                     DB::raw('LTRIM(RTRIM(st.staff_id)) as staff_id'),
                     'st.staff_name',
                 ])
-                ->map(fn ($r) => [
+                ->map(fn($r) => [
                     'staff_id' => (string) ($r->staff_id ?? ''),
                     'staff_name' => (string) ($r->staff_name ?? ''),
                 ])
-                ->filter(fn ($r) => $r['staff_id'] !== '')
+                ->filter(fn($r) => $r['staff_id'] !== '')
                 ->values()
                 ->all();
         }
