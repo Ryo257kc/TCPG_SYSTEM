@@ -26,3 +26,11 @@
 
 - 現在の役員報酬は `allowance_amo_2`。
 - `allowance_2`、`officer_com` は旧カラム扱い。
+
+## 2026-08-01 ドキュメント構成を追加
+
+- `07_architecture.md` を追加。
+- `08_dependencies.md` を追加。
+- `09_coding_rules.md` を追加。
+- `99_do_not_touch.md` を追加。
+- 今後、全ページ共通ルールは薄く保ち、ページ別の業務ルールは対象別docsに分ける方針にした。
