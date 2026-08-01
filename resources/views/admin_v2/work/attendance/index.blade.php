@@ -8,8 +8,6 @@
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/data_table.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/attendance.css') }}"> -->
-    <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/daily_table_item.css') }}"> -->
 
     <style>
         /* body {

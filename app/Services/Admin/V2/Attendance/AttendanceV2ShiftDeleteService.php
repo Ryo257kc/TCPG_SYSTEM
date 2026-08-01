@@ -85,7 +85,6 @@ class AttendanceV2ShiftDeleteService
                     'actual_leave',
                     'actual_break_out',
                     'actual_end',
-                    'actual_scheduled_old',
                     'manager_approval',
                     'staff_request',
                 ];

@@ -207,12 +207,12 @@ class AttendanceV2DailyTableItemBuilder
                 'shift_leave' => $this->formatTime($card->shift_leave ?? null),
                 'shift_break_out' => $this->formatTime($card->shift_break_out ?? null),
                 'shift_end' => $this->formatTime($card->shift_end ?? null),
-                'shift_scheduled' => $shiftScheduled,
+                'shift_scheduled_hours' => $shiftScheduled,
                 'actual_start' => $this->formatTime($card->actual_start ?? null),
                 'actual_leave' => $this->formatTime($card->actual_leave ?? null),
                 'actual_break_out' => $this->formatTime($card->actual_break_out ?? null),
                 'actual_end' => $this->formatTime($card->actual_end ?? null),
-                'actual_scheduled_old' => $this->calculateScheduled(
+                'actual_scheduled_hours' => $this->calculateScheduled(
                     $card->actual_start ?? null,
                     $card->actual_leave ?? null,
                     $card->actual_break_out ?? null,
@@ -238,81 +238,6 @@ class AttendanceV2DailyTableItemBuilder
         return $rows;
     }
 
-
-
-    // 日別サマリー
-    /**
-     * 未使用の旧サマリー計算。
-     *
-     * 月次集計は AttendanceV2MonthlySummaryService に集約済み。
-     * 後で安全に削除できるよう、旧処理として残している。
-     *
-     * @param list<array<string,string>> $rows
-     * @return array<string,mixed>
-     */
-    public function summary(array $rows): array
-    {
-        $summary = [
-            'work_days' => 0,
-            'absence_days' => 0,
-            'holiday_work_days' => 0,
-            'late_early_days' => 0,
-            'paid_leave_days' => 0.0,
-            'shift_scheduled_total' => 0.0,
-            'actual_scheduled_total' => 0.0,
-            'change_scheduled_total' => 0.0,
-            'overtime_total' => 0.0,
-            'night_overtime_total' => 0.0,
-            'category_totals' => [],
-        ];
-
-        foreach ($rows as $row) {
-            $shiftScheduled = $this->toFloat($row['shift_scheduled'] ?? '');
-            $actualScheduled = $this->toFloat($row['actual_scheduled_old'] ?? '');
-            $rawChangeScheduled = trim((string) ($row['change_scheduled'] ?? ''));
-            $changeScheduled = $rawChangeScheduled !== ''
-                ? $this->toFloat($rawChangeScheduled)
-                : $shiftScheduled;
-            $overtime = $this->toFloat($row['overtime'] ?? '');
-            $nightOvertime = $this->toFloat($row['night_overtime'] ?? '');
-            $paidLeave = $this->toFloat($row['paid_leave_used'] ?? '');
-            $categoryTime = $this->toFloat($row['category_time'] ?? '');
-            $attendanceCategory = trim((string) ($row['attendance_category'] ?? ''));
-
-            $hasWork = $rawChangeScheduled !== ''
-                ? $changeScheduled > 0
-                : $shiftScheduled > 0;
-
-            if ($hasWork) {
-                $summary['work_days']++;
-            }
-
-            if ($attendanceCategory === "欠勤") {
-                $summary['absence_days']++;
-            }
-            if ($attendanceCategory === "休出") {
-                $summary['holiday_work_days']++;
-            }
-            if (in_array($attendanceCategory, ["遅刻", "早退", "遅早"], true)) {
-                $summary['late_early_days']++;
-            }
-
-            $summary['paid_leave_days'] += $paidLeave;
-            $summary['shift_scheduled_total'] += $shiftScheduled;
-            $summary['actual_scheduled_total'] += $actualScheduled;
-            $summary['change_scheduled_total'] += $changeScheduled;
-            $summary['overtime_total'] += $overtime;
-            $summary['night_overtime_total'] += $nightOvertime;
-
-            if ($attendanceCategory !== '' && $categoryTime > 0) {
-                $summary['category_totals'][$attendanceCategory] = ($summary['category_totals'][$attendanceCategory] ?? 0.0) + $categoryTime;
-            }
-        }
-
-        ksort($summary['category_totals']);
-
-        return $summary;
-    }
 
     private function formatTime(mixed $value): string
     {
@@ -347,37 +272,9 @@ class AttendanceV2DailyTableItemBuilder
         mixed $breakOutValue,
         mixed $endValue,
     ): string {
-        $startMinutes = $this->parseTimeMinutes($startValue);
-        $endMinutes = $this->parseTimeMinutes($endValue);
-        if ($startMinutes === null || $endMinutes === null) {
-            return '';
-        }
+        $hours = AttendanceTime::scheduledHours($startValue, $leaveValue, $breakOutValue, $endValue);
 
-        $leaveMinutes = $this->parseTimeMinutes($leaveValue);
-        $breakOutMinutes = $this->parseTimeMinutes($breakOutValue);
-
-        if ($leaveMinutes !== null && $breakOutMinutes !== null) {
-            $totalMinutes = $this->minutesBetween($startMinutes, $leaveMinutes)
-                + $this->minutesBetween($breakOutMinutes, $endMinutes);
-
-            return $this->formatNumber($totalMinutes / 60);
-        }
-
-        return $this->formatNumber($this->minutesBetween($startMinutes, $endMinutes) / 60);
-    }
-
-    private function parseTimeMinutes(mixed $value): ?int
-    {
-        return AttendanceTime::parseMinutes($value);
-    }
-
-    private function minutesBetween(int $startMinutes, int $endMinutes): int
-    {
-        if ($endMinutes < $startMinutes) {
-            $endMinutes += 24 * 60;
-        }
-
-        return max(0, $endMinutes - $startMinutes);
+        return $hours > 0 ? AttendanceTime::formatNumber($hours) : '';
     }
 
     private function jpWeekday(DateTimeImmutable $date): string
@@ -387,13 +284,7 @@ class AttendanceV2DailyTableItemBuilder
 
     private function hasAnyTimeValue(array $values): bool
     {
-        foreach ($values as $value) {
-            if ($this->parseTimeMinutes($value) !== null) {
-                return true;
-            }
-        }
-
-        return false;
+        return AttendanceTime::hasAnyTimeValue($values);
     }
 
     private function resolveStoreName(mixed $value, array $storeShortNameByCode, array $storeShortNameByName): string
@@ -426,16 +317,7 @@ class AttendanceV2DailyTableItemBuilder
 
     private function formatNumber(mixed $value): string
     {
-        if ($value === null || $value === '') {
-            return '';
-        }
-
-        $num = (float) $value;
-        if (abs($num - round($num)) < 0.00001) {
-            return (string) (int) round($num);
-        }
-
-        return rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.');
+        return AttendanceTime::formatNumber($value);
     }
 
     private function toFloat(mixed $value): float
@@ -444,4 +326,5 @@ class AttendanceV2DailyTableItemBuilder
 
         return $text === '' || !is_numeric($text) ? 0.0 : (float) $text;
     }
+
 }

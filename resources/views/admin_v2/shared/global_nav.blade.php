@@ -7,7 +7,7 @@ $navGroups = [
 'label' => $t('\\u52e4\\u6020\\u30fb\\u7d66\\u4e0e'),
 'items' => [
 ['label' => $t('\\u52e4\\u6020\\u7ba1\\u7406'), 'route' => 'admin.attendance.index', 'prefixes' => ['admin.attendance.']],
-['label' => $t('\\u7d66\\u4e0e\\u8a08\\u7b97'), 'route' => 'admin.payroll.index', 'prefixes' => ['admin.payroll.', 'admin.payroll-v2.']],
+['label' => $t('\\u7d66\\u4e0e\\u8a08\\u7b97'), 'route' => 'admin.payroll.index', 'prefixes' => ['admin.payroll.']],
 ['label' => $t('\\u8cde\\u4e0e\\u8a08\\u7b97'), 'route' => 'admin.bonus.index', 'prefixes' => ['admin.bonus.']],
 ['label' => $t('\\u6709\\u4f11\\u7ba1\\u7406'), 'route' => 'admin.paid-leave.index', 'prefixes' => ['admin.paid-leave.']],
 ],

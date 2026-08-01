@@ -4,7 +4,6 @@ use App\Http\Controllers\Admin\V2\PayrollV2Controller;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/payroll', [PayrollV2Controller::class, 'index'])->name('admin.payroll.index');
-Route::get('/payroll-v2', [PayrollV2Controller::class, 'index'])->name('admin.payroll-v2.index');
 Route::get('/bonus', [PayrollV2Controller::class, 'bonusIndex'])->name('admin.bonus.index');
 Route::get('/payroll/transfer-list', [PayrollV2Controller::class, 'transferList'])->name('admin.payroll.transfer-list');
 Route::get('/payroll/wage-ledger', [PayrollV2Controller::class, 'wageLedger'])->name('admin.payroll.wage-ledger');

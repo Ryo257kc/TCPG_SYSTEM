@@ -4,6 +4,7 @@ namespace App\Http\Controllers\StaffPortal;
 
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Attendance\AttendanceV2DailyEditService;
+use App\Services\Admin\V2\Attendance\AttendanceV2MonthlySummaryService;
 use App\Services\StaffPortal\Attendance\AttendanceV2DailyTableItemBuilder;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
 use Carbon\Carbon;
@@ -27,7 +28,7 @@ class AttendanceController extends Controller
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
 
-        $builder = new AttendanceV2DailyTableItemBuilder();
+        $builder = new AttendanceV2DailyTableItemBuilder(new AttendanceV2MonthlySummaryService());
         $dailyTableData = $builder->build([$staffId], $year, $month, false);
         $latestAppliedAt = collect($dailyTableData['dailyRows'])
             ->pluck('staff_request')
@@ -43,16 +44,19 @@ class AttendanceController extends Controller
                 return $row;
             })
             ->all();
+        $hasTimeCards = collect($dailyRows)
+            ->contains(static fn (array $row): bool => (int) ($row['time_no'] ?? 0) > 0);
 
         return view('staff_portal.attendance.monthly', $this->commonViewData($request, [
             'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'selectedMonth' => $selectedMonth,
             'rowCount' => count($dailyRows),
             'dailyRows' => $dailyRows,
+            'hasTimeCards' => $hasTimeCards,
             'attendanceCategories' => $dailyTableData['attendanceCategories'],
             'storeOptions' => $dailyTableData['storeOptions'],
             'monthlyAppliedAt' => $latestAppliedAt ? Carbon::parse($latestAppliedAt)->format('Y/n/d G:i:s') : null,
-            'canMonthlyApply' => $dailyTableData['dailyRows'] !== [] && empty($latestAppliedAt),
+            'canMonthlyApply' => $hasTimeCards && empty($latestAppliedAt),
             'isAdmin' => false,
         ]));
     }
@@ -542,6 +546,7 @@ class AttendanceController extends Controller
         [$year, $month] = $this->splitMonth($selectedMonth);
         $monthlyStatus = $this->loadMonthlyApprovalStatus($staffId, $year, $month);
         $targetStaffRow = $this->staffPortalStaffRow($staffId);
+        $dailySummary = (new AttendanceV2MonthlySummaryService())->summaryForTimeCardKeys([$staffId], $year, $month);
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
@@ -621,6 +626,7 @@ class AttendanceController extends Controller
             ])
             ->values()
             ->all();
+        $detailRows = $this->formatManagementDetailRows($rows);
 
         return view('staff_portal.admin.attendance.management_detail', $this->commonViewData($request, [
             'selectedMonth' => $selectedMonth,
@@ -628,7 +634,9 @@ class AttendanceController extends Controller
             'targetStaffName' => $this->resolveDisplayName($targetStaffRow, $staffId),
             'rowCount' => count($rows),
             'rows' => $rows,
+            'detailRows' => $detailRows,
             'returnedSummaries' => $returnedSummaries,
+            'dailySummary' => $dailySummary,
             'monthlyAppliedAt' => $monthlyStatus['monthlyAppliedAt'],
             'adminApprovedAt' => $monthlyStatus['adminApprovedAt'],
             'canAdminApprove' => $monthlyStatus['canAdminApprove'],
@@ -636,6 +644,44 @@ class AttendanceController extends Controller
             'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'isAdmin' => true,
         ]));
+    }
+
+    private function formatManagementDetailRows(array $rows): array
+    {
+        return collect($rows)
+            ->map(static function (array $row): array {
+                $holidayCategory = $row['holiday_kubun'] ?? '';
+                $changeScheduled = $row['change_scheduled'] ?? '';
+                if (in_array(trim((string) $holidayCategory), ['休日', '祝日', '法休'], true) && trim((string) $changeScheduled) === '0') {
+                    $changeScheduled = '';
+                }
+
+                return [
+                    'date_label' => $row['date_label'] ?? '',
+                    'holiday_category' => $holidayCategory,
+                    'is_returned' => !empty($row['is_returned']),
+                    'attendance_category' => $row['attendance_kubun'] ?? '',
+                    'category_time' => $row['category_time'] ?? '',
+                    'paid_leave_used' => $row['paid_leave_used'] ?? '',
+                    'actual_start' => $row['jitu_sigyo'] ?? '',
+                    'actual_leave' => $row['jitu_taisitu'] ?? '',
+                    'actual_break_out' => $row['jitu_irisitu'] ?? '',
+                    'actual_end' => $row['jitu_syugyo'] ?? '',
+                    'shift_start' => $row['shift_sigyo'] ?? '',
+                    'shift_leave' => $row['shift_taisitu'] ?? '',
+                    'shift_break_out' => $row['shift_irisitu'] ?? '',
+                    'shift_end' => $row['shift_syugyo'] ?? '',
+                    'change_start' => $row['change_sigyo'] ?? '',
+                    'change_leave' => $row['change_taisitu'] ?? '',
+                    'change_break_out' => $row['change_irisitu'] ?? '',
+                    'change_end' => $row['change_syugyo'] ?? '',
+                    'change_scheduled' => $changeScheduled,
+                    'overtime' => $row['overtime'] ?? '',
+                    'work_store' => $row['shop_name'] ?? '',
+                    'timecard_note' => $row['remark'] ?? '',
+                ];
+            })
+            ->all();
     }
 
     private function resolveMonth(string $month): string

@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - シフト変更</title>
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/zzz_app-shell copy.css') }}"> -->
-    <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/daily_table_item_plain.css') }}">
 </head>
@@ -16,7 +15,8 @@
         @php
         $showPunchColumns = (bool) ($showPunchColumns ?? false);
         $isSelfOnly = (bool) ($isSelfOnly ?? false);
-        $updateRouteName = (string) ($updateRouteName ?? 'admin.shift.update');
+        $updateRouteName = (string) ($updateRouteName ?? 'admin.shift.inline_update');
+        $confirmedMessage = '勤怠確定済';
         @endphp
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
@@ -87,12 +87,15 @@
                     </thead>
                     <tbody>
                         @foreach ($rows as $row)
-                        @php $formId = 'shift-row-' . $row['time_no']; @endphp
+                        @php
+                        $formId = 'shift-row-' . $row['time_no'];
+                        $isConfirmedRow = !empty($row['is_confirmed']);
+                        @endphp
                         <tr class="{{ in_array($row['holiday_category'] ?? '', ['休日', '祝日', '法休'], true) ? 'holiday' : '' }}" data-row-form="{{ $formId }}">
                             <td>{{ $row['date_label'] }}</td>
                             <td>
                                 <span class="display-value">{{ $row['holiday_category'] }}</span>
-                                <select form="{{ $formId }}" class="inline-input" name="holiday_category">
+                                <select form="{{ $formId }}" class="inline-input" name="holiday_category" @disabled($isConfirmedRow)>
                                     <option value="" @selected(($row['holiday_category'] ?? '' )==='' )>--</option>
                                     <option value="平日" @selected(($row['holiday_category'] ?? '' )==='平日' )>平日</option>
                                     <option value="休日" @selected(($row['holiday_category'] ?? '' )==='休日' )>休日</option>
@@ -108,23 +111,23 @@
                             @endif
                             <td>
                                 <span class="display-value">{{ $row['shift_start'] }}</span>
-                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_start" step="900" value="{{ $row['shift_start'] }}">
+                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_start" @disabled($isConfirmedRow) step="900" value="{{ $row['shift_start'] }}">
                             </td>
                             <td>
                                 <span class="display-value">{{ $row['shift_exit'] }}</span>
-                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_exit" step="900" value="{{ $row['shift_exit'] }}">
+                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_exit" @disabled($isConfirmedRow) step="900" value="{{ $row['shift_exit'] }}">
                             </td>
                             <td>
                                 <span class="display-value">{{ $row['shift_in_out'] }}</span>
-                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_in_out" step="900" value="{{ $row['shift_in_out'] }}">
+                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_in_out" @disabled($isConfirmedRow) step="900" value="{{ $row['shift_in_out'] }}">
                             </td>
                             <td>
                                 <span class="display-value">{{ $row['shift_end'] }}</span>
-                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_end" step="900" value="{{ $row['shift_end'] }}">
+                                <input form="{{ $formId }}" class="inline-input" type="time" name="shift_end" @disabled($isConfirmedRow) step="900" value="{{ $row['shift_end'] }}">
                             </td>
                             <td>
                                 <span class="display-value">{{ $row['shop_name'] }}</span>
-                                <select form="{{ $formId }}" class="inline-input" name="shop_code">
+                                <select form="{{ $formId }}" class="inline-input" name="shop_code" @disabled($isConfirmedRow)>
                                     <option value="" @selected($row['shop_code']==='' || $row['shop_code']===null)>-- 店舗選択 --</option>
                                     @foreach (($storeOptions ?? []) as $store)
                                     <option value="{{ $store['store_code'] }}" @selected($row['shop_code']===$store['store_code'])>{{ $store['label'] }}</option>
@@ -132,6 +135,9 @@
                                 </select>
                             </td>
                             <td class="action-cell">
+                                @if ($isConfirmedRow)
+                                <span class="status-text">{{ $confirmedMessage }}</span>
+                                @else
                                 <form id="{{ $formId }}" class="row-form" method="post" action="{{ route($updateRouteName, ['timeNo' => $row['time_no']]) }}">
                                     @csrf
                                     <input type="hidden" name="month" value="{{ $selectedMonth }}">
@@ -143,6 +149,7 @@
                                 <button form="{{ $formId }}" type="submit" name="_action" value="register" class="btn_small edit-only">登録</button>
                                 <button type="button" class="btn_small edit-only cancel-trigger">戻す</button>
                                 <button form="{{ $formId }}" type="submit" name="_action" value="clear" class="btn_small edit-only" formnovalidate>クリア</button>
+                                @endif
 
                             </td>
                         </tr>

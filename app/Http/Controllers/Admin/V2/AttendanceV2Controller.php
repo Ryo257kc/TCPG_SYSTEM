@@ -10,7 +10,6 @@ use App\Services\Admin\V2\Attendance\AttendanceV2CompanyService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Attendance\AttendanceV2DailyTableItemBuilder;
 use App\Services\Admin\V2\Attendance\AttendanceV2DailyEditService;
-use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
 use App\Services\Admin\V2\Attendance\AttendanceV2MetricService;
 use App\Services\Admin\V2\Attendance\AttendanceV2MonthService;
 use App\Services\Admin\V2\Attendance\AttendanceV2PayrollTargetService;
@@ -35,7 +34,6 @@ class AttendanceV2Controller extends Controller
         private readonly AttendanceV2ConfirmService $confirmService,
         private readonly AttendanceV2AttendanceStaffService $attendanceStaffService,
         private readonly AttendanceV2MetricService $metricService,
-        private readonly AttendanceV2ListSummaryService $listSummaryService,
         private readonly AttendanceV2PayrollTargetService $payrollTargetService,
         private readonly AttendanceV2DailyTableItemBuilder $dailyTableItemService,
         private readonly AttendanceV2DailyEditService $dailyEditService,

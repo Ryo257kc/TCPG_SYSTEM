@@ -148,7 +148,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 $row['shift_end'] ?? '',
                 ])->contains(static fn ($value) => trim((string) $value) !== '');
                 $isDimmedRow = !$hasShift;
-                $shiftScheduled = (float) ($row['shift_scheduled'] !== '' ? $row['shift_scheduled'] : 0);
+                $shiftScheduled = (float) ($row['shift_scheduled_hours'] !== '' ? $row['shift_scheduled_hours'] : 0);
                 $changeScheduled = (float) ($row['change_scheduled'] !== '' ? $row['change_scheduled'] : 0);
                 $isChangeScheduledOver = $shiftScheduled > 0 && $changeScheduled > $shiftScheduled;
                 $isChangeScheduledUnder = $shiftScheduled > 0 && $changeScheduled > 0 && $changeScheduled < $shiftScheduled;
@@ -208,7 +208,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                     <td>{{ $row['actual_leave'] }}</td>
                     <td>{{ $row['actual_break_out'] }}</td>
                     <td>{{ $row['actual_end'] }}</td>
-                    <td class="f-sen">{{ $row['actual_scheduled_old'] }}</td>
+                    <td class="f-sen">{{ $row['actual_scheduled_hours'] }}</td>
                     <td class="daily-group-start">
                         <span class="daily-view">{{ $row['shift_start'] }}</span>
                         <input class="daily-edit daily-edit-input" type="text" name="shift_start" value="{{ $row['shift_start'] }}" form="{{ $formId }}" data-original="{{ $row['shift_start'] }}">
@@ -225,7 +225,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                         <span class="daily-view">{{ $row['shift_end'] }}</span>
                         <input class="daily-edit daily-edit-input" type="text" name="shift_end" value="{{ $row['shift_end'] }}" form="{{ $formId }}" data-original="{{ $row['shift_end'] }}">
                     </td>
-                    <td class="f-sen">{{ $row['shift_scheduled'] }}</td>
+                    <td class="f-sen">{{ $row['shift_scheduled_hours'] }}</td>
                     <td class="daily-group-start">
                         <span class="daily-view">{{ $row['change_start'] }}</span>
                         <input class="daily-edit daily-edit-input" type="text" name="change_start" value="{{ $row['change_start'] }}" form="{{ $formId }}" data-original="{{ $row['change_start'] }}">

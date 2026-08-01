@@ -85,14 +85,7 @@
                 <table class="data-table">
                     <colgroup>
                         <col style="width:40px;">
-                        <!-- <col style="width: 100px;">
-                        <col style="width: 50px;">
-                        <col style="width: 50px;">
-                        <col style="width: 50px;">
-                        <col style="width: 70px;">
-                        <col style="width: 50px;">
-                        <col style="width: 60px;">
-                        <col style="width: 40px;"> -->
+
                     </colgroup>
                     <thead>
                         <tr>

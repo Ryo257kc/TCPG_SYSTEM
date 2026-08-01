@@ -187,15 +187,13 @@ Route::prefix('staff')->group(function (): void {
 
     Route::get('/attendance/paid-leave', [AttendanceController::class, 'paidLeave'])->name('attendance.paid_leave');
     Route::get('/shift/change', [ShiftController::class, 'adminShiftChange'])->name('admin.shift.change');
-    Route::get('/shift/change/edit/{timeNo}', [ShiftController::class, 'adminShiftEdit'])->name('admin.shift.edit');
-    Route::post('/shift/change/edit/{timeNo}', [ShiftController::class, 'adminShiftUpdate'])->name('admin.shift.update');
+    Route::post('/shift/change/{timeNo}', [ShiftController::class, 'adminShiftUpdate'])->name('admin.shift.inline_update');
 
     Route::get('/office/attendance', [ShiftController::class, 'officeAttendance'])->name('office.attendance');
     Route::post('/office/attendance/{timeNo}', [ShiftController::class, 'officeAttendanceUpdate'])->name('office.attendance.update');
 
     Route::get('/shift/basic', [ShiftController::class, 'adminBasicShift'])->name('admin.basic-shift');
-    Route::get('/shift/basic/edit/{shiftNo}', [ShiftController::class, 'adminBasicShiftEdit'])->name('admin.basic-shift.edit');
-    Route::post('/shift/basic/edit/{shiftNo}', [ShiftController::class, 'adminBasicShiftUpdate'])->name('admin.basic-shift.update');
+    Route::post('/shift/basic/{shiftNo}', [ShiftController::class, 'adminBasicShiftUpdate'])->name('admin.basic-shift.inline_update');
 
     Route::get('/office/documents', [DocumentsController::class, 'index'])->name('office.documents');
 

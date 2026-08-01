@@ -70,7 +70,6 @@ class AttendanceV2ShiftCreateService
                     $payload['shift_leave'] = $shift['shift_exit'] ?? null;
                     $payload['shift_break_out'] = $shift['shift_entry'] ?? null;
                     $payload['shift_end'] = $shift['shift_out'] ?? null;
-                    $payload['shift_scheduled'] = $shift['rou_time'] ?? null;
                     $payload['timecard_note'] = trim((string) ($shift['shift_memo'] ?? ''));
                 }
 

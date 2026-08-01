@@ -127,10 +127,7 @@
                             <col style="width: 96px;">
                             <col style="width: 96px;">
                             <col style="width: 138px;">
-                            <!-- <col class="col-label">
-                            <col class="col-jitu">
-                            <col class="col-shift">
-                            <col class="col-change"> -->
+
                         </colgroup>
                         <tr>
                             <th>対象者名</th>

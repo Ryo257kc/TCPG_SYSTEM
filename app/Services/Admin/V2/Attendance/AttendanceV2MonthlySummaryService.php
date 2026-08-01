@@ -339,47 +339,12 @@ class AttendanceV2MonthlySummaryService
         mixed $breakOutValue,
         mixed $endValue,
     ): float {
-        $startMinutes = $this->parseTimeMinutes($startValue);
-        $endMinutes = $this->parseTimeMinutes($endValue);
-        if ($startMinutes === null || $endMinutes === null) {
-            return 0.0;
-        }
-
-        $leaveMinutes = $this->parseTimeMinutes($leaveValue);
-        $breakOutMinutes = $this->parseTimeMinutes($breakOutValue);
-        if ($leaveMinutes !== null && $breakOutMinutes !== null) {
-            return (
-                $this->minutesBetween($startMinutes, $leaveMinutes)
-                + $this->minutesBetween($breakOutMinutes, $endMinutes)
-            ) / 60;
-        }
-
-        return $this->minutesBetween($startMinutes, $endMinutes) / 60;
-    }
-
-    private function parseTimeMinutes(mixed $value): ?int
-    {
-        return AttendanceTime::parseMinutes($value);
+        return AttendanceTime::scheduledHours($startValue, $leaveValue, $breakOutValue, $endValue);
     }
 
     private function hasAnyTimeValue(array $values): bool
     {
-        foreach ($values as $value) {
-            if ($this->parseTimeMinutes($value) !== null) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function minutesBetween(int $startMinutes, int $endMinutes): int
-    {
-        if ($endMinutes < $startMinutes) {
-            $endMinutes += 24 * 60;
-        }
-
-        return max(0, $endMinutes - $startMinutes);
+        return AttendanceTime::hasAnyTimeValue($values);
     }
 
     private function toFloat(mixed $value): float

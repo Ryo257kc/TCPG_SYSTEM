@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
-use App\Services\Admin\V2\Attendance\AttendanceV2ListSummaryService;
 use App\Services\Admin\V2\Attendance\AttendanceV2AttendanceStaffService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
@@ -58,7 +57,6 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2CalculationFlowService $calculationFlowService,
         private readonly PayrollV2AttendanceReflectService $attendanceReflectService,
         private readonly AttendanceV2AttendanceStaffService $attendanceStaffService,
-        private readonly AttendanceV2ListSummaryService $attendanceListSummaryService,
         private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
         private readonly PayrollV2UpdateService $updateService,
         private readonly PayrollV2RecalculateService $recalculateService,

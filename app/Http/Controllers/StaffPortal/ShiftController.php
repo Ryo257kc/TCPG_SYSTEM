@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class ShiftController extends Controller
@@ -65,6 +66,7 @@ class ShiftController extends Controller
                     'tc.shift_break_out',
                     'tc.shift_end',
                     'tc.work_store',
+                    'tc.attendance_checked',
                     'cal.week as cal_week',
                     'cal.work_holiday as cal_work_holiday',
                     'st.store_short_name',
@@ -89,6 +91,7 @@ class ShiftController extends Controller
                         trim((string) ($row->store_name ?? '')),
                         trim((string) ($row->work_store ?? ''))
                     ),
+                    'is_confirmed' => ((int) ($row->attendance_checked ?? 0)) === 1,
                     'is_holiday' => trim((string) ($row->cal_week ?? '')) === '日' || in_array($workHoliday, ['休日', '法休'], true),
                 ];
             }
@@ -105,7 +108,7 @@ class ShiftController extends Controller
             'rowCount' => count($rows),
             'showPunchColumns' => false,
             'isSelfOnly' => !$canSelectBasicShiftStaff,
-            'updateRouteName' => 'admin.shift.update',
+            'updateRouteName' => 'admin.shift.inline_update',
         ]);
     }
 
@@ -136,56 +139,6 @@ class ShiftController extends Controller
         ]);
     }
 
-    public function adminShiftEdit(Request $request, int $timeNo): RedirectResponse|View
-    {
-        $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
-
-        if (!$this->isStoreManager($this->staffPortalStaffRow($staffId))) {
-            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
-        }
-
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_time_cards as tc')
-            ->leftJoin('dbo.mx_staffs as s', 'tc.staff_name', '=', 's.staff_id')
-            ->where('tc.time_no', $timeNo)
-            ->first([
-                'tc.time_no',
-                'tc.work_date',
-                'tc.staff_name',
-                'tc.shift_start',
-                'tc.shift_leave',
-                'tc.shift_break_out',
-                'tc.shift_end',
-                'tc.work_store',
-                's.staff_name as target_staff_name',
-            ]);
-
-        if ($row === null) {
-            return redirect()->route('admin.shift.change')->with('statusMessage', 'Shift row not found.');
-        }
-
-        $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
-        $selectedStaffId = trim((string) $request->query('staff_id', (string) ($row->staff_name ?? '')));
-
-        return view('staff_portal.admin.shift.edit', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'selectedMonth' => $selectedMonth,
-            'selectedStaffId' => $selectedStaffId,
-            'timeNo' => $timeNo,
-            'staffName' => (string) ($row->target_staff_name ?? $row->staff_name ?? ''),
-            'dateLabel' => Carbon::parse((string) $row->work_date)->format('Y/n/j'),
-            'weekLabel' => $this->weekdayLabel($row->work_date),
-            'shiftStart' => $this->formatTimeForInput($row->shift_start),
-            'shiftExit' => $this->formatTimeForInput($row->shift_leave),
-            'shiftInOut' => $this->formatTimeForInput($row->shift_break_out),
-            'shiftEnd' => $this->formatTimeForInput($row->shift_end),
-            'shopCode' => trim((string) ($row->work_store ?? '')),
-        ]);
-    }
-
     public function adminShiftUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
@@ -199,6 +152,12 @@ class ShiftController extends Controller
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
         $selectedStaffId = trim((string) $request->input('staff_id', ''));
+        if ($this->isTimeCardConfirmed($timeNo)) {
+            return redirect()
+                ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+                ->with('statusMessage', '勤怠確定済みのため、シフトは編集できません。');
+        }
+
         $action = (string) $request->input('_action', 'register');
         $payload = $this->extractShiftPayload($request);
         $holidayCategory = $this->normalizeHolidayCategory((string) $request->input('holiday_category', ''));
@@ -248,6 +207,12 @@ class ShiftController extends Controller
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
+        if ($this->isTimeCardConfirmed($timeNo, $staffId)) {
+            return redirect()
+                ->route('office.attendance', ['month' => $selectedMonth])
+                ->with('statusMessage', '勤怠確定済みのため、シフトは編集できません。');
+        }
+
         $action = (string) $request->input('_action', 'register');
         $payload = $this->extractShiftPayload($request);
         $holidayCategory = $this->normalizeHolidayCategory((string) $request->input('holiday_category', ''));
@@ -377,57 +342,6 @@ class ShiftController extends Controller
         ]);
     }
 
-    public function adminBasicShiftEdit(Request $request, int $shiftNo): RedirectResponse|View
-    {
-        $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
-
-        if (!$this->canManageBasicShift($this->staffPortalStaffRow($staffId))) {
-            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
-        }
-
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_kihon_shifts as ks')
-            ->leftJoin('dbo.mx_staffs as s', 'ks.staff_name', '=', 's.staff_id')
-            ->where('ks.shift_no', $shiftNo)
-            ->first([
-                'ks.shift_no',
-                'ks.staff_name',
-                'ks.week',
-                'ks.shift_in',
-                'ks.shift_exit',
-                'ks.shift_entry',
-                'ks.shift_out',
-                'ks.section',
-                's.staff_name as target_staff_name',
-            ]);
-
-        if ($row === null) {
-            return redirect()->route('admin.basic-shift')->with('statusMessage', 'Basic shift row not found.');
-        }
-
-        $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
-        $selectedStaffId = trim((string) $request->query('staff_id', (string) ($row->staff_name ?? '')));
-
-        return view('staff_portal.admin.shift.basic_edit', [
-            'displayName' => $this->resolveDisplayName($staffId),
-            'statusMessage' => (string) $request->session()->get('statusMessage', ''),
-            'selectedMonth' => $selectedMonth,
-            'selectedStaffId' => $selectedStaffId,
-            'shiftNo' => $shiftNo,
-            'targetStaffName' => (string) ($row->target_staff_name ?? $row->staff_name ?? ''),
-            'week' => trim((string) ($row->week ?? '')),
-            'shiftStart' => $this->formatTimeForInput($row->shift_in),
-            'shiftExit' => $this->formatTimeForInput($row->shift_exit),
-            'shiftInOut' => $this->formatTimeForInput($row->shift_entry),
-            'shiftEnd' => $this->formatTimeForInput($row->shift_out),
-            'shopCode' => trim((string) ($row->section ?? '')),
-            'storeOptions' => $this->storeOptions(),
-        ]);
-    }
-
     public function adminBasicShiftUpdate(Request $request, int $shiftNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
@@ -478,6 +392,24 @@ class ShiftController extends Controller
         return redirect()
             ->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
             ->with('statusMessage', $action === 'clear' ? 'Basic shift cleared.' : '保存しました');
+    }
+
+
+    private function isTimeCardConfirmed(int $timeNo, ?string $staffId = null): bool
+    {
+        if (!Schema::connection('sqlsrv')->hasColumn('mx_time_cards', 'attendance_checked')) {
+            return false;
+        }
+
+        $query = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->where('time_no', $timeNo);
+
+        if ($staffId !== null && trim($staffId) !== '') {
+            $query->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [trim($staffId)]);
+        }
+
+        return ((int) ($query->value('attendance_checked') ?? 0)) === 1;
     }
 
     private function canManageBasicShift(?array $staffRow): bool
@@ -597,6 +529,7 @@ class ShiftController extends Controller
                 'tc.actual_break_out',
                 'tc.actual_end',
                 'tc.work_store',
+                'tc.attendance_checked',
                 'cal.week as cal_week',
                 'cal.work_holiday as cal_work_holiday',
                 'st.store_short_name',
@@ -623,6 +556,7 @@ class ShiftController extends Controller
                     trim((string) ($row->store_name ?? '')),
                     trim((string) ($row->work_store ?? ''))
                 ),
+                'is_confirmed' => ((int) ($row->attendance_checked ?? 0)) === 1,
                 'is_holiday' => in_array($holidayCategory, ['休日', '祝日', '法休'], true),
             ];
 

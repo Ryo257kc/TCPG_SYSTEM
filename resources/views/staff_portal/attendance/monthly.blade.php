@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - 月間勤怠</title>
-    <!-- <link rel="stylesheet" href="{{ asset('css/staff_portal/zzz_app-shell copy.css') }}"> -->
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/daily_table_item_plain.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
@@ -63,11 +62,13 @@
                     <button type="submit">表示</button>
                 </form>
 
-                @if ($rowCount === 0)
-                <div class="empty">当月の勤怠はありません。</div>
-                @else
+                @if (!empty($hasTimeCards))
                 <p class="notice right">※赤セル: 修正が必要な勤怠があります。</p>
+                @endif
             </div>
+            @if (empty($hasTimeCards))
+                <div class="empty">この月の勤怠データはまだ作成されていません。シフト作成後に編集できます。</div>
+                @else
             @php
             $sharedRows = collect($dailyRows ?? [])->map(static function (array $row): array {
             return [
@@ -81,12 +82,12 @@
             'actual_leave' => $row['actual_leave'] ?? '',
             'actual_break_out' => $row['actual_break_out'] ?? '',
             'actual_end' => $row['actual_end'] ?? '',
-            'actual_scheduled_old' => $row['actual_scheduled_old'] ?? '',
+            'actual_scheduled_hours' => $row['actual_scheduled_hours'] ?? '',
             'shift_start' => $row['shift_start'] ?? '',
             'shift_leave' => $row['shift_leave'] ?? '',
             'shift_break_out' => $row['shift_break_out'] ?? '',
             'shift_end' => $row['shift_end'] ?? '',
-            'shift_scheduled' => $row['shift_scheduled'] ?? '',
+            'shift_scheduled_hours' => $row['shift_scheduled_hours'] ?? '',
             'change_start' => $row['change_start'] ?? '',
             'change_leave' => $row['change_leave'] ?? '',
             'change_break_out' => $row['change_break_out'] ?? '',

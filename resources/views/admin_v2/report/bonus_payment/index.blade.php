@@ -9,8 +9,6 @@
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/report.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/data_table.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/zzz_santei.css') }}"> -->
-    <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/bonus_payment.css') }}"> -->
 
     <style>
         .bonus-payment-filter-panel,

@@ -111,7 +111,7 @@
                             </td>
                             @if ($canManageBasicShift)
                             <td>
-                                <form id="{{ $formId }}" class="row-form" method="post" action="{{ route('admin.basic-shift.update', ['shiftNo' => $row['shift_no']]) }}">
+                                <form id="{{ $formId }}" class="row-form" method="post" action="{{ route('admin.basic-shift.inline_update', ['shiftNo' => $row['shift_no']]) }}">
                                     @csrf
                                     <input type="hidden" name="month" value="{{ $selectedMonth }}">
                                     <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">

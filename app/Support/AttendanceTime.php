@@ -45,6 +45,66 @@ class AttendanceTime
         return ((int) date('G', $timestamp) * 60) + (int) date('i', $timestamp);
     }
 
+
+    public static function scheduledHours(
+        mixed $startValue,
+        mixed $leaveValue,
+        mixed $breakOutValue,
+        mixed $endValue,
+    ): float {
+        $startMinutes = self::parseMinutes($startValue);
+        $endMinutes = self::parseMinutes($endValue);
+        if ($startMinutes === null || $endMinutes === null) {
+            return 0.0;
+        }
+
+        $leaveMinutes = self::parseMinutes($leaveValue);
+        $breakOutMinutes = self::parseMinutes($breakOutValue);
+
+        if ($leaveMinutes !== null && $breakOutMinutes !== null) {
+            return (
+                self::minutesBetween($startMinutes, $leaveMinutes)
+                + self::minutesBetween($breakOutMinutes, $endMinutes)
+            ) / 60;
+        }
+
+        return self::minutesBetween($startMinutes, $endMinutes) / 60;
+    }
+
+    public static function hasAnyTimeValue(array $values): bool
+    {
+        foreach ($values as $value) {
+            if (self::parseMinutes($value) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function minutesBetween(int $startMinutes, int $endMinutes): int
+    {
+        if ($endMinutes < $startMinutes) {
+            $endMinutes += 24 * 60;
+        }
+
+        return max(0, $endMinutes - $startMinutes);
+    }
+
+    public static function formatNumber(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        $num = (float) $value;
+        if (abs($num - round($num)) < 0.00001) {
+            return (string) (int) round($num);
+        }
+
+        return rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.');
+    }
+
     public static function isZeroPlaceholder(mixed $value): bool
     {
         if ($value === null) {
