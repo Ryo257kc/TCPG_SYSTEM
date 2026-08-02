@@ -567,9 +567,9 @@ class EntryController extends Controller
             ->selectRaw("
                 detail.store_name as department_name,
                 department.{$departmentNoColumn} as department_no,
-                SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) LIKE N'%ｼﾞﾋ%' THEN 0 ELSE ISNULL(detail.cash_collected_amount, 0) END) as counter_amount,
-                SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) LIKE N'%ｼﾞﾋ%' THEN 0 ELSE ISNULL(detail.payment_amount, 0) END) as personal_transfer_amount,
-                0 as self_pay_amount
+                SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) IN (N'ｼﾞﾋ', N'ｼﾞﾋｺｳｻﾞ') THEN 0 ELSE ISNULL(detail.cash_collected_amount, 0) END) as counter_amount,
+                SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) IN (N'ｼﾞﾋ', N'ｼﾞﾋｺｳｻﾞ') THEN 0 ELSE ISNULL(detail.payment_amount, 0) END) as personal_transfer_amount,
+                SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) = N'ｼﾞﾋ' THEN ISNULL(detail.cash_collected_amount, 0) ELSE 0 END) as self_pay_amount
             ")
             ->where('detail.treatment_month', '>=', $targetMonthStart->format('Y-m-d'))
             ->where('detail.treatment_month', '<', $targetMonthNext->format('Y-m-d'))

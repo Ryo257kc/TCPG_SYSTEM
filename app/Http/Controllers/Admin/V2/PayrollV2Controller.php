@@ -115,6 +115,7 @@ class PayrollV2Controller extends Controller
         $selectedStaffId = $pageData['selectedStaffId'];
         $staffRows = $pageData['staffRows'];
         $rows = (array) $pageData['rows'];
+        $rows = $this->attachBonusCalc($rows, $selectedPaymentDate);
 
         return view('admin_v2.work.bonus.index', [
             'availablePaymentDates' => $availablePaymentDates,
@@ -1420,9 +1421,21 @@ class PayrollV2Controller extends Controller
             'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
             'values' => ['required', 'array'],
             'company_id' => ['nullable', 'string', 'max:200'],
+            'payment_date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
         [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $paymentDate = trim((string) ($v['payment_date'] ?? ''));
+        if ($paymentDate === '') {
+            $paymentDate = sprintf('%04d-%02d-01', $year, $month);
+        }
+        if ($this->isBonusLocked((string) $v['staff_id'], $paymentDate)) {
+            return response()->json([
+                'ok' => false,
+                'message' => '賞与確定済のため変更できません。',
+            ], 409);
+        }
+
         $updated = $this->updateBonusSummary(
             (string) $v['staff_id'],
             $year,
@@ -1490,6 +1503,12 @@ class PayrollV2Controller extends Controller
         $paymentDate = trim((string) ($v['payment_date'] ?? ''));
         if ($paymentDate === '') {
             $paymentDate = sprintf('%04d-%02d-01', $year, $month);
+        }
+        if ($this->isBonusLocked((string) $v['staff_id'], $paymentDate)) {
+            return response()->json([
+                'ok' => false,
+                'message' => '賞与確定済のため再計算できません。',
+            ], 409);
         }
 
         $updated = 0;
@@ -2273,6 +2292,19 @@ class PayrollV2Controller extends Controller
         unset($row);
 
         return $rows;
+    }
+
+    private function isBonusLocked(string $staffId, string $paymentDate): bool
+    {
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 1)
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+            ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
+            ->orderByDesc('kyuyo_sho_no')
+            ->first(['edit_lock']);
+
+        return ((int) ($row->edit_lock ?? 0)) === 1;
     }
 
     /** @param array<string,mixed> $values */

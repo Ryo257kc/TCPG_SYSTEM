@@ -45,8 +45,8 @@
 
             <form method="get" action="{{ route('office.store_daily_report.return_note') }}" class="filter-row return-note-filter">
                 <label>
-                    施術月
-                    <input type="month" name="target_month" value="{{ $targetMonth }}">
+                    施術年
+                    <input type="number" name="target_year" value="{{ $targetYear }}" min="2000" max="2100" step="1">
                 </label>
 
                 <select name="返戻店舗">
@@ -120,7 +120,7 @@
                                 <form id="{{ $formId }}" method="post" action="{{ route('office.store_daily_report.return_note.save') }}">
                                     @csrf
                                     <input type="hidden" name="henrei_no" value="{{ $row['henrei_no'] }}">
-                                    <input type="hidden" name="target_month" value="{{ $targetMonth }}">
+                                    <input type="hidden" name="target_year" value="{{ $targetYear }}">
                                     <input type="hidden" name="返戻店舗" value="{{ $selectedStore }}">
                                     <input type="hidden" name="payment_filter" value="{{ $paymentFilter }}">
                                     <input type="date" name="入金日" value="{{ $row['original_入金日'] }}">

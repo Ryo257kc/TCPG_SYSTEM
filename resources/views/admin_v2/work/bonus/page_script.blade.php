@@ -13,6 +13,7 @@
     var paymentDate = @json($selectedPaymentDate);
     var staffId = @json((string)(($selectedRow['staff_id'] ?? '')));
     var selectedCompanyId = @json((string)($selectedCompanyId ?? ''));
+    var isBonusConfirmed = @json(((int)($summary['edit_lock'] ?? 0)) === 1);
     var confirmUrl = @json(route('admin.bonus.confirm'));
 
     var editBtn = document.getElementById('edit-toggle-btn');
@@ -32,6 +33,17 @@
 
     // 確定ボタン
     var confirmBtn = document.getElementById('confirm-btn');
+
+    var setBonusLockedUi = function() {
+      [editBtn, recalculateBtn].forEach(function(btn) {
+        if (btn) btn.disabled = true;
+      });
+      if (confirmBtn) confirmBtn.disabled = false;
+    };
+
+    if (isBonusConfirmed) {
+      setBonusLockedUi();
+    }
 
     if (confirmBtn) {
       confirmBtn.addEventListener('click', function() {
@@ -72,6 +84,7 @@
 
     if (editBtn) {
       editBtn.addEventListener('click', function() {
+        if (isBonusConfirmed) return;
         if (!root.classList.contains('is-editing')) {
           root.classList.add('is-editing');
           editBtn.textContent = '保存';
@@ -98,6 +111,7 @@
             body: JSON.stringify({
               staff_id: staffId,
               month: month,
+              payment_date: paymentDate,
               values: values,
               company_id: selectedCompanyId
             })
@@ -130,7 +144,7 @@
 
     if (recalculateBtn) {
       recalculateBtn.addEventListener('click', function() {
-        if (!staffId) return;
+        if (!staffId || isBonusConfirmed) return;
         recalculateBtn.disabled = true;
         fetch(recalculateUrl, {
             method: 'POST',

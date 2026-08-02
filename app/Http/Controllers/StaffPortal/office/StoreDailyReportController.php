@@ -237,12 +237,14 @@ class StoreDailyReportController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
-        $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
-        [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
+        $targetYear = (int) $request->query('target_year', now()->format('Y'));
+        if ($targetYear < 2000 || $targetYear > 2100) {
+            $targetYear = (int) now()->format('Y');
+        }
         $selectedStore = trim((string) $request->query('返戻店舗', ''));
         $paymentFilter = trim((string) $request->query('payment_filter', ''));
-        $targetMonthStart = sprintf('%04d-%02d-01', $targetYear, $targetMonthNo);
-        $targetMonthEnd = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
+        $targetYearStart = sprintf('%04d-01-01', $targetYear);
+        $targetYearEnd = sprintf('%04d-01-01', $targetYear + 1);
         $storeOptions = $this->storeDailyReportStoreOptions();
 
         $returnNoteQuery = DB::connection('sqlsrv_dailyreport')
@@ -265,8 +267,8 @@ class StoreDailyReportController extends Controller
                 '事務所備考',
             ])
             ->where('振分', '返戻')
-            ->where('施術月', '>=', $targetMonthStart)
-            ->where('施術月', '<', $targetMonthEnd);
+            ->where('施術月', '>=', $targetYearStart)
+            ->where('施術月', '<', $targetYearEnd);
 
         if ($selectedStore !== '') {
             $returnNoteQuery->where('返戻店舗', $selectedStore);
@@ -302,7 +304,7 @@ class StoreDailyReportController extends Controller
             ->all();
 
         return view('staff_portal.office.store_daily_report.return_note.index', $this->commonViewData($request, [
-            'targetMonth' => sprintf('%04d-%02d', $targetYear, $targetMonthNo),
+            'targetYear' => (string) $targetYear,
             'selectedStore' => $selectedStore,
             'paymentFilter' => $paymentFilter,
             'storeOptions' => $storeOptions,
@@ -322,7 +324,7 @@ class StoreDailyReportController extends Controller
         $事務所備考 = trim((string) $request->input('事務所備考', ''));
 
         $redirectQuery = [
-            'target_month' => trim((string) $request->input('target_month', '')),
+            'target_year' => trim((string) $request->input('target_year', '')),
             '返戻店舗' => trim((string) $request->input('返戻店舗', '')),
             'payment_filter' => trim((string) $request->input('payment_filter', '')),
         ];

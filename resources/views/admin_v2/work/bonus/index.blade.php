@@ -225,8 +225,8 @@
 
           </div>
           <div class="actions">
-            <button class="btn" type="button" id="edit-toggle-btn">編集</button>
-            <button class="btn" type="button" id="bonus-recalculate-btn">再計算</button>
+            <button class="btn" type="button" id="edit-toggle-btn" @disabled($bonusConfirmed)>編集</button>
+            <button class="btn" type="button" id="bonus-recalculate-btn" @disabled($bonusConfirmed)>再計算</button>
             <a class="btn" href="{{ route('admin.bonus.transfer-list', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">振込一覧</a>
             <a class="btn" href="{{ route('admin.bonus.wage-ledger', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">賃金台帳</a>
           </div>
@@ -360,7 +360,7 @@
 
           $editSections = [
           '支給' => [
-          ['label' => '賞与税額', 'key' => 'bonus_tax', 'total' => true, 'readonly' => true],
+          ['label' => '賞与税率', 'key' => 'bonus_tax', 'total' => false, 'readonly' => true],
           ['label' => '賞与額', 'key' => 'bonus_amo', 'total' => false],
           ['label' => '調整手当', 'key' => 'allowance_amo_5', 'total' => false],
           ['label' => '課税支給合計', 'key' => 'taxation_sum', 'total' => true],

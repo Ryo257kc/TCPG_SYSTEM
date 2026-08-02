@@ -49,7 +49,10 @@ class PayrollV2BonusIncomeTaxCalcService
             return (int) DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $bonusRow->kyuyo_sho_no)
-                ->update(['income_tax' => 0]);
+                ->update([
+                    'income_tax' => 0,
+                    'bonus_tax' => 0,
+                ]);
         }
 
         $bonusTaxableBase = max(
@@ -65,15 +68,18 @@ class PayrollV2BonusIncomeTaxCalcService
         $previousNet = $this->num($this->loadPreviousPayrollRow($staffId, $paymentDate)?->syaho_deduction_sum ?? 0);
 
         if (mb_strpos($taxAmount, '乙欄') !== false) {
-            $incomeTax = $this->calcBonusOtsu($bonusTaxableBase, $previousNet);
+            $calc = $this->calcBonusOtsu($bonusTaxableBase, $previousNet);
         } else {
-            $incomeTax = $this->calcBonusKou($bonusTaxableBase, $previousNet, $fuyoNum);
+            $calc = $this->calcBonusKou($bonusTaxableBase, $previousNet, $fuyoNum);
         }
 
         return (int) DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('kyuyo_sho_no', (int) $bonusRow->kyuyo_sho_no)
-            ->update(['income_tax' => $incomeTax]);
+            ->update([
+                'income_tax' => (int) ($calc['tax'] ?? 0),
+                'bonus_tax' => round((float) ($calc['rate'] ?? 0), 3),
+            ]);
     }
 
     private function loadPreviousPayrollRow(string $staffId, string $paymentDate): ?object
@@ -98,37 +104,46 @@ class PayrollV2BonusIncomeTaxCalcService
             ->first(['syaho_deduction_sum']);
     }
 
-    private function calcBonusKou(float $bonusTaxableBase, float $previousNet, int $fuyoNum): int
+    /** @return array{tax:int,rate:float} */
+    private function calcBonusKou(float $bonusTaxableBase, float $previousNet, int $fuyoNum): array
     {
         if ($bonusTaxableBase <= 0) {
-            return 0;
+            return ['tax' => 0, 'rate' => 0.0];
         }
 
         if ($previousNet <= 0 || $bonusTaxableBase > ($previousNet * 10)) {
             $monthly = $bonusTaxableBase / 6;
             $monthlyTax = (int) ($this->calcKou($monthly, $fuyoNum)['tax'] ?? 0);
-            return max(0, (int) floor($monthlyTax * 6));
+            $tax = max(0, (int) floor($monthlyTax * 6));
+            return ['tax' => $tax, 'rate' => $this->effectiveRate($tax, $bonusTaxableBase)];
         }
 
         $rate = $this->bonusRateKou($previousNet, $fuyoNum);
-        return max(0, (int) floor($bonusTaxableBase * ($rate / 100)));
+        return ['tax' => max(0, (int) floor($bonusTaxableBase * ($rate / 100))), 'rate' => $rate];
     }
 
-    private function calcBonusOtsu(float $bonusTaxableBase, float $previousNet): int
+    /** @return array{tax:int,rate:float} */
+    private function calcBonusOtsu(float $bonusTaxableBase, float $previousNet): array
     {
         if ($bonusTaxableBase <= 0) {
-            return 0;
+            return ['tax' => 0, 'rate' => 0.0];
         }
 
         if ($previousNet <= 0 || $bonusTaxableBase > ($previousNet * 10)) {
             $monthly = $bonusTaxableBase / 6;
             $monthlyTax = (int) ($this->calcOtsu($monthly)['tax'] ?? 0);
-            return max(0, (int) floor($monthlyTax * 6));
+            $tax = max(0, (int) floor($monthlyTax * 6));
+            return ['tax' => $tax, 'rate' => $this->effectiveRate($tax, $bonusTaxableBase)];
         }
 
         $monthlyTax = (int) ($this->calcOtsu($previousNet)['tax'] ?? 0);
         $rate = $previousNet > 0 ? ($monthlyTax / $previousNet) * 100 : 0.0;
-        return max(0, (int) floor($bonusTaxableBase * ($rate / 100)));
+        return ['tax' => max(0, (int) floor($bonusTaxableBase * ($rate / 100))), 'rate' => $rate];
+    }
+
+    private function effectiveRate(int $tax, float $base): float
+    {
+        return $base > 0 ? ($tax / $base) * 100 : 0.0;
     }
 
     private function bonusRateKou(float $previousNet, int $fuyoNum): float
