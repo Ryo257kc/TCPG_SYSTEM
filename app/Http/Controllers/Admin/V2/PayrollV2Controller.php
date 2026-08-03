@@ -431,7 +431,7 @@ class PayrollV2Controller extends Controller
 
         $ledgerRows = [];
         foreach ($rows as $row) {
-            if (trim((string) ($row['division'] ?? '')) === '業務委託') {
+            if (!$this->shouldIncludeWageLedgerRow($row)) {
                 continue;
             }
 
@@ -562,7 +562,7 @@ class PayrollV2Controller extends Controller
 
         $ledgerRows = [];
         foreach ($rows as $row) {
-            if (trim((string) ($row['division'] ?? '')) === '紹介派遣') {
+            if (!$this->shouldIncludeWageLedgerRow($row)) {
                 continue;
             }
 
@@ -2292,6 +2292,12 @@ class PayrollV2Controller extends Controller
         unset($row);
 
         return $rows;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function shouldIncludeWageLedgerRow(array $row): bool
+    {
+        return trim((string) ($row['division'] ?? '')) !== '業務委託';
     }
 
     private function isBonusLocked(string $staffId, string $paymentDate): bool

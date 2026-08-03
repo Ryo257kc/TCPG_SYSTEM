@@ -89,26 +89,24 @@ document.addEventListener('DOMContentLoaded', function () {
         var claimAmountCell = getPaymentCell(row, 3);
         var treatmentMonth = ((treatmentMonthCell ? treatmentMonthCell.textContent : '') || '').trim();
         var claimAmount = parsePaymentMoney((((claimAmountCell ? claimAmountCell.textContent : '') || '')).trim());
-        var adjustmentAmount = parsePaymentMoney((getPaymentControl(row, PAYMENT_CELL_INDEX.adjustmentAmount) || {}).value || '');
-        var totalAmount = claimAmount + adjustmentAmount;
-
-        if (treatmentMonth === '' && totalAmount === 0) {
+        if (treatmentMonth === '' && claimAmount === 0) {
             return '';
         }
 
-        return treatmentMonth + '　確認額 ' + formatPaymentMoney(totalAmount);
+        return treatmentMonth + '　請求額 ' + formatPaymentMoney(claimAmount);
     }
 
-    // 複製行は元行で確認した金額の残りになるよう修正額を反転する。
+    // 複製行は請求額を0にし、複製元の修正額だけを符号反転して引き継ぐ。
     function applyDuplicatePaymentAdjustment(sourceRow, clonedRow) {
-        var claimAmountCell = getPaymentCell(sourceRow, 3);
-        var claimAmount = parsePaymentMoney((((claimAmountCell ? claimAmountCell.textContent : '') || '')).trim());
+        var clonedClaimAmountCell = getPaymentCell(clonedRow, 3);
         var adjustmentAmount = parsePaymentMoney((getPaymentControl(sourceRow, PAYMENT_CELL_INDEX.adjustmentAmount) || {}).value || '');
-        var sourceConfirmedAmount = claimAmount + adjustmentAmount;
-        var nextAdjustmentAmount = sourceConfirmedAmount === 0 ? '' : '-' + formatPaymentMoney(sourceConfirmedAmount);
+        var nextAdjustmentAmount = adjustmentAmount === 0 ? '' : formatPaymentMoney(-adjustmentAmount);
         var adjustmentReadonly = getPaymentReadonly(clonedRow, PAYMENT_CELL_INDEX.adjustmentAmount);
         var adjustmentControl = getPaymentControl(clonedRow, PAYMENT_CELL_INDEX.adjustmentAmount);
 
+        if (clonedClaimAmountCell) {
+            clonedClaimAmountCell.textContent = '0';
+        }
         if (adjustmentReadonly) {
             adjustmentReadonly.textContent = nextAdjustmentAmount;
         }

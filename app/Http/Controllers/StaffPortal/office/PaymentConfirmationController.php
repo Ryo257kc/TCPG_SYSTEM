@@ -398,7 +398,7 @@ class PaymentConfirmationController extends Controller
                     'insurer_number' => $sourceRow->insurer_number,
                     'store_name' => $sourceRow->store_name,
                     'deposit_name' => $sourceRow->deposit_name,
-                    'claim_amount' => $sourceRow->claim_amount,
+                    'claim_amount' => 0,
                 ], $payload), 'insurance_claim_detail_id');
         }
 
