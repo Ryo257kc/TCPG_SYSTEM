@@ -80,6 +80,7 @@ Route::prefix('admin')->group(function (): void {
     Route::middleware('admin.auth')->group(function (): void {
         Route::get('/', [DashboardV2Controller::class, 'index'])->name('admin.dashboard');
         Route::get('/sales', [DashboardV2Controller::class, 'sales'])->name('admin.sales');
+        Route::get('/sales/csv', [DashboardV2Controller::class, 'salesCsv'])->name('admin.sales.csv');
         Route::get('/sales/pdf', [DashboardV2Controller::class, 'salesPdf'])->name('admin.sales.pdf');
         Route::get('/work/information', [InformationV2Controller::class, 'index'])->name('admin.work.information');
         Route::post('/work/information/save', [InformationV2Controller::class, 'save'])->name('admin.work.information.save');

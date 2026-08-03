@@ -8,6 +8,7 @@ use App\Services\Admin\V2\Sales\SalesV2Service;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class DashboardV2Controller extends Controller
@@ -46,6 +47,7 @@ class DashboardV2Controller extends Controller
         return view('admin_v2.sales.index', [
             'companyOptions' => $companyOptions,
             'salesRows' => $summary['rows'],
+            'companyTotals' => $summary['company_totals'],
             'targetMonth' => $summary['target_month'],
             'selectedCompanyId' => $summary['company_id'],
             'grandTotal' => $summary['grand_total'],
@@ -81,6 +83,23 @@ class DashboardV2Controller extends Controller
             'selectedCompanyId' => $summary['company_id'],
             'grandTotal' => $summary['grand_total'],
             'companyName' => $companyName,
+        ]);
+    }
+
+
+    public function salesCsv(Request $request): Response
+    {
+        $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
+        $companyId = trim((string) $request->query('company_id', ''));
+        $csv = $this->salesService->freeeJournalCsv($targetMonth, $companyId);
+        $yyyymm = str_replace('-', '', $csv['target_month']);
+        $downloadName = 'TC_freee振伝_売上' . $yyyymm . '.csv';
+        $fallbackName = 'TC_freee_sales_' . $yyyymm . '.csv';
+
+        return response($csv['content'], 200, [
+            'Content-Type' => 'text/csv; charset=Shift_JIS',
+            'Content-Disposition' => "attachment; filename=\"{$fallbackName}\"; filename*=UTF-8''" . rawurlencode($downloadName),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
     }
 

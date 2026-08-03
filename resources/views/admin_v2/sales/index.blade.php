@@ -168,12 +168,16 @@
                         class="btn"
                         target="_blank"
                         rel="noopener noreferrer">印刷</a>
+                    <a
+                        href="{{ url('/admin/sales/csv') . '?' . http_build_query(['target_month' => ($targetMonth ?? now()->format('Y-m')), 'company_id' => ($selectedCompanyId ?? '')]) }}"
+                        class="btn">CSV DL</a>
                     <button type="submit" class="btn btn-primary">売上月次解除</button>
                 </div>
             </form>
 
             @include('shared.sales.sales_table_item', [
             'salesRows' => $salesRows ?? [],
+            'companyTotals' => $companyTotals ?? [],
             'grandTotal' => $grandTotal ?? 0,
             ])
             <div>
