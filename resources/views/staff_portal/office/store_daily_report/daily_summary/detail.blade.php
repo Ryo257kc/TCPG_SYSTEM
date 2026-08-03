@@ -309,10 +309,7 @@
                         <div class="daily-summary-header-fields">
 
                             <div class="daily-summary-header-label">来院人数</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['来院人数'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="来院人数" value="{{ $dailySummary['来院人数'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['来院人数'] }}</div>
                             <div class="daily-summary-header-label">レセコン</div>
                             <div class="daily-summary-header-value">
                                 <span class="daily-summary-header-display">{{ $dailySummary['レセコン'] }}</span>
@@ -322,34 +319,19 @@
 
 
                             <div class="daily-summary-header-label">予約人数</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['予約人数'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="予約人数" value="{{ $dailySummary['予約人数'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['予約人数'] }}</div>
                             <div class="daily-summary-header-label">先生別計</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['先生別計'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="先生別計" value="{{ $dailySummary['先生別計'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['先生別計'] }}</div>
                             <div class="daily-summary-header-label">院内人数</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['院内人数'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="院内人数" value="{{ $dailySummary['院内人数'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['院内人数'] }}</div>
 
 
 
                             <div class="daily-summary-header-label">差額</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['差額'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="差額" value="{{ $dailySummary['差額'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['差額'] }}</div>
 
                             <div class="daily-summary-header-label">交通事故</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['交通事故'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="交通事故" value="{{ $dailySummary['交通事故'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['交通事故'] }}</div>
                             <div class="daily-summary-header-label">レジ</div>
                             <div class="daily-summary-header-value">
                                 <span class="daily-summary-header-display">{{ $dailySummary['レジ'] }}</span>
@@ -358,20 +340,11 @@
                             <div class="daily-summary-header-label">レセ負担金</div>
                             <div class="daily-summary-header-value text-right">{{ $dailySummary['レセ負担金'] }}</div>
                             <div class="daily-summary-header-label">カード</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['カード'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="カード" value="{{ $dailySummary['カード'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['カード'] }}</div>
                             <div class="daily-summary-header-label">銀行預入金額</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['銀行預入金額'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="銀行預入金額" value="{{ $dailySummary['銀行預入金額'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['銀行預入金額'] }}</div>
                             <div class="daily-summary-header-label">誤差チェック</div>
-                            <div class="daily-summary-header-value">
-                                <span class="daily-summary-header-display">{{ $dailySummary['誤差チェック'] }}</span>
-                                <input class="daily-summary-header-edit text-right" type="text" name="誤差チェック" value="{{ $dailySummary['誤差チェック'] }}">
-                            </div>
+                            <div class="daily-summary-header-value text-right">{{ $dailySummary['誤差チェック'] }}</div>
 
                             <div class="daily-summary-header-label">確定</div>
                             <div class="daily-summary-header-value">{{ $dailySummary['確定'] }}</div>

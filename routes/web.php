@@ -287,6 +287,7 @@ Route::prefix('staff')->group(function (): void {
     Route::get('/office/store_daily_report/daily_summary/detail', [StoreDailyReportController::class, 'dailySummaryDetail'])->name('office.store_daily_report.daily_summary.detail');
     Route::get('/office/store_daily_report/daily_summary/print', [StoreDailyReportController::class, 'dailySummaryPrint'])->name('office.store_daily_report.daily_summary.print');
     Route::post('/office/store_daily_report/daily_summary/detail/header-save', [StoreDailyReportController::class, 'saveDailySummaryHeader'])->name('office.store_daily_report.daily_summary.detail.header_save');
+    Route::post('/office/store_daily_report/daily_summary/summary-save', [StoreDailyReportController::class, 'saveDailySummarySummary'])->name('office.store_daily_report.daily_summary.summary_save');
     Route::post('/office/store_daily_report/daily_summary/detail/add-patient', [StoreDailyReportController::class, 'addDailySummaryPatient'])->name('office.store_daily_report.daily_summary.detail.add_patient');
     Route::post('/office/store_daily_report/daily_summary/detail/bulk-ch', [StoreDailyReportController::class, 'bulkCheckDailySummaryDetail'])->name('office.store_daily_report.daily_summary.detail.bulk_ch');
     Route::post('/office/store_daily_report/daily_summary/detail/save', [StoreDailyReportController::class, 'saveDailySummaryDetail'])->name('office.store_daily_report.daily_summary.detail.save');

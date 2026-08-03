@@ -1141,23 +1141,75 @@ class StoreDailyReportController extends Controller
             ->table('dbo.T_日報集計')
             ->where('日報集計No', $dailySummaryId)
             ->update([
-                '来院人数' => $this->integerToDatabaseValue($request->input('来院人数')),
-                '予約人数' => $this->integerToDatabaseValue($request->input('予約人数')),
-                '院内人数' => $this->integerToDatabaseValue($request->input('院内人数')),
                 'レセコン' => $this->moneyToDatabaseValue($request->input('レセコン')),
-                '先生別計' => $this->moneyToDatabaseValue($request->input('先生別計')),
-                '差額' => $this->moneyToDatabaseValue($request->input('差額')),
-                '交通事故' => $this->moneyToDatabaseValue($request->input('交通事故')),
                 'レジ' => $this->moneyToDatabaseValue($request->input('レジ')),
-                '銀行預入金額' => $this->moneyToDatabaseValue($request->input('銀行預入金額')),
-                'カード' => $this->moneyToDatabaseValue($request->input('カード')),
-                '誤差チェック' => $this->moneyToDatabaseValue($request->input('誤差チェック')),
                 '備考' => $this->blankToNull($request->input('備考')),
             ]);
 
         return redirect()
             ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
             ->with('statusMessage', '保存しました。');
+    }
+
+
+    public function saveDailySummarySummary(Request $request): RedirectResponse
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
+        $targetMonth = trim((string) $request->input('target_month', now()->format('Y-m')));
+        $selectedStore = trim((string) $request->input('日報集計店舗', ''));
+        $redirectQuery = ['target_month' => $targetMonth];
+        if ($selectedStore !== '') {
+            $redirectQuery['日報集計店舗'] = $selectedStore;
+        }
+
+        if ($dailySummaryId === '') {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary', $redirectQuery)
+                ->with('errorMessage', '保存対象が確認できません。');
+        }
+
+        $dailySummaryRow = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->select(['日付', '確定'])
+            ->where('日報集計No', $dailySummaryId)
+            ->first();
+
+        if ($dailySummaryRow === null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary', $redirectQuery)
+                ->with('errorMessage', '保存対象が確認できません。');
+        }
+
+        $targetMonthStart = Carbon::createFromFormat('Y-m-d', $targetMonth . '-01')->startOfDay();
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthStart) !== null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary', $redirectQuery)
+                ->with('errorMessage', '月次処理済のため保存できません。');
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if ((bool) ($dailySummaryRow->{'確定'} ?? false) && !$this->isPaymentCheck($staffRow)) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary', $redirectQuery)
+                ->with('errorMessage', '確定済みの日報は保存できません。');
+        }
+
+        DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->where('日報集計No', $dailySummaryId)
+            ->update([
+                'レセコン' => $this->moneyToDatabaseValue($request->input('レセコン')),
+                'レジ' => $this->moneyToDatabaseValue($request->input('レジ')),
+            ]);
+
+        return redirect()
+            ->route('office.store_daily_report.daily_summary', $redirectQuery)
+            ->with('statusMessage', 'レセコン・レジを保存しました。');
     }
 
     public function saveDailySummaryExpense(Request $request): RedirectResponse
@@ -2098,18 +2150,28 @@ class StoreDailyReportController extends Controller
 
     private function buildTeacherMonthlyPrintData(string $targetMonthStart, string $targetMonthEnd, string $selectedStore): array
     {
+        $staffNameSubQuery = DB::connection('sqlsrv_dailyreport')
+            ->table('TCPGSYSTEM_DEV.dbo.mx_staffs')
+            ->select([
+                'staff_id',
+                DB::raw("MAX(LTRIM(RTRIM(COALESCE(display_name_ja, staff_name, staff_id, '')))) as staff_display_name"),
+            ])
+            ->groupBy('staff_id');
+
         $rowsQuery = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_患者名日報 as patient')
             ->leftJoin('dbo.T_先生別日報 as teacher', 'patient.患者No', '=', 'teacher.患者No_t')
-            ->leftJoin('TCPGSYSTEM_DEV.dbo.mx_staffs as staff', 'teacher.担当者ID', '=', 'staff.staff_id')
+            ->leftJoinSub($staffNameSubQuery, 'staff', function ($join): void {
+                $join->on('teacher.担当者ID', '=', 'staff.staff_id');
+            })
             ->select([
                 'patient.日付',
                 'teacher.担当者ID',
-                DB::raw("LTRIM(RTRIM(COALESCE(staff.display_name_ja, staff.staff_name, teacher.担当者ID, ''))) as 担当者名"),
+                DB::raw("LTRIM(RTRIM(COALESCE(staff.staff_display_name, teacher.担当者ID, ''))) as 担当者名"),
                 DB::raw('COUNT(DISTINCT patient.患者No) as 人数'),
                 DB::raw("SUM(CASE WHEN patient.割合 = N'自' THEN 1 ELSE 0 END) as 自費人数"),
-                DB::raw('SUM(COALESCE(teacher.自費, 0)) as 自費'),
-                DB::raw("COUNT(DISTINCT CASE WHEN (COALESCE(teacher.保険負担, 0) + COALESCE(teacher.請求金額, 0)) <> 0 THEN patient.患者No END) as 保険人数"),
+                DB::raw('SUM(CASE WHEN COALESCE(teacher.先生別外, 0) = 0 THEN COALESCE(teacher.自費, 0) ELSE 0 END) as 自費'),
+                DB::raw("SUM(CASE WHEN (COALESCE(teacher.請求金額, 0) + COALESCE(teacher.保険負担, 0)) <> 0 THEN 1 ELSE 0 END) as 保険人数"),
                 DB::raw('SUM(COALESCE(teacher.保険負担, 0)) as 保険負担'),
                 DB::raw('SUM(COALESCE(teacher.請求金額, 0)) as 請求金額'),
                 DB::raw('SUM(COALESCE(teacher.レセ差額, 0)) as レセ差額'),
@@ -2119,17 +2181,9 @@ class StoreDailyReportController extends Controller
             ->where('patient.日付', '<', $targetMonthEnd)
             ->whereNotNull('teacher.担当者ID')
             ->where('teacher.担当者ID', '<>', '')
-            ->where(function ($query): void {
-                $query->whereNull('teacher.先生別外')
-                    ->orWhere('teacher.先生別外', 0);
-            })
-            ->groupBy('patient.日付', 'teacher.担当者ID', 'staff.display_name_ja', 'staff.staff_name')
+            ->groupBy('patient.日付', 'teacher.担当者ID', 'staff.staff_display_name')
             ->orderBy('teacher.担当者ID')
             ->orderBy('patient.日付');
-
-        if ($selectedStore !== '') {
-            $rowsQuery->where('patient.店舗', $selectedStore);
-        }
 
         $rows = $rowsQuery
             ->get()

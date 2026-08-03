@@ -171,7 +171,7 @@
 
     <main class="print-page">
         <header class="print-header">
-            <div class="print-store">{{ $selectedStore !== '' ? $selectedStore : '全店舗' }}</div>
+            <div class="print-store">全店舗</div>
             <div class="print-title">施術者別日報集計</div>
         </header>
 
@@ -179,8 +179,8 @@
             @forelse (($teacherGroups ?? []) as $teacherGroup)
             <section class="teacher-block">
                 <div class="teacher-head">
-                    <div class="teacher-label">担当者ID</div>
-                    <div class="teacher-value">{{ $teacherGroup['担当者名'] !== '' ? $teacherGroup['担当者名'] : $teacherGroup['担当者ID'] }}</div>
+                    <div class="teacher-label">担当</div>
+                    <div class="teacher-value">{{ $teacherGroup['担当者名'] !== '' ? $teacherGroup['担当者名'] : $teacherGroup['担当者ID'] }}　先生</div>
                     <div class="teacher-label">日付</div>
                     <div class="teacher-value">{{ $targetMonth }}</div>
                 </div>

@@ -16,6 +16,44 @@
         margin: 8px 0 4px;
         color: #1b06df;
     }
+
+    .daily-summary-editable.summary-is-editing .display-value {
+        display: none;
+    }
+
+    .daily-summary-editable.summary-is-editing .inline-input {
+        display: inline-block;
+    }
+
+    .daily-summary-editable.summary-is-editing {
+        outline: 1px dashed #e6a96d;
+        outline-offset: -2px;
+    }
+
+    tr.summary-is-editing .daily-summary-row-actions .edit-only {
+        display: inline-flex;
+    }
+
+    tr.summary-is-editing .daily-summary-row-actions .edit-trigger {
+        display: none;
+    }
+
+    .daily-summary-money-input {
+        width: 64px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 4px;
+        background: #fff;
+        color: #5f320f;
+        font-size: 12px;
+    }
+
+    .daily-summary-row-actions {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
 
 
@@ -136,6 +174,15 @@
                     if (sakura && saveSakura) saveSakura.value = sakura.value;
                     if (hinata && saveHinata) saveHinata.value = hinata.value;
                 }
+
+                function toggleDailySummarySummaryEdit(rowId) {
+                    var row = document.getElementById('daily-summary-row-' + rowId);
+                    if (!row) return;
+                    row.classList.add('summary-is-editing');
+                    row.querySelectorAll('.daily-summary-editable').forEach(function(cell) {
+                        cell.classList.add('summary-is-editing');
+                    });
+                }
             </script>
             <form id="receipt-monthly-unlock-form" method="post" action="{{ route('office.store_daily_report.daily_summary.monthly_unlock') }}">
                 @csrf
@@ -189,25 +236,43 @@
                     </thead>
                     <tbody>
                         @forelse (($dailySummaryRows ?? []) as $row)
-                        <tr>
+                        <tr id="daily-summary-row-{{ $row['daily_summary_id'] }}">
                             <td>{{ $row['日付'] }}</td>
                             <td class="text-right">{{ $row['来院人数'] }}</td>
                             <td class="text-right">{{ $row['予約人数'] }}</td>
                             <td class="text-right">{{ $row['院内人数'] }}</td>
-                            <td class="text-right">{{ $row['レセコン'] }}</td>
+                            <td class="text-right daily-summary-editable">
+                                <span class="display-value">{{ $row['レセコン'] }}</span>
+                                <input type="text" name="レセコン" value="{{ $row['レセコン'] }}" class="inline-input daily-summary-money-input text-right" form="daily-summary-summary-save-{{ $row['daily_summary_id'] }}">
+                            </td>
                             <td class="text-right">{{ $row['先生別計'] }}</td>
                             <td class="text-right">{{ $row['差額'] }}</td>
                             <td class="text-right">{{ $row['交通事故'] }}</td>
-                            <td class="text-right">{{ $row['レジ'] }}</td>
+                            <td class="text-right daily-summary-editable">
+                                <span class="display-value">{{ $row['レジ'] }}</span>
+                                <input type="text" name="レジ" value="{{ $row['レジ'] }}" class="inline-input daily-summary-money-input text-right" form="daily-summary-summary-save-{{ $row['daily_summary_id'] }}">
+                            </td>
                             <td class="text-right">{{ $row['銀行預入金額'] }}</td>
                             <td class="text-right">{{ $row['誤差チェック'] }}</td>
                             <td>{{ $row['確定'] }}</td>
                             <td>{{ $row['確定日'] }}</td>
                             <td>{{ $row['日報集計店舗'] }}</td>
                             <td>
-                                <a
-                                    href="{{ route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $row['daily_summary_id']]) }}"
-                                    class="btn btn_small">詳細</a>
+                                <div class="daily-summary-row-actions">
+                                    <a
+                                        href="{{ route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $row['daily_summary_id']]) }}"
+                                        class="btn btn_small">詳細</a>
+                                    @if (!($isDailySummaryMonthlyClosed ?? false))
+                                    <button type="button" class="btn btn_small edit-trigger" onclick="toggleDailySummarySummaryEdit('{{ $row['daily_summary_id'] }}')">編集</button>
+                                    <button type="submit" class="btn btn_small save edit-only" form="daily-summary-summary-save-{{ $row['daily_summary_id'] }}">保存</button>
+                                    <form id="daily-summary-summary-save-{{ $row['daily_summary_id'] }}" method="post" action="{{ route('office.store_daily_report.daily_summary.summary_save') }}">
+                                        @csrf
+                                        <input type="hidden" name="daily_summary_id" value="{{ $row['daily_summary_id'] }}">
+                                        <input type="hidden" name="target_month" value="{{ $targetMonth ?? now()->format('Y-m') }}">
+                                        <input type="hidden" name="日報集計店舗" value="{{ $selectedStore ?? '' }}">
+                                    </form>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                         @empty
