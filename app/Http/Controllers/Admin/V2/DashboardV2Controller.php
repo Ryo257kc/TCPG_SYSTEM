@@ -77,7 +77,7 @@ class DashboardV2Controller extends Controller
             }
         }
 
-        return view('admin_v2.sales.print', [
+        return view('staff_portal.office.sales.print', [
             'stores' => $summary['stores'],
             'targetMonth' => $summary['target_month'],
             'selectedCompanyId' => $summary['company_id'],
