@@ -251,7 +251,11 @@
                 @csrf
                 <button type="submit" class="btn btn-primary">この1件を再計算</button>
             </form>
-            <a href="{{ route('admin.work.year_end_adjustments.hoken.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">保険料控除申告書プレビュー</a>
+            <a href="{{ route('admin.work.year_end_adjustments.hoken.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">保険料控除申告書</a>
+            <a href="{{ route('admin.work.year_end_adjustments.kiso.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">基礎控除申告書</a>
+            <a href="{{ route('admin.work.year_end_adjustments.fuyo.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">扶養控除申告書</a>
+            <a href="{{ route('admin.work.year_end_adjustments.gensen_bo.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">源泉徴収簿</a>
+            <a href="{{ route('admin.work.year_end_adjustments.gensen_hyou.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">源泉徴収票</a>
         </div>
 
         @if (session('status'))
@@ -480,7 +484,7 @@
 
                         <div class="year-end-insurance-proof">
                             @if ($proofUrl !== '')
-                            <a href="{{ $proofUrl }}" target="_blank" rel="noopener" class="btn btn-outline">証明書を開く{{ $proofName !== '' ? ' ('.$proofName.')' : '' }}</a>
+                            <a href="{{ route('admin.work.year_end_adjustments.hoken.certificate_preview', ['applicationId' => $applicationId, 'hokenNo' => $row['hoken_no'] ?? 0]) }}" target="_blank" rel="noopener" class="btn btn-outline">証明書を開く{{ $proofName !== '' ? ' ('.$proofName.')' : '' }}</a>
                             @else
                             <span class="year-end-proof-missing">証明書未添付</span>
                             @endif

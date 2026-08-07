@@ -95,6 +95,11 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/year-end-adjustments/create-targets', [YearEndAdjustmentV2Controller::class, 'createTargets'])->name('admin.work.year_end_adjustments.create_targets');
         Route::get('/year-end-adjustments/{applicationId}', [YearEndAdjustmentV2Controller::class, 'show'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.show');
         Route::get('/year-end-adjustments/{applicationId}/hoken-preview', [YearEndAdjustmentV2Controller::class, 'hokenPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.hoken.preview');
+        Route::get('/year-end-adjustments/{applicationId}/kiso-preview', [YearEndAdjustmentV2Controller::class, 'kisoPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.kiso.preview');
+        Route::get('/year-end-adjustments/{applicationId}/fuyo-preview', [YearEndAdjustmentV2Controller::class, 'fuyoPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.fuyo.preview');
+        Route::get('/year-end-adjustments/{applicationId}/gensen-bo-preview', [YearEndAdjustmentV2Controller::class, 'gensenBoPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.gensen_bo.preview');
+        Route::get('/year-end-adjustments/{applicationId}/gensen-hyou-preview', [YearEndAdjustmentV2Controller::class, 'gensenHyouPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.gensen_hyou.preview');
+        Route::get('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/certificate-preview', [YearEndAdjustmentV2Controller::class, 'hokenCertificatePreview'])->whereNumber('applicationId')->whereNumber('hokenNo')->name('admin.work.year_end_adjustments.hoken.certificate_preview');
         Route::post('/year-end-adjustments/update-status', [YearEndAdjustmentV2Controller::class, 'updateStatus'])->name('admin.work.year_end_adjustments.update_status');
         Route::post('/year-end-adjustments/delete-target', [YearEndAdjustmentV2Controller::class, 'deleteTarget'])->name('admin.work.year_end_adjustments.delete_target');
         Route::post('/year-end-adjustments/{applicationId}/calculate', [YearEndAdjustmentV2Controller::class, 'calculateSingle'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.calculate');

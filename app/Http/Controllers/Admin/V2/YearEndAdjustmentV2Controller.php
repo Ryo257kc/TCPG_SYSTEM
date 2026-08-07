@@ -171,6 +171,97 @@ class YearEndAdjustmentV2Controller extends Controller
             'Content-Disposition' => 'inline; filename="hoken_koujyo_shinkoku_' . $targetYear . '_' . $staffId . '.pdf"',
         ]);
     }
+    public function kisoPreview(int $applicationId)
+    {
+        return $this->templatePreview($applicationId, 'kiso_koujyo_shinkoku', 'kiso_koujyo_shinkoku');
+    }
+
+    public function fuyoPreview(int $applicationId)
+    {
+        return $this->templatePreview($applicationId, 'fuyo_koujyo_shinkoku', 'fuyo_koujyo_shinkoku');
+    }
+
+    public function gensenBoPreview(int $applicationId)
+    {
+        return $this->templatePreview($applicationId, 'gensen_tyoushu_bo', 'gensen_tyoushu_bo');
+    }
+
+    public function gensenHyouPreview(int $applicationId)
+    {
+        return $this->templatePreview($applicationId, 'gensen_tyoushu_hyou', 'gensen_tyoushu_hyou');
+    }
+
+    private function templatePreview(int $applicationId, string $templateKey, string $outputKey)
+    {
+        [$application, $staffId, $targetYear] = $this->yearEndApplicationContext($applicationId);
+        $templatePath = $this->yearEndPdfTemplatePath($targetYear, $templateKey);
+
+        $previewDir = storage_path("app/year_end/previews/{$targetYear}/{$staffId}");
+        if (!is_dir($previewDir)) {
+            mkdir($previewDir, 0775, true);
+        }
+
+        $outputPath = $previewDir . '\\' . $outputKey . '.pdf';
+        $this->copyPdfTemplateToPreview($templatePath, $outputPath);
+
+        return response()->file($outputPath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $outputKey . '_' . $targetYear . '_' . $staffId . '.pdf"',
+        ]);
+    }
+
+    private function copyPdfTemplateToPreview(string $templatePath, string $outputPath): void
+    {
+        $pdf = new Fpdi('P', 'mm');
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(0, 0, 0);
+        $pdf->SetAutoPageBreak(false, 0);
+        $pageCount = $pdf->setSourceFile($templatePath);
+
+        for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+            $templateId = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($templateId);
+            $pdf->AddPage($size['width'] > $size['height'] ? 'L' : 'P', [$size['width'], $size['height']]);
+            $pdf->useTemplate($templateId);
+        }
+
+        $pdf->Output($outputPath, 'F');
+    }
+
+    public function hokenCertificatePreview(int $applicationId, int $hokenNo): View
+    {
+        [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+        $row = $this->hokenRowOrFail($hokenNo, $staffId, $targetYear);
+        $path = trim((string) ($row->certificate_file_path ?? ''));
+        abort_if($path === '', 404);
+
+        $isExternal = preg_match('/^https?:\/\//', $path) === 1;
+        $fileUrl = '';
+        $extension = '';
+
+        if ($isExternal) {
+            $fileUrl = $path;
+            $urlPath = (string) parse_url($path, PHP_URL_PATH);
+            $extension = strtolower(pathinfo($urlPath, PATHINFO_EXTENSION));
+        } else {
+            $relativePath = ltrim(str_replace('\\', '/', $path), '/');
+            $fullPath = public_path($relativePath);
+            abort_unless(is_file($fullPath), 404);
+            $fileUrl = asset($relativePath);
+            $extension = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+        }
+
+        return view('admin_v2.work.year_end_adjustments.certificate_preview', [
+            'fileUrl' => $fileUrl,
+            'fileName' => trim((string) ($row->certificate_original_name ?? '')),
+            'extension' => $extension,
+            'isImage' => in_array($extension, ['jpg', 'jpeg', 'png'], true),
+            'isPdf' => $extension === 'pdf',
+            'hokenNo' => $hokenNo,
+            'targetYear' => $targetYear,
+        ]);
+    }
 
     public function createTargets(Request $request): RedirectResponse
     {
