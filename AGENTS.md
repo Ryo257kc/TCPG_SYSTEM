@@ -1,5 +1,10 @@
 ﻿# Project Guard Rules (Hard Stop)
 
+# Rule Source Priority
+- `docs/rules/` is the current source of truth for project rules.
+- `AGENTS.md` is a temporary guard file kept only until the Japanese docs rules fully replace it.
+- If `AGENTS.md` conflicts with `docs/rules/`, follow `docs/rules/`.
+- For page-specific work, read `docs/rules/00_global.md` first, then the relevant `docs/rules/{domain}/` files.
 ## 1) Target Lock
 - This repository is `tcpg_system_laravel`.
 - If request targets another project, STOP immediately.
@@ -152,10 +157,14 @@
 - If a planned action would violate any existing rule in this file, stop before editing and report the conflict.
 - Never create your own temporary exception, “just this once” exception, or convenience-based exception to a written rule.
 
-## 23) No Scripted Rewrite Of Existing UI Files
-- Do not use temporary scripts, one-off PHP scripts, PowerShell scripts, regex rewrite scripts, or bulk text replacement scripts to modify existing Blade, PHP, CSS, JS, or SQL files that are already part of the project UI or business flow.
-- Such scripts may be used only for read-only investigation, mechanical checks, or clearly temporary non-project outputs, not for overwriting existing project files.
-- Existing project files must be edited directly and minimally.
+## 23) Temporary Script Rule
+- One-time temporary scripts are allowed when they reduce breakage risk, especially for narrow mechanical edits that are hard to apply safely by hand.
+- Temporary scripts must be created only under `C:\dev\tcpg_system_laravel\_tmp_codex`.
+- Temporary scripts must be removed after execution.
+- Do not create temporary scripts in another project folder or in `C:\tmp`.
+- Do not ask the user again for ordinary `_tmp_codex` temporary scripts after the user has already approved this workflow.
+- Still confirm before adding permanent files, new folders, libraries, composer changes, migrations, DB structure changes, or any external-folder access.
+- Prefer direct minimal edits first, then `_tmp_codex` temporary scripts, then user confirmation only when genuinely blocked or risky.
 
 ## 24) Existing Japanese UI Must Use Minimal Direct Edits Only
 - For existing Japanese UI files, edit only the agreed block or lines needed for the requested change.
