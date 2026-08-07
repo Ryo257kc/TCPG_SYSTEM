@@ -195,6 +195,8 @@ class YearEndAdjustmentV2Controller extends Controller
     {
         [$application, $staffId, $targetYear] = $this->yearEndApplicationContext($applicationId);
         $templatePath = $this->yearEndPdfTemplatePath($targetYear, $templateKey);
+        $staff = $this->staffDetail($staffId);
+        $nenTyo = $this->nenTyoDetail($application, $staffId, $targetYear);
 
         $previewDir = storage_path("app/year_end/previews/{$targetYear}/{$staffId}");
         if (!is_dir($previewDir)) {
@@ -202,7 +204,17 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         $outputPath = $previewDir . '\\' . $outputKey . '.pdf';
-        $this->copyPdfTemplateToPreview($templatePath, $outputPath);
+        $this->copyPdfTemplateToPreview(
+            $templatePath,
+            $outputPath,
+            function (Fpdi $pdf, int $pageNo) use ($templateKey, $staffId, $targetYear, $staff, $nenTyo): void {
+                if ($pageNo !== 1) {
+                    return;
+                }
+
+                $this->writeYearEndTemplateHeader($pdf, $templateKey, $staffId, $targetYear, $staff, $nenTyo);
+            }
+        );
 
         return response()->file($outputPath, [
             'Content-Type' => 'application/pdf',
@@ -210,7 +222,7 @@ class YearEndAdjustmentV2Controller extends Controller
         ]);
     }
 
-    private function copyPdfTemplateToPreview(string $templatePath, string $outputPath): void
+    private function copyPdfTemplateToPreview(string $templatePath, string $outputPath, ?callable $writer = null): void
     {
         $pdf = new Fpdi('P', 'mm');
         $pdf->setPrintHeader(false);
@@ -224,9 +236,39 @@ class YearEndAdjustmentV2Controller extends Controller
             $size = $pdf->getTemplateSize($templateId);
             $pdf->AddPage($size['width'] > $size['height'] ? 'L' : 'P', [$size['width'], $size['height']]);
             $pdf->useTemplate($templateId);
+            if ($writer) {
+                $writer($pdf, $pageNo);
+            }
         }
 
         $pdf->Output($outputPath, 'F');
+    }
+
+    private function writeYearEndTemplateHeader(Fpdi $pdf, string $templateKey, string $staffId, int $targetYear, array $staff, array $nenTyo): void
+    {
+        $staffName = trim((string) ($staff['staff_name'] ?? ''));
+        $companyName = trim((string) ($staff['company_name'] ?? $staff['company'] ?? ''));
+        $yearEnd = trim((string) ($nenTyo['year_end'] ?? ''));
+
+        $pdf->SetTextColor(0, 0, 180);
+        $pdf->SetFont('kozminproregular', '', 8);
+
+        $positions = [
+            'kiso_koujyo_shinkoku' => [18, 14, 42, 14, 62, 14, 122, 14],
+            'fuyo_koujyo_shinkoku' => [18, 14, 42, 14, 62, 14, 122, 14],
+            'gensen_tyoushu_bo' => [16, 12, 36, 12, 56, 12, 112, 12],
+            'gensen_tyoushu_hyou' => [16, 12, 36, 12, 56, 12, 112, 12],
+        ];
+        [$yearX, $yearY, $idX, $idY, $nameX, $nameY, $companyX, $companyY] = $positions[$templateKey] ?? [18, 14, 42, 14, 62, 14, 122, 14];
+
+        $this->writePdfText($pdf, $yearX, $yearY, "{$targetYear}年");
+        $this->writePdfText($pdf, $idX, $idY, $staffId);
+        $this->writePdfText($pdf, $nameX, $nameY, $staffName, 36);
+        $this->writePdfText($pdf, $companyX, $companyY, $companyName, 36);
+
+        if ($yearEnd !== '') {
+            $this->writePdfText($pdf, $companyX, $companyY + 5, $yearEnd, 18);
+        }
     }
 
     public function hokenCertificatePreview(int $applicationId, int $hokenNo): View
@@ -1076,6 +1118,22 @@ class YearEndAdjustmentV2Controller extends Controller
         imagedestroy($source);
 
         return $saved;
+    }
+    private function yearEndPdfTemplatePath(int $targetYear, string $templateKey): string
+    {
+        $fileName = $templateKey . '.pdf';
+        $candidates = [
+            storage_path("app/templates/year_end/{$targetYear}-{$fileName}"),
+            storage_path("app/templates/year_end/2025-{$fileName}"),
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        abort(404, '年末調整帳票テンプレートが見つかりません。');
     }
     private function hokenPdfTemplatePath(int $targetYear): string
     {
