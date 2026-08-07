@@ -8,14 +8,7 @@
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/data_table.css') }}">
-    <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/sales_item.css') }}"> -->
-
     <style>
-        /* .sales-panel {
-            display: grid;
-            gap: 16px;
-        } */
-
         .sales-filter-row {
             display: grid;
             grid-template-columns: minmax(170px, 220px) minmax(240px, 360px) auto;
@@ -91,39 +84,6 @@
             text-align: right;
         }
 
-        .sales-table-wrap {
-            overflow-x: auto;
-            border: 1px solid #d9e0ea;
-            border-radius: 10px;
-            background: #fff;
-        }
-
-        .sales-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .sales-table th,
-        .sales-table td {
-            padding: 12px 14px;
-            border-bottom: 1px solid #e7edf4;
-            font-size: 13px;
-            text-align: left;
-            white-space: nowrap;
-        }
-
-        .sales-table th {
-            background: #f7f9fc;
-            color: #506074;
-            font-weight: 700;
-        }
-
-        .sales-empty {
-            text-align: center;
-            color: #6a7688;
-            padding: 28px 14px;
-        }
-
         @media (max-width: 840px) {
             .sales-filter-row {
                 grid-template-columns: 1fr;
@@ -156,7 +116,7 @@
                     <select id="sales-company" name="company_id">
                         <option value="">会社を選択</option>
                         @foreach (($companyOptions ?? []) as $company)
-                        <option value="{{ $company['company_id'] }}" @selected(($selectedCompanyId ?? '' )===$company['company_id'])>{{ $company['company_name'] }}</option>
+                        <option value="{{ $company['company_id'] }}" @selected(($selectedCompanyId ?? '') === $company['company_id'])>{{ $company['company_name'] }}</option>
                         @endforeach
                     </select>
                 </div>

@@ -1,6 +1,6 @@
 <div class="sales-table-card">
     <div class="sales-table-head">
-        <h2 class="panel-title">部署別売上</h2>
+        <h2 class="panel-title">部門別売上</h2>
         <div class="sales-head-meta">
             <div class="meta-count">{{ count($salesRows ?? []) }}件</div>
             <div class="sales-grand-total">{{ number_format((float) ($grandTotal ?? 0)) }}円</div>
@@ -11,7 +11,7 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>部署</th>
+                    <th>部門</th>
                     <th>保険請求額</th>
                     <th>保険窓口負担</th>
                     <th>個人振込分</th>

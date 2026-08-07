@@ -3,18 +3,18 @@ $targetMonthText = (string) ($targetMonth ?? '');
 $warekiTitle = $targetMonthText;
 
 if (preg_match('/^(\d{4})-(\d{2})$/', $targetMonthText, $matches)) {
-$year = (int) $matches[1];
-$month = (int) $matches[2];
-$warekiTitle = '令和' . ($year - 2018) . '年' . $month . '月';
+    $year = (int) $matches[1];
+    $month = (int) $matches[2];
+    $warekiTitle = '令和' . ($year - 2018) . '年' . $month . '月';
 }
 @endphp
 
-<div class="print-page landscape ">
+<div class="print-page landscape">
     <header class="page-header">
         <h1 class="page-title">{{ $warekiTitle }} 売上一覧</h1>
         <div class="page-meta">
             <span>{{ $companyName }}</span>
-            <span>　／　総売上 {{ number_format((float) ($grandTotal ?? 0)) }}</span>
+            <span>総売上 {{ number_format((float) ($grandTotal ?? 0)) }}</span>
         </div>
     </header>
 

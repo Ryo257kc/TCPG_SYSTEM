@@ -7,9 +7,6 @@
     <title>TCPG SYSTEM - 売上一覧</title>
     <link rel="stylesheet" href="{{ asset('css/print.css') }}">
     <link rel="stylesheet" href="{{ asset('css/sales_print_item.css') }}">
-    <style>
-
-    </style>
 </head>
 
 <body>

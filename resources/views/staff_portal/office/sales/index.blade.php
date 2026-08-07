@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/sales_item.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
-
 </head>
 
 <body>
@@ -16,7 +15,6 @@
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
         <section class="panel content-panel staff-viewport-panel">
-
             <div class="content-head">
                 <h2 class="content-title">店舗売上</h2>
             </div>
@@ -32,7 +30,7 @@
                     <select id="sales-company" name="company_id">
                         <option value="">会社を選択</option>
                         @foreach (($companyOptions ?? []) as $company)
-                        <option value="{{ $company['company_id'] }}" @selected((string)($selectedCompanyId ?? '' )===(string)($company['company_id'] ?? '' ))>{{ $company['company_name'] }}</option>
+                        <option value="{{ $company['company_id'] }}" @selected((string)($selectedCompanyId ?? '') === (string)($company['company_id'] ?? ''))>{{ $company['company_name'] }}</option>
                         @endforeach
                     </select>
                 </div>
