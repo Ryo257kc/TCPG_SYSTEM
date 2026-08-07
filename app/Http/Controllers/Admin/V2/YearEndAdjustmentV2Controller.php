@@ -213,6 +213,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 }
 
                 $this->writeYearEndTemplateHeader($pdf, $templateKey, $staffId, $targetYear, $staff, $nenTyo);
+                if ($templateKey === 'gensen_tyoushu_bo') {
+                    $this->writeGensenBoPreview($pdf, $staffId, $targetYear, $staff, $nenTyo);
+                }
             }
         );
 
@@ -271,6 +274,141 @@ class YearEndAdjustmentV2Controller extends Controller
         }
     }
 
+    private function writeGensenBoPreview(Fpdi $pdf, string $staffId, int $targetYear, array $staff, array $nenTyo): void
+    {
+        $companyName = trim((string) ($staff['company_name'] ?? $staff['company'] ?? ''));
+        $payrollRows = $this->yearEndPayrollLedgerRows($staffId, $targetYear, $companyName);
+
+        $pdf->SetTextColor(0, 0, 180);
+        $pdf->SetFont('kozminproregular', '', 7);
+
+        $y = 107.5;
+        foreach (array_slice($payrollRows, 0, 14) as $row) {
+            $this->writePdfText($pdf, 12, $y, $row['month'], 16);
+            $this->writePdfTextRight($pdf, 40, $y, $row['fuyo_sum'], 10);
+            $this->writePdfTextRight($pdf, 58, $y, $row['bonus_amount'], 18);
+            $this->writePdfTextRight($pdf, 82, $y, $row['taxation_sum'], 20);
+            $this->writePdfTextRight($pdf, 107, $y, $row['syaho_sum'], 20);
+            $this->writePdfTextRight($pdf, 132, $y, $row['syaho_deduction_sum'], 20);
+            $this->writePdfTextRight($pdf, 154, $y, $row['income_tax'], 18);
+            $this->writePdfText($pdf, 161, $y, $companyName, 24);
+            $y += 5.1;
+        }
+
+        $this->writePdfTextRight($pdf, 58, 184, $this->sumPdfRows($payrollRows, 'bonus_amount'), 18);
+        $this->writePdfTextRight($pdf, 82, 184, $this->sumPdfRows($payrollRows, 'taxation_sum'), 20);
+        $this->writePdfTextRight($pdf, 107, 184, $this->sumPdfRows($payrollRows, 'syaho_sum'), 20);
+        $this->writePdfTextRight($pdf, 132, 184, $this->sumPdfRows($payrollRows, 'syaho_deduction_sum'), 20);
+        $this->writePdfTextRight($pdf, 154, 184, $this->sumPdfRows($payrollRows, 'income_tax'), 18);
+
+        $summaryRows = [
+            ['kyuyo_teate_sum', 165, 74],
+            ['bonus_etc', 165, 80],
+            ['bonus_kyuyo_sum', 165, 86],
+            ['shotoku_deduction', 165, 92],
+            ['kyu_syaho_fee_kou', 165, 98],
+            ['shin_syaho_fee_kou', 165, 104],
+            ['seimei_fee_kou', 165, 110],
+            ['jishun_fee_kou', 165, 116],
+            ['deduction_sum', 165, 122],
+            ['shotoku_deduction_sum', 165, 128],
+            ['sa_kazei_shotoku', 165, 134],
+            ['sanshutu_shotoku', 165, 140],
+            ['jyu_kari_kou', 165, 146],
+            ['nentyo_shotoku_amo', 165, 152],
+            ['nentyo_nen_tax', 165, 158],
+            ['sa_excess', 165, 164],
+            ['kyuyo_teate_tax', 222, 74],
+            ['bonus_tax', 222, 80],
+            ['siharai_shotoku', 222, 86],
+            ['kiso_koujyo', 222, 98],
+            ['haigu_toku_deduction', 222, 104],
+            ['tyosei_koujyo', 222, 110],
+        ];
+
+        foreach ($summaryRows as [$key, $x, $y]) {
+            $this->writePdfTextRight($pdf, $x, $y, (string) ($nenTyo[$key] ?? ''), 22);
+        }
+    }
+
+    /** @return list<array<string, string>> */
+    private function yearEndPayrollLedgerRows(string $staffId, int $targetYear, string $companyName): array
+    {
+        if (!Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')) {
+            return [];
+        }
+
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('kyuyo_staff_id', $staffId)
+            ->whereYear('supply_month', $targetYear)
+            ->orderBy('supply_month')
+            ->orderBy('bonus')
+            ->get(['supply_month', 'fuyo_sum', 'bonus', 'bonus_amo', 'taxation_sum', 'syaho_sum', 'syaho_deduction_sum', 'income_tax'])
+            ->map(function ($row) use ($companyName): array {
+                $isBonus = (int) ($row->bonus ?? 0) === 1;
+                return [
+                    'month' => $this->pdfDateMonthLabel($row->supply_month ?? null),
+                    'fuyo_sum' => $this->pdfNumber($row->fuyo_sum ?? 0),
+                    'bonus_amount' => $isBonus ? $this->pdfNumber($row->bonus_amo ?? $row->taxation_sum ?? 0) : '',
+                    'taxation_sum' => $this->pdfNumber($row->taxation_sum ?? 0),
+                    'syaho_sum' => $this->pdfNumber($row->syaho_sum ?? 0),
+                    'syaho_deduction_sum' => $this->pdfNumber($row->syaho_deduction_sum ?? 0),
+                    'income_tax' => $this->pdfNumber($row->income_tax ?? 0),
+                    'company_name' => $companyName,
+                ];
+            })
+            ->all();
+    }
+
+    private function pdfDateMonthLabel(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        try {
+            return (new \DateTimeImmutable((string) $value))->format('Y/m/d');
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+    }
+
+    private function pdfNumber(mixed $value): string
+    {
+        $number = $this->money($value);
+        if (abs($number) < 0.00001) {
+            return '0';
+        }
+
+        return number_format($number, 0);
+    }
+
+    /** @param list<array<string, string>> $rows */
+    private function sumPdfRows(array $rows, string $key): string
+    {
+        $total = 0.0;
+        foreach ($rows as $row) {
+            $total += $this->money($row[$key] ?? 0);
+        }
+
+        return number_format($total, 0);
+    }
+
+    private function writePdfTextRight(Fpdi $pdf, float $rightX, float $y, string $text, int $maxWidth = 0): void
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return;
+        }
+
+        if ($maxWidth > 0 && function_exists('mb_strimwidth')) {
+            $text = mb_strimwidth($text, 0, $maxWidth, '...', 'UTF-8');
+        }
+
+        $width = $pdf->GetStringWidth($text);
+        $pdf->Text($rightX - $width, $y, $text);
+    }
     public function hokenCertificatePreview(int $applicationId, int $hokenNo): View
     {
         [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);

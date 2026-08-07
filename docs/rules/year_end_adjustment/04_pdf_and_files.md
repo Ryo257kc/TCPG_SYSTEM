@@ -58,3 +58,20 @@ HEICなどブラウザ確認しにくい形式は受け付けない方針。
 
 最終的には全員分をまとめたPDF、または個人別PDFを `final` 用フォルダへ退避する方針を検討する。
 現時点ではプレビュー中心。
+## 源泉徴収簿プレビュー
+
+源泉徴収簿は `mx_kyuyo_shou` と `mx_nen_tyo` の保存値を表示する。
+帳票側で給与・賞与・年調の再計算をしない。
+
+月別支給行は `mx_kyuyo_shou` から取得する。
+
+- `supply_month`
+- `fuyo_sum`
+- `bonus_amo`
+- `taxation_sum`
+- `syaho_sum`
+- `syaho_deduction_sum`
+- `income_tax`
+
+年調結果欄は `mx_nen_tyo` の計算済み保存値を表示する。
+表示位置は帳票確認しながら微調整する。
