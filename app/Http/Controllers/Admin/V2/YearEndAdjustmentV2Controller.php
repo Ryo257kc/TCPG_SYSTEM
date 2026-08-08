@@ -219,6 +219,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 if ($templateKey === 'gensen_tyoushu_hyou') {
                     $this->writeGensenHyouPreview($pdf, $staff, $nenTyo);
                 }
+                if ($templateKey === 'kiso_koujyo_shinkoku') {
+                    $this->writeKisoPreview($pdf, $nenTyo);
+                }
             }
         );
 
@@ -277,6 +280,30 @@ class YearEndAdjustmentV2Controller extends Controller
         }
     }
 
+    private function writeKisoPreview(Fpdi $pdf, array $nenTyo): void
+    {
+        $pdf->SetTextColor(0, 0, 180);
+        $pdf->SetFont('kozminproregular', '', 8);
+
+        $rows = [
+            ['kyuyo_teate_sum', 70, 73],
+            ['shotoku_deduction', 105, 73],
+            ['bonus_kyuyo_sum', 140, 73],
+            ['kiso_bunrui', 174, 73],
+            ['kiso_koujyo', 205, 73],
+            ['haigu_shotoku', 70, 104],
+            ['haigu_shotoku_sum', 105, 104],
+            ['haigu_bunrui', 140, 104],
+            ['haigu_toku_deduction', 174, 104],
+            ['haigu_toku_deduction_amo', 205, 104],
+            ['tyosei_koujyo_select', 105, 139],
+            ['tyosei_koujyo', 174, 139],
+        ];
+
+        foreach ($rows as [$key, $x, $y]) {
+            $this->writePdfTextRight($pdf, $x, $y, (string) ($nenTyo[$key] ?? ''), 22);
+        }
+    }
     private function writeGensenHyouPreview(Fpdi $pdf, array $staff, array $nenTyo): void
     {
         $staffName = trim((string) ($staff['staff_name'] ?? ''));

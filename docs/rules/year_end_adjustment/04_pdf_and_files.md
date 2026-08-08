@@ -93,3 +93,22 @@ HEICなどブラウザ確認しにくい形式は受け付けない方針。
 - 扶養人数系の保存値
 
 住所や細かい摘要欄は帳票確認しながら追加する。
+## 基礎控除申告書プレビュー
+
+基礎控除申告書は `mx_nen_tyo` の保存済み値を表示する。
+帳票側で基礎控除、配偶者控除、所得金額調整控除を再計算しない。
+
+主要出力値は以下。
+
+- `kyuyo_teate_sum`
+- `shotoku_deduction`
+- `bonus_kyuyo_sum`
+- `kiso_bunrui`
+- `kiso_koujyo`
+- `haigu_shotoku`
+- `haigu_shotoku_sum`
+- `haigu_bunrui`
+- `haigu_toku_deduction`
+- `haigu_toku_deduction_amo`
+- `tyosei_koujyo_select`
+- `tyosei_koujyo`
