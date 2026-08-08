@@ -216,6 +216,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 if ($templateKey === 'gensen_tyoushu_bo') {
                     $this->writeGensenBoPreview($pdf, $staffId, $targetYear, $staff, $nenTyo);
                 }
+                if ($templateKey === 'gensen_tyoushu_hyou') {
+                    $this->writeGensenHyouPreview($pdf, $staff, $nenTyo);
+                }
             }
         );
 
@@ -274,6 +277,35 @@ class YearEndAdjustmentV2Controller extends Controller
         }
     }
 
+    private function writeGensenHyouPreview(Fpdi $pdf, array $staff, array $nenTyo): void
+    {
+        $staffName = trim((string) ($staff['staff_name'] ?? ''));
+        $address = trim((string) ($staff['address'] ?? $staff['staff_address'] ?? $staff['add'] ?? ''));
+
+        $pdf->SetTextColor(0, 0, 180);
+        $pdf->SetFont('kozminproregular', '', 8);
+
+        $this->writePdfText($pdf, 34, 31, $address, 70);
+        $this->writePdfText($pdf, 34, 41, $staffName, 38);
+
+        $this->writePdfTextRight($pdf, 83, 65, (string) ($nenTyo['bonus_kyuyo_sum'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 121, 65, (string) ($nenTyo['shotoku_deduction'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 159, 65, (string) ($nenTyo['shotoku_deduction_sum'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 197, 65, (string) ($nenTyo['nentyo_nen_tax'] ?? ''), 18);
+
+        $this->writePdfTextRight($pdf, 72, 87, (string) ($nenTyo['kyu_syaho_fee_kou'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 109, 87, (string) ($nenTyo['seimei_fee_kou'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 146, 87, (string) ($nenTyo['jishun_fee_kou'] ?? ''), 18);
+        $this->writePdfTextRight($pdf, 184, 87, (string) ($nenTyo['jyu_kari_kou'] ?? ''), 18);
+
+        $this->writePdfTextRight($pdf, 61, 112, (string) ($nenTyo['haigu_umu'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 82, 112, (string) ($nenTyo['toku_fu'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 103, 112, (string) ($nenTyo['rou_dou'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 124, 112, (string) ($nenTyo['rou_dou_gai'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 145, 112, (string) ($nenTyo['fuyo_ta'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 166, 112, (string) ($nenTyo['dependent_under_16'] ?? ''), 8);
+        $this->writePdfTextRight($pdf, 187, 112, (string) ($nenTyo['shougai_ta'] ?? ''), 8);
+    }
     private function writeGensenBoPreview(Fpdi $pdf, string $staffId, int $targetYear, array $staff, array $nenTyo): void
     {
         $companyName = trim((string) ($staff['company_name'] ?? $staff['company'] ?? ''));

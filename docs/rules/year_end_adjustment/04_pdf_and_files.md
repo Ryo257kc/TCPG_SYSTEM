@@ -75,3 +75,21 @@ HEICなどブラウザ確認しにくい形式は受け付けない方針。
 
 年調結果欄は `mx_nen_tyo` の計算済み保存値を表示する。
 表示位置は帳票確認しながら微調整する。
+## 源泉徴収票プレビュー
+
+源泉徴収票は `mx_nen_tyo` の保存済み年調結果を表示する。
+帳票側で支払金額、控除後金額、所得控除額、源泉徴収税額を再計算しない。
+
+現時点の主要出力値は以下。
+
+- `bonus_kyuyo_sum`
+- `shotoku_deduction`
+- `shotoku_deduction_sum`
+- `nentyo_nen_tax`
+- `kyu_syaho_fee_kou`
+- `seimei_fee_kou`
+- `jishun_fee_kou`
+- `jyu_kari_kou`
+- 扶養人数系の保存値
+
+住所や細かい摘要欄は帳票確認しながら追加する。
