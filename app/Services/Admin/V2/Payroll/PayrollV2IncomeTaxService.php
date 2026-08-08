@@ -119,7 +119,10 @@ class PayrollV2IncomeTaxService
         return ['updated' => $updated, 'trace' => $trace];
     }
 
-    private function calcKou(float $syahoDeductionSum, int $fuyoNum): array
+    /**
+     * 月額表(甲欄)による所得税計算。賞与の月割換算(PayrollV2BonusIncomeTaxCalcService)からも呼ぶため public。
+     */
+    public function calcKou(float $syahoDeductionSum, int $fuyoNum): array
     {
         if ($syahoDeductionSum < 88000) {
             return ['tax' => 0, 'detail' => ['rule' => '< 88000']];
@@ -187,7 +190,10 @@ class PayrollV2IncomeTaxService
         ];
     }
 
-    private function calcOtsu(float $syahoDeductionSum): array
+    /**
+     * 月額表(乙欄)による所得税計算。賞与の月割換算(PayrollV2BonusIncomeTaxCalcService)からも呼ぶため public。
+     */
+    public function calcOtsu(float $syahoDeductionSum): array
     {
         $a = max(0.0, $syahoDeductionSum);
         if ($a < 88000) {
