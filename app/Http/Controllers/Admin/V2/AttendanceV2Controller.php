@@ -150,6 +150,18 @@ class AttendanceV2Controller extends Controller
             'is_returned' => ['nullable', 'integer'],
         ]);
 
+        [$year, $month] = array_map('intval', explode('-', (string) $v['month']));
+        $isConfirmed = (bool) ($this->confirmedStateService->mapByStaffIds([(string) $v['staff_id']], $year, $month)[(string) $v['staff_id']] ?? false);
+        if ($isConfirmed) {
+            return redirect()
+                ->route('admin.attendance.index', [
+                    'month' => (string) $v['month'],
+                    'company_id' => (string) ($v['company_id'] ?? ''),
+                    'staff_id' => (string) $v['staff_id'],
+                ])
+                ->with('status', '勤怠確定済のため編集できません。先に確定を解除してください。');
+        }
+
         $updated = $this->dailyEditService->update($v);
 
         return redirect()

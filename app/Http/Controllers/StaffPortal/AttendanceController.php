@@ -246,6 +246,13 @@ class AttendanceController extends Controller
             return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '差戻しました');
         }
 
+        [$cardYear, $cardMonth] = $this->splitMonth($month);
+        $isConfirmed = (bool) (app(\App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService::class)
+            ->mapByStaffIds([$staffId], $cardYear, $cardMonth)[$staffId] ?? false);
+        if ($isConfirmed) {
+            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '確定済のため編集できません。');
+        }
+
         $submitted = array_values($request->except([
             '_token',
             'month',
