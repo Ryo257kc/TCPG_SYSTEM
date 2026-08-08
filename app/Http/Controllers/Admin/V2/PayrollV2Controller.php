@@ -123,150 +123,22 @@ class PayrollV2Controller extends Controller
 
     public function transferList(Request $request): View
     {
-        $pageData = $this->buildPageData($request, false);
-        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
-        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
-        $rows = (array) $pageData['rows'];
-        $mayorMetaMap = $this->mayorMetaMap();
-
-        $transferRows = [];
-        foreach ($rows as $row) {
-            $summary = (array) ($row['summary'] ?? []);
-            $kihon = (array) ($row['kihon'] ?? []);
-            $shaho = (array) ($row['shaho'] ?? []);
-            $staffMaster = (array) ($row['staff_master'] ?? []);
-
-            $bankName = trim((string) ($staffMaster['bank_name_1'] ?? ''));
-            $bankBranch = trim((string) ($staffMaster['bank_branch_1'] ?? ''));
-            $accountNo = trim((string) ($staffMaster['account_num'] ?? ''));
-
-            if ($bankName === '' && trim((string) ($staffMaster['bank_name_2'] ?? '')) !== '') {
-                $bankName = trim((string) ($staffMaster['bank_name_2'] ?? ''));
-                $bankBranch = trim((string) ($staffMaster['bank_branch_2'] ?? ''));
-                $accountNo = trim((string) ($staffMaster['account_num2'] ?? ''));
-            }
-
-            $transferAmount = $this->summaryService->transferAmount($summary);
-
-            $transferRows[] = [
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-                'division' => trim((string) ($row['division'] ?? '')),
-                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
-                'staff_name_furi' => trim((string) ($staffMaster['staff_name_furi'] ?? '')),
-                'bank_name' => $bankName,
-                'bank_branch' => $bankBranch,
-                'account_no' => $accountNo,
-                'transfer_amount' => $transferAmount,
-                'city' => $this->resolveMunicipalityLabel(
-                    trim((string) ($staffMaster['submission'] ?? '')),
-                    trim((string) ($staffMaster['city'] ?? '')),
-                    $mayorMetaMap
-                ),
-                'specified_num' => $this->resolveSpecifiedNum(
-                    trim((string) ($staffMaster['submission'] ?? '')),
-                    $mayorMetaMap
-                ),
-                'submission' => trim((string) ($staffMaster['submission'] ?? '')),
-                'resident_tax' => $this->num($summary['resident_tax'] ?? 0),
-                'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
-                'income_tax' => $this->num($summary['income_tax'] ?? 0),
-                'transfer_purpose' => trim((string) ($staffMaster['transfer_purpose'] ?? '')),
-            ];
-        }
-
-        usort($transferRows, static function (array $a, array $b): int {
-            return [$a['company_name'], $a['transfer_purpose'], $a['bank_name'], $a['bank_branch'], $a['staff_name_furi'], $a['staff_name']]
-                <=> [$b['company_name'], $b['transfer_purpose'], $b['bank_name'], $b['bank_branch'], $b['staff_name_furi'], $b['staff_name']];
-        });
-
-        $groupedCompanies = [];
-        $grandTransfer = 0.0;
-        $grandResidentTax = 0.0;
-        $grandTaxation = 0.0;
-        $grandIncomeTax = 0.0;
-
-        foreach ($transferRows as $row) {
-            $companyKey = $row['company_name'] !== '' ? $row['company_name'] : '未設定';
-            $bankKey = $row['bank_name'] !== '' ? $row['bank_name'] : '未設定';
-
-            if (!isset($groupedCompanies[$companyKey])) {
-                $groupedCompanies[$companyKey] = [
-                    'company_name' => $companyKey,
-                    'groups' => [],
-                    'city_totals' => [],
-                    'transfer_total' => 0.0,
-                    'resident_tax_total' => 0.0,
-                    'taxation_total' => 0.0,
-                    'income_tax_total' => 0.0,
-                    'row_count' => 0,
-                    'non_outsource_count' => 0,
-                ];
-            }
-
-            if (!isset($groupedCompanies[$companyKey]['groups'][$bankKey])) {
-                $groupedCompanies[$companyKey]['groups'][$bankKey] = [
-                    'bank_name' => $bankKey,
-                    'rows' => [],
-                    'transfer_total' => 0.0,
-                    'resident_tax_total' => 0.0,
-                    'taxation_total' => 0.0,
-                    'income_tax_total' => 0.0,
-                ];
-            }
-
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['rows'][] = $row;
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['transfer_total'] += $row['transfer_amount'];
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['resident_tax_total'] += $row['resident_tax'];
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['taxation_total'] += $row['taxation_sum'];
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['income_tax_total'] += $row['income_tax'];
-            $cityKey = trim((string) ($row['city'] ?? ''));
-            if ($cityKey !== '' && $cityKey !== '-') {
-                if (!isset($groupedCompanies[$companyKey]['city_totals'][$cityKey])) {
-                    $groupedCompanies[$companyKey]['city_totals'][$cityKey] = [
-                        'city' => $cityKey,
-                        'specified_num' => trim((string) ($row['specified_num'] ?? '')),
-                        'row_count' => 0,
-                        'resident_tax_total' => 0.0,
-                    ];
-                }
-                $groupedCompanies[$companyKey]['city_totals'][$cityKey]['row_count']++;
-                $groupedCompanies[$companyKey]['city_totals'][$cityKey]['resident_tax_total'] += $row['resident_tax'];
-            }
-            $groupedCompanies[$companyKey]['transfer_total'] += $row['transfer_amount'];
-            $groupedCompanies[$companyKey]['resident_tax_total'] += $row['resident_tax'];
-            $groupedCompanies[$companyKey]['taxation_total'] += $row['taxation_sum'];
-            $groupedCompanies[$companyKey]['income_tax_total'] += $row['income_tax'];
-            $groupedCompanies[$companyKey]['row_count']++;
-            if ($row['division'] !== '業務委託') {
-                $groupedCompanies[$companyKey]['non_outsource_count']++;
-            }
-            $grandTransfer += $row['transfer_amount'];
-            $grandResidentTax += $row['resident_tax'];
-            $grandTaxation += $row['taxation_sum'];
-            $grandIncomeTax += $row['income_tax'];
-        }
-
-        return view('admin_v2.work.transfer_list.index', [
-            'selectedPaymentDate' => $selectedPaymentDate,
-            'selectedCompanyId' => $selectedCompanyId,
-            'isBonus' => false,
-            'groupedCompanies' => array_map(static function (array $company): array {
-                $company['groups'] = array_values($company['groups']);
-                $company['city_totals'] = array_values($company['city_totals']);
-                return $company;
-            }, array_values($groupedCompanies)),
-            'grandTransfer' => $grandTransfer,
-            'grandResidentTax' => $grandResidentTax,
-            'grandTaxation' => $grandTaxation,
-            'grandIncomeTax' => $grandIncomeTax,
-            'rowCount' => count($transferRows),
-            'companyLabel' => $this->resolveCompanyLabel($rows),
-        ]);
+        return $this->buildTransferListView($request, false);
     }
 
     public function bonusTransferList(Request $request): View
     {
-        $pageData = $this->buildPageData($request, true);
+        return $this->buildTransferListView($request, true);
+    }
+
+    /**
+     * 給与・賞与の振込一覧は同じ計算式・同じテンプレートを使う。
+     * $isBonus はデータ取得元(mx_kyuyo_shou.bonus)の切り替えだけに使い、
+     * 集計ロジックそのものは1箇所にまとめる。
+     */
+    private function buildTransferListView(Request $request, bool $isBonus): View
+    {
+        $pageData = $this->buildPageData($request, $isBonus);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $selectedCompanyId = (string) $pageData['selectedCompanyId'];
         $rows = (array) $pageData['rows'];
@@ -390,7 +262,7 @@ class PayrollV2Controller extends Controller
         return view('admin_v2.work.transfer_list.index', [
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
-            'isBonus' => true,
+            'isBonus' => $isBonus,
             'groupedCompanies' => array_map(static function (array $company): array {
                 $company['groups'] = array_values($company['groups']);
                 $company['city_totals'] = array_values($company['city_totals']);
@@ -407,7 +279,22 @@ class PayrollV2Controller extends Controller
 
     public function wageLedger(Request $request): View
     {
-        $pageData = $this->buildPageData($request, false);
+        return $this->buildWageLedgerView($request, false);
+    }
+
+    public function bonusWageLedger(Request $request): View
+    {
+        return $this->buildWageLedgerView($request, true);
+    }
+
+    /**
+     * 給与・賞与の賃金台帳は同じ計算式・同じテンプレートを使う。
+     * $isBonus はデータ取得元(mx_kyuyo_shou.bonus)の切り替えだけに使い、
+     * 集計ロジックそのものは1箇所にまとめる。
+     */
+    private function buildWageLedgerView(Request $request, bool $isBonus): View
+    {
+        $pageData = $this->buildPageData($request, $isBonus);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $selectedCompanyId = (string) $pageData['selectedCompanyId'];
         $rows = (array) $pageData['rows'];
@@ -523,122 +410,7 @@ class PayrollV2Controller extends Controller
         return view('admin_v2.work.wage_ledger.index', [
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
-            'isBonus' => false,
-            'groupedCompanies' => array_values($groupedCompanies),
-            'companyLabel' => $this->resolveCompanyLabel($rows),
-            'allowanceEntries' => $allowanceEntries,
-            'allowanceLabelMap' => $this->allowanceLabelService->labelMap(),
-        ]);
-    }
-
-    public function bonusWageLedger(Request $request): View
-    {
-        $pageData = $this->buildPageData($request, true);
-        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
-        $selectedCompanyId = (string) $pageData['selectedCompanyId'];
-        $rows = (array) $pageData['rows'];
-        $allowanceEntries = $this->allowanceLabelService->entries();
-
-        $ledgerRows = [];
-        foreach ($rows as $row) {
-            if (!$this->shouldIncludeWageLedgerRow($row)) {
-                continue;
-            }
-
-            $summary = (array) ($row['summary'] ?? []);
-            $shaho = (array) ($row['shaho'] ?? []);
-
-            $transferAmount = $this->summaryService->transferAmount($summary);
-
-            $ledgerRows[] = [
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-                'store_code' => trim((string) ($row['store_code'] ?? '')),
-                'store_name' => trim((string) ($row['store_name'] ?? '')),
-                'staff_id' => trim((string) ($row['staff_id'] ?? '')),
-                'staff_name' => trim((string) ($row['staff_name'] ?? '')),
-                'division' => trim((string) ($row['division'] ?? '')),
-                'shaho' => $shaho,
-                'bonus_amount' => $this->num($summary['bonus_amo'] ?? 0),
-                'basic_salary' => $this->num($summary['basic_salary'] ?? 0),
-                'allowance_amo_2' => $this->num($summary['allowance_amo_2'] ?? 0),
-                'position_allowance' => $this->num($summary['position_allow'] ?? 0),
-                'qualification_allowance' => $this->num($summary['qualification_allow'] ?? 0),
-                'duties_allowance' => $this->num(($row['kihon']['duties_allow'] ?? 0)),
-                'request_allowance' => $this->num($summary['claim_allow'] ?? 0),
-                'family_allowance' => $this->num($summary['rent_subsidies'] ?? 0),
-                'adjust_allowance' => $this->num($summary['adjustment_add'] ?? 0),
-                'fixed_overtime_allowance' => $this->num(($row['kihon']['fixed_overtime'] ?? 0)),
-                'taxable_commuting' => $this->num(($row['kihon']['traffic_pay'] ?? 0)),
-                'non_taxable_commuting' => $this->num(($row['kihon']['rent_pay'] ?? 0)),
-                'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
-                'not_taxation_sum' => $this->num($summary['not_taxation_sum'] ?? 0),
-                'supply_sum' => $this->num($summary['supply_sum'] ?? 0),
-                'kenpo' => $this->num($summary['kenpo'] ?? 0),
-                'kaigo' => $this->num($summary['kaigo'] ?? 0),
-                'child_support_funds' => $this->num($summary['child_support_funds'] ?? 0),
-                'kounen' => $this->num($summary['kounen'] ?? 0),
-                'koyou' => $this->num($summary['koyou'] ?? 0),
-                'kenpo_monthly_amo' => $shaho['kenpo_monthly_amo'] ?? null,
-                'kounen_monthly_amo' => $shaho['kounen_monthly_amo'] ?? null,
-                'syaho_sum' => $this->num($summary['syaho_sum'] ?? 0),
-                'income_tax' => $this->num($summary['income_tax'] ?? 0),
-                'resident_tax' => $this->num($summary['resident_tax'] ?? 0),
-                'koujyo_1' => $this->num($summary['koujyo_1'] ?? 0),
-                'late_deduction' => $this->num($summary['late_deduction'] ?? 0),
-                'absence_deduction' => $this->num($summary['absence_deduction'] ?? 0),
-                'deduction_sum' => $this->num($summary['deduction_sum'] ?? 0),
-                'adjustment_year_end' => $this->num($summary['adjustment_year_end'] ?? 0),
-                'cost_liquidation' => $this->num($summary['cost_liquidation'] ?? 0),
-                'transfer_amount' => $transferAmount,
-                'work_in_num' => $this->num($summary['work_in_num'] ?? 0),
-                'work_time' => $this->num($summary['work_time'] ?? 0),
-                'late_time' => $this->num($summary['late_time'] ?? 0),
-                'overtime' => $this->num($summary['overtime'] ?? 0),
-                'work_holiday_num' => $this->num($summary['work_holiday_num'] ?? ($summary['work_horiday_num'] ?? 0)),
-                'holiday_work_time' => $this->num($summary['work_time_num'] ?? 0),
-                'holiday_true' => $this->num($summary['holiday_true'] ?? 0),
-                'holiday_true_num' => $this->num($summary['holiday_true_num'] ?? ($summary['horiday_true_num'] ?? 0)),
-                'absence_num' => $this->num($summary['absence_num'] ?? 0),
-            ];
-        }
-
-        usort($ledgerRows, static function (array $a, array $b): int {
-            return [$a['company_name'], $a['store_code'], $a['store_name'], $a['staff_id'], $a['staff_name']]
-                <=> [$b['company_name'], $b['store_code'], $b['store_name'], $b['staff_id'], $b['staff_name']];
-        });
-
-        $groupedCompanies = [];
-        foreach ($ledgerRows as $row) {
-            $companyKey = $row['company_name'] !== '' ? $row['company_name'] : '未設定';
-
-            if (!isset($groupedCompanies[$companyKey])) {
-                $groupedCompanies[$companyKey] = [
-                    'company_name' => $companyKey,
-                    'rows' => [],
-                    'totals' => [
-                        'taxation_sum' => 0.0,
-                        'supply_sum' => 0.0,
-                        'deduction_sum' => 0.0,
-                        'transfer_amount' => 0.0,
-                        'resident_tax' => 0.0,
-                        'income_tax' => 0.0,
-                    ],
-                ];
-            }
-
-            $groupedCompanies[$companyKey]['rows'][] = $row;
-            $groupedCompanies[$companyKey]['totals']['taxation_sum'] += $row['taxation_sum'];
-            $groupedCompanies[$companyKey]['totals']['supply_sum'] += $row['supply_sum'];
-            $groupedCompanies[$companyKey]['totals']['deduction_sum'] += $row['deduction_sum'];
-            $groupedCompanies[$companyKey]['totals']['transfer_amount'] += $row['transfer_amount'];
-            $groupedCompanies[$companyKey]['totals']['resident_tax'] += $row['resident_tax'];
-            $groupedCompanies[$companyKey]['totals']['income_tax'] += $row['income_tax'];
-        }
-
-        return view('admin_v2.work.wage_ledger.index', [
-            'selectedPaymentDate' => $selectedPaymentDate,
-            'selectedCompanyId' => $selectedCompanyId,
-            'isBonus' => true,
+            'isBonus' => $isBonus,
             'groupedCompanies' => array_values($groupedCompanies),
             'companyLabel' => $this->resolveCompanyLabel($rows),
             'allowanceEntries' => $allowanceEntries,
