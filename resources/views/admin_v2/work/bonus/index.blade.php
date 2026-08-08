@@ -178,10 +178,7 @@
           $paymentRaw = trim((string) ($bonusSummary['supply_month'] ?? $selectedPaymentDate ?? ''));
           $timestamp = $paymentRaw !== '' ? strtotime($paymentRaw) : false;
           $bonusPaymentDate = $timestamp !== false ? date('Y/m/d', $timestamp) : ($paymentRaw !== '' ? (preg_split('/[ T]/', $paymentRaw)[0] ?? $paymentRaw) : '-');
-          $bonusAmount = (float) ($bonusSummary['bonus_amo'] ?? 0);
-          $deductionSum = (float) ($bonusSummary['deduction_sum'] ?? 0);
-          $transferBalance = (float) ($bonusSummary['transfer_balance'] ?? 0);
-          $transferAmount = $bonusAmount - $deductionSum - $transferBalance;
+          $transferAmount = (float) ($bonusSummary['transfer_amount'] ?? 0);
           $bonusConfirmed = ((int) ($summary['edit_lock'] ?? 0)) === 1;
           @endphp
           <div class="top-cards">
@@ -322,10 +319,7 @@
           return $text !== '' ? $text : $fallback;
           };
 
-          $transferAmountCalc = (is_numeric($summary['bonus_amo'] ?? null) ? (float) $summary['bonus_amo'] : 0.0)
-          - (is_numeric($summary['deduction_sum'] ?? null) ? (float) $summary['deduction_sum'] : 0.0)
-          - (is_numeric($summary['transfer_balance'] ?? null) ? (float) $summary['transfer_balance'] : 0.0);
-          $summary['transfer_amount_calc'] = $transferAmountCalc;
+          $summary['transfer_amount_calc'] = is_numeric($summary['transfer_amount'] ?? null) ? (float) $summary['transfer_amount'] : 0.0;
           $staffMemo = trim((string) ($staffMaster['memo'] ?? ''));
 
           $sources = [
@@ -397,7 +391,7 @@
                       <td>{{ $item['label'] }}</td>
                       <td>
                         @if ($item['key'] === 'transfer_amount_calc')
-                        <span>{{ number_format($transferAmountCalc, 0) }}</span>
+                        <span>{{ number_format($summary['transfer_amount_calc'], 0) }}</span>
                         @elseif (!empty($item['readonly']))
                         <span class="view-only">{{ $item['key'] === 'bonus_tax' ? $moneyFlexible($summary, $item['key']) : $money($summary, $item['key']) }}</span>
                         @else

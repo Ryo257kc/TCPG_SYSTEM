@@ -248,10 +248,8 @@ $otherSum =
     (is_numeric($summary['cost_liquidation'] ?? null) ? (float)$summary['cost_liquidation'] : 0.0)
     - (is_numeric($summary['adjustment_year_end'] ?? null) ? (float)$summary['adjustment_year_end'] : 0.0)
     + (is_numeric($summary['company_advance_cost'] ?? null) ? (float)$summary['company_advance_cost'] : 0.0);
-
-$netPay = $supplySum - $deductionSum + $otherSum;
-$transferBalance = is_numeric($summary['transfer_balance'] ?? null) ? (float)$summary['transfer_balance'] : 0.0;
-$summary['transfer_amount_calc'] = $netPay - $transferBalance;
+$netPay = is_numeric($summary['transfer_amount'] ?? null) ? (float)$summary['transfer_amount'] : 0.0;
+$summary['transfer_amount_calc'] = $netPay;
 $salesCoreTotal = 0.0;
 foreach (['kitazaike','higashi_kakogawa','tsubasa_harima','sakura_hari','orita_hari','miyamoto_hari','yokoi_hari','own_cost','unpaid_amo'] as $salesKey) {
     $salesCoreTotal += is_numeric($summary[$salesKey] ?? null) ? (float) $summary[$salesKey] : 0.0;

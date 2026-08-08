@@ -4,6 +4,11 @@ namespace App\Services\Admin\V2\Payroll;
 
 use Illuminate\Support\Facades\DB;
 
+/**
+ * 給与・賞与の mx_kyuyo_shou サマリー行の取得・正規化を担当する。
+ * 「振込額（差引支給額）」の計算式はここ(transferAmount)を正本とし、
+ * Controller・帳票・スタッフポータルはすべてここの値を使う。式を個別に持たない。
+ */
 class PayrollV2SummaryService
 {
     /** @return array<string, array<string, mixed>> */
@@ -151,6 +156,37 @@ class PayrollV2SummaryService
             }
         }
 
+        $row['transfer_amount'] = $this->transferAmount($row);
+
         return $row;
+    }
+
+    /**
+     * 振込額（差引支給額）の正本計算。
+     * 支給合計 - 控除合計 - 年末調整 + 立替経費精算 + 会社立替費用 - 振込残額。
+     * `docs/rules/payroll_bonus/03_wage_ledger.md` の規定式と一致させること。
+     * @param array<string, mixed> $summary
+     */
+    public function transferAmount(array $summary): float
+    {
+        return $this->toFloat($summary['supply_sum'] ?? 0)
+            - $this->toFloat($summary['deduction_sum'] ?? 0)
+            - $this->toFloat($summary['adjustment_year_end'] ?? 0)
+            + $this->toFloat($summary['cost_liquidation'] ?? 0)
+            + $this->toFloat($summary['company_advance_cost'] ?? 0)
+            - $this->toFloat($summary['transfer_balance'] ?? 0);
+    }
+
+    private function toFloat(mixed $value): float
+    {
+        if ($value === null) {
+            return 0.0;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        $text = str_replace([',', ' '], '', trim((string) $value));
+        return $text !== '' && is_numeric($text) ? (float) $text : 0.0;
     }
 }

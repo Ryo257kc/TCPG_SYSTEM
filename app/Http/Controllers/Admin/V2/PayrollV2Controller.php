@@ -142,10 +142,6 @@ class PayrollV2Controller extends Controller
             $summary = (array) ($row['summary'] ?? []);
             $kihon = (array) ($row['kihon'] ?? []);
             $shaho = (array) ($row['shaho'] ?? []);
-            $kihon = (array) ($row['kihon'] ?? []);
-            $shaho = (array) ($row['shaho'] ?? []);
-            $kihon = (array) ($row['kihon'] ?? []);
-            $shaho = (array) ($row['shaho'] ?? []);
             $staffMaster = (array) ($row['staff_master'] ?? []);
 
             $bankName = trim((string) ($staffMaster['bank_name_1'] ?? ''));
@@ -158,9 +154,7 @@ class PayrollV2Controller extends Controller
                 $accountNo = trim((string) ($staffMaster['account_num2'] ?? ''));
             }
 
-            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
-                - $this->num($summary['deduction_sum'] ?? 0)
-                - $this->num($summary['transfer_balance'] ?? 0);
+            $transferAmount = $this->summaryService->transferAmount($summary);
 
             $transferRows[] = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -301,9 +295,7 @@ class PayrollV2Controller extends Controller
                 $accountNo = trim((string) ($staffMaster['account_num2'] ?? ''));
             }
 
-            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
-                - $this->num($summary['deduction_sum'] ?? 0)
-                - $this->num($summary['transfer_balance'] ?? 0);
+            $transferAmount = $this->summaryService->transferAmount($summary);
 
             $transferRows[] = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -439,12 +431,7 @@ class PayrollV2Controller extends Controller
             $kihon = (array) ($row['kihon'] ?? []);
             $shaho = (array) ($row['shaho'] ?? []);
 
-            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
-                - $this->num($summary['deduction_sum'] ?? 0)
-                - $this->num($summary['adjustment_year_end'] ?? 0)
-                + $this->num($summary['cost_liquidation'] ?? 0)
-                + $this->num($summary['company_advance_cost'] ?? 0)
-                - $this->num($summary['transfer_balance'] ?? 0);
+            $transferAmount = $this->summaryService->transferAmount($summary);
 
             $ledgerRow = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -569,12 +556,7 @@ class PayrollV2Controller extends Controller
             $summary = (array) ($row['summary'] ?? []);
             $shaho = (array) ($row['shaho'] ?? []);
 
-            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
-                - $this->num($summary['deduction_sum'] ?? 0)
-                - $this->num($summary['adjustment_year_end'] ?? 0)
-                + $this->num($summary['cost_liquidation'] ?? 0)
-                + $this->num($summary['company_advance_cost'] ?? 0)
-                - $this->num($summary['transfer_balance'] ?? 0);
+            $transferAmount = $this->summaryService->transferAmount($summary);
 
             $ledgerRows[] = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -1181,12 +1163,7 @@ class PayrollV2Controller extends Controller
                 continue;
             }
 
-            $transferAmount = $this->num($summary['supply_sum'] ?? 0)
-                - $this->num($summary['deduction_sum'] ?? 0)
-                - $this->num($summary['adjustment_year_end'] ?? 0)
-                + $this->num($summary['cost_liquidation'] ?? 0)
-                + $this->num($summary['company_advance_cost'] ?? 0)
-                - $this->num($summary['transfer_balance'] ?? 0);
+            $transferAmount = $this->summaryService->transferAmount($summary);
 
             $rows[] = array_merge($summary, [
                 'staff_id' => trim((string) ($row['staff_id'] ?? '')),
@@ -1306,17 +1283,7 @@ class PayrollV2Controller extends Controller
     private function personalWageLedgerRow(array $summary, array $staffInfo, array $shaho, array $allowanceEntries): array
     {
         $isBonus = ((int) ($summary['bonus'] ?? 0)) === 1;
-        $otherSum = $isBonus
-            ? 0.0
-            : $this->num($summary['cost_liquidation'] ?? 0)
-                - $this->num($summary['adjustment_year_end'] ?? 0)
-                + $this->num($summary['company_advance_cost'] ?? 0);
-
-        $transferAmount =
-            $this->num($summary['supply_sum'] ?? 0)
-            - $this->num($summary['deduction_sum'] ?? 0)
-            + $otherSum
-            - $this->num($summary['transfer_balance'] ?? 0);
+        $transferAmount = $this->summaryService->transferAmount($summary);
 
         $paymentDate = trim((string) ($summary['supply_month'] ?? ''));
         $paymentTime = strtotime($paymentDate);

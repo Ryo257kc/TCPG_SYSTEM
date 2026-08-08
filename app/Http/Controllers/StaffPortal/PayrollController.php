@@ -5,6 +5,7 @@ namespace App\Http\Controllers\StaffPortal;
 use Carbon\Carbon;
 use DateTimeInterface;
 use App\Http\Controllers\Controller;
+use App\Services\Admin\V2\Payroll\PayrollV2SummaryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,10 @@ use Illuminate\View\View;
 class PayrollController extends Controller
 {
     private const PAYROLL_VISIBLE_FROM = '2022-07-01';
+
+    public function __construct(private readonly PayrollV2SummaryService $summaryService)
+    {
+    }
 
     public function payslip(Request $request): RedirectResponse|View
     {
@@ -336,6 +341,7 @@ class PayrollController extends Controller
     private function normalizePayrollRowForDisplay(array $row): array
     {
         unset($row['raw_payload']);
+        $row['transfer_amount'] = $this->summaryService->transferAmount($row);
 
         return $row;
     }

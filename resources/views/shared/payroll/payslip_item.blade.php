@@ -25,13 +25,7 @@ $makeValueItem = fn($label, $value) => [((string)$value === '' || (float)$value 
     $payTotal = $row['supply_sum'] ?? null;
     $deductTotal = $row['deduction_sum'] ?? null;
     $otherTotal = (float)($row['cost_liquidation'] ?? 0) + (float)($row['company_advance_cost'] ?? 0)-(float)($row['adjustment_year_end'] ?? 0);
-    $transfer =
-    (float)$row['supply_sum']
-    - (float)$row['deduction_sum']
-    - (float)$row['adjustment_year_end']
-    + (float)$row['cost_liquidation']
-    + (float)$row['company_advance_cost']
-    - (float)$row['transfer_balance'];
+    $transfer = (float)($row['transfer_amount'] ?? 0);
 
     $attendanceItems = [
     $makeValueItem('出勤日数', $row['work_in_num'] ?? ''),
