@@ -31,7 +31,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 <div class="daily-summary-label">出勤日数</div>
                 <div class="daily-summary-value">{{ number_format((float) ($dailySummary['work_days'] ?? 0), 0) }}</div>
                 <div class="daily-summary-label">欠勤日数</div>
-                <div class="daily-summary-value">{{ number_format((float) ($dailySummary['absence_days'] ?? 0), 0) }}</div>
+                <div class="daily-summary-value">{{ number_format((float) ($dailySummary['absence_days'] ?? 0), 1) }}</div>
                 <div class="daily-summary-label">休出日数</div>
                 <div class="daily-summary-value">{{ number_format((float) ($dailySummary['holiday_work_days'] ?? 0), 0) }}</div>
                 <div class="daily-summary-label">遅早日数</div>
