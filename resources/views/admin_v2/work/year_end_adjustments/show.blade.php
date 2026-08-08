@@ -11,26 +11,26 @@
     <style>
         .year-end-detail-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 10px;
         }
 
         .year-end-detail-card {
             border: 1px solid #d3dff0;
             border-radius: 8px;
             background: #fff;
-            padding: 14px;
+            padding: 10px 12px;
         }
 
         .year-end-detail-card h2 {
-            margin: 0 0 12px;
-            font-size: 16px;
+            margin: 0 0 8px;
+            font-size: 15px;
         }
 
         .year-end-fields {
             display: grid;
-            grid-template-columns: 140px minmax(0, 1fr);
-            gap: 8px 12px;
+            grid-template-columns: minmax(60px, max-content) minmax(0, 1fr);
+            gap: 6px 10px;
             font-size: 13px;
         }
 
@@ -67,15 +67,15 @@
 
         .year-end-summary-blocks {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
         }
 
         .year-end-summary-block {
             border: 1px solid #d3dff0;
             border-radius: 8px;
             background: #fff;
-            padding: 12px;
+            padding: 10px 12px;
         }
 
         .year-end-summary-block h3 {
@@ -165,8 +165,8 @@
 
         .year-end-hoken-edit-grid {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 6px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px 10px;
             min-width: 0;
         }
 
@@ -199,6 +199,10 @@
             grid-column: 1 / -1;
         }
 
+        .year-end-hoken-field-narrow input {
+            max-width: 140px;
+        }
+
         .year-end-hoken-field textarea {
             min-height: 42px;
             resize: vertical;
@@ -216,6 +220,17 @@
             margin: 0;
         }
 
+        .year-end-hoken-delete-btn {
+            color: #b42318;
+            border-color: #f3c6c1;
+        }
+
+        .year-end-hoken-delete-btn:hover {
+            background: #fef3f2;
+            border-color: #b42318;
+            color: #b42318;
+        }
+
         .year-end-hoken-add {
             margin-top: 14px;
             border: 1px dashed #a7b7cc;
@@ -226,6 +241,10 @@
 
         @media (max-width: 560px) {
             .year-end-insurance-list {
+                grid-template-columns: 1fr;
+            }
+
+            .year-end-hoken-edit-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -452,7 +471,7 @@
                                 適用制度
                                 <input type="text" name="applied_system" value="{{ $system }}" maxlength="20">
                             </label>
-                            <label class="year-end-hoken-field">
+                            <label class="year-end-hoken-field year-end-hoken-field-narrow">
                                 申告額
                                 <input type="number" name="declared_amount" value="{{ str_replace(',', '', $amount) }}" step="1">
                             </label>
@@ -497,11 +516,11 @@
 
                         <div class="year-end-hoken-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
+                            <button type="submit" form="year-end-hoken-delete-{{ $row['hoken_no'] ?? 0 }}" class="btn year-end-hoken-delete-btn">削除</button>
                         </div>
                     </form>
-                    <form method="post" action="{{ route('admin.work.year_end_adjustments.hoken.delete', ['applicationId' => $applicationId, 'hokenNo' => $row['hoken_no'] ?? 0]) }}" class="year-end-hoken-delete-form" onsubmit="return confirm('この保険情報を削除します。よろしいですか？');">
+                    <form method="post" id="year-end-hoken-delete-{{ $row['hoken_no'] ?? 0 }}" action="{{ route('admin.work.year_end_adjustments.hoken.delete', ['applicationId' => $applicationId, 'hokenNo' => $row['hoken_no'] ?? 0]) }}" class="year-end-hoken-delete-form" onsubmit="return confirm('この保険情報を削除します。よろしいですか？');">
                         @csrf
-                        <button type="submit" class="btn btn-outline">削除</button>
                     </form>
                 </article>
                 @empty
@@ -530,7 +549,7 @@
                             適用制度
                             <input type="text" name="applied_system" maxlength="20">
                         </label>
-                        <label class="year-end-hoken-field">
+                        <label class="year-end-hoken-field year-end-hoken-field-narrow">
                             申告額
                             <input type="number" name="declared_amount" step="1">
                         </label>
