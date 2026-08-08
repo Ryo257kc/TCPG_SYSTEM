@@ -7,6 +7,7 @@ use App\Services\Admin\V2\Attendance\AttendanceV2DailyEditService;
 use App\Services\Admin\V2\Attendance\AttendanceV2MonthlySummaryService;
 use App\Services\StaffPortal\Attendance\AttendanceV2DailyTableItemBuilder;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
+use App\Support\AttendanceTime;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -589,10 +590,11 @@ class AttendanceController extends Controller
                 $holidayKubun = trim((string) ($item['holiday_kubun'] ?? ''));
                 $attendanceKubun = trim((string) ($item['attendance_kubun'] ?? ''));
                 $isHoliday = $holidayKubun !== '' && (mb_strpos($holidayKubun, '休日') !== false || mb_strpos($holidayKubun, '法休') !== false);
+                $rawChangeScheduled = trim((string) ($item['change_scheduled'] ?? ''));
                 if ($isHoliday && $attendanceKubun === '') {
-                    $item['change_scheduled'] = '';
+                    $rawChangeScheduled = '';
                 }
-                $item['change_scheduled'] = $this->formatNumericDisplay($item['change_scheduled'] ?? null);
+
                 $item['overtime'] = $this->formatNumericDisplay($item['overtime'] ?? null);
                 $item['is_returned'] = ((int) ($item['is_returned'] ?? 0)) === 1;
                 foreach (
@@ -612,6 +614,30 @@ class AttendanceController extends Controller
                     ] as $key
                 ) {
                     $item[$key] = $this->formatTimeValue($item[$key] ?? null);
+                }
+
+                // change_scheduled(変更実績所定)の解決優先度は管理側の日別勤怠(AttendanceV2DailyTableItemBuilder)と揃える:
+                // 保存済みの値 > 変更後の打刻から計算 > シフト予定から計算。
+                // ここで使う shift_sigyo 等は上のforeachで "H:i" 形式へ正規化済みの値。
+                if ($rawChangeScheduled !== '') {
+                    $item['change_scheduled'] = $this->formatNumericDisplay($rawChangeScheduled);
+                } else {
+                    $changeTimes = [
+                        $item['change_sigyo'],
+                        $item['change_taisitu'],
+                        $item['change_irisitu'],
+                        $item['change_syugyo'],
+                    ];
+                    $shiftTimes = [
+                        $item['shift_sigyo'],
+                        $item['shift_taisitu'],
+                        $item['shift_irisitu'],
+                        $item['shift_syugyo'],
+                    ];
+                    $timesForSchedule = AttendanceTime::hasAnyTimeValue($changeTimes) ? $changeTimes : $shiftTimes;
+                    $item['change_scheduled'] = AttendanceTime::hasAnyTimeValue($timesForSchedule)
+                        ? AttendanceTime::formatNumber(AttendanceTime::scheduledHours(...$timesForSchedule))
+                        : '';
                 }
 
                 return $item;
@@ -738,6 +764,10 @@ class AttendanceController extends Controller
 
         $text = trim((string) $value);
         if ($text === '') {
+            return '';
+        }
+
+        if (AttendanceTime::isZeroPlaceholder($text)) {
             return '';
         }
 

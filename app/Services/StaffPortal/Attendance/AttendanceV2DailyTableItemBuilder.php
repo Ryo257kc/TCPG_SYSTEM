@@ -164,17 +164,25 @@ class AttendanceV2DailyTableItemBuilder
                 $card->change_end ?? null,
             );
 
+            $hasChangeRecord = $this->hasAnyTimeValue([
+                $card->change_start ?? null,
+                $card->change_leave ?? null,
+                $card->change_break_out ?? null,
+                $card->change_end ?? null,
+            ]);
+
+            $rawChangeScheduled = trim((string) ($card->change_scheduled ?? ''));
+
+            $displayChangeScheduled = $rawChangeScheduled !== ''
+                ? $this->formatNumber($rawChangeScheduled)
+                : ($hasChangeRecord ? $changeScheduled : $shiftScheduled);
+
             $rows[] = [
                 'time_no' => (string) ($card->time_no ?? ''),
                 'time_card_key' => trim((string) ($card->staff_name ?? ($staffKeys[0] ?? ''))),
                 'work_date' => $key,
                 'date_label' => $date->format('n/j') . '(' . $this->jpWeekday($date) . ')',
-                'has_change_record' => $this->hasAnyTimeValue([
-                    $card->change_start ?? null,
-                    $card->change_leave ?? null,
-                    $card->change_break_out ?? null,
-                    $card->change_end ?? null,
-                ]) ? '1' : '0',
+                'has_change_record' => $hasChangeRecord ? '1' : '0',
                 'holiday_category' => trim((string) ($card->holiday_category ?? '')),
                 'attendance_category' => trim((string) ($card->work_type ?? '')),
                 'category_time' => $this->formatNumber($card->work_type_time ?? null),
@@ -203,12 +211,7 @@ class AttendanceV2DailyTableItemBuilder
                 'change_leave' => $this->formatTime($card->change_leave ?? null),
                 'change_break_out' => $this->formatTime($card->change_break_out ?? null),
                 'change_end' => $this->formatTime($card->change_end ?? null),
-                'change_scheduled' => $this->hasAnyTimeValue([
-                    $card->change_start ?? null,
-                    $card->change_leave ?? null,
-                    $card->change_break_out ?? null,
-                    $card->change_end ?? null,
-                ]) ? $changeScheduled : $shiftScheduled,
+                'change_scheduled' => $displayChangeScheduled,
                 'overtime' => $this->formatNumber($card->overtime ?? null),
                 'night_overtime' => $this->formatNumber($card->night_overtime ?? null),
                 'timecard_note' => trim((string) ($card->timecard_note ?? '')),
