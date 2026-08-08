@@ -378,7 +378,7 @@ class PayrollV2Controller extends Controller
             $groupedCompanies[$companyKey]['taxation_total'] += $row['taxation_sum'];
             $groupedCompanies[$companyKey]['income_tax_total'] += $row['income_tax'];
             $groupedCompanies[$companyKey]['row_count']++;
-            if ($row['division'] !== '紹介派遣') {
+            if ($row['division'] !== '業務委託') {
                 $groupedCompanies[$companyKey]['non_outsource_count']++;
             }
             $grandTransfer += $row['transfer_amount'];
