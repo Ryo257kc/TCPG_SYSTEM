@@ -46,8 +46,11 @@ class PayrollV2OvertimeDeductionService
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
             ->first(['staff_division', 'year_working_time']);
 
+        // 元は文字化けした文字列リテラルで判定しており「staff_division = 役員」の職員に
+        // 一度も一致していなかった（2026年ユーザー確認: 対象は「役員」のみ、「兼務役員」は含めない）。
+        // 他の判定（下のパート／アルバイト）と同じく hex2bin で安全にエンコードする。
         $division = trim((string) ($staff->staff_division ?? ''));
-        $isOfficer = mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡') !== false || mb_strpos($division, '鬮ｯ貅ｷ遘√・・ｽ繝ｻ・ｹ鬮ｯ・ｷ繝ｻ・ｩ郢晢ｽｻ繝ｻ・｡鬮ｯ諛ｶ・ｽ・｣郢晢ｽｻ繝ｻ・ｱ鬯ｯ・ｩ雋翫ｑ・ｽ・ｽ繝ｻ・ｬ') !== false;
+        $isOfficer = $division === hex2bin('e5bdb9e593a1'); // 役員
 
         if ($isOfficer) {
             // Officers do not receive overtime or deduction calculations.
