@@ -13,6 +13,8 @@ use setasign\Fpdi\Tcpdf\Fpdi;
 
 class YearEndAdjustmentV2Controller extends Controller
 {
+    private const FUYO_PDF_TEXT_COLOR = [255, 0, 0];
+
     public function index(Request $request): View
     {
         $targetYear = (int) $request->query('target_year', date('Y'));
@@ -306,30 +308,31 @@ class YearEndAdjustmentV2Controller extends Controller
         $houseRelationship = trim((string) ($staff['relationship'] ?? ''));
         $spouse = trim((string) ($staff['spouse'] ?? ''));
         $taxAmount = trim((string) ($staff['tax_amount'] ?? ''));
-        $textColor = [0, 0, 180];
+        $textColor = self::FUYO_PDF_TEXT_COLOR;
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
 
         // 会社欄
-        $this->writePdfTextSized($pdf, 62, 15, $companyName, 7, 42);
-        $this->writePdfDigitsSized($pdf, 60, 27, $companyNumber, 4.4, 7);
+        $this->writePdfTextSized($pdf, 62, 15, $companyName, 11, 42);
+        $this->writePdfDigitsSized($pdf, 60, 27, $companyNumber, 4.4, 8);
         $this->writePdfWrappedTextSized($pdf, 61, 34, $companyAddress, 58, 4.0, 2, 7);
 
         // 本人欄
-        $this->writePdfTextSized($pdf, 142, 11.5, $staffFuri, 7, 28);
-        $this->writePdfTextSized($pdf, 142, 17, $staffName, 7, 28);
+        $this->writePdfTrackedTextSized($pdf, 142, 11.5, $staffFuri, 7, 1.4, 28);
+        $this->writePdfTrackedTextSized($pdf, 142, 17, $staffName, 9, 3.0, 28);
 
         // 本人欄：生年月日の元号などを隠す枠。調整中は色付き、確定後は [255, 255, 255] にする。
         $birthdayEraseColor = [255, 240, 120];
-        $staffBirthdayEraseX = 209.0;
-        $staffBirthdayEraseY = 10.0;
-        $staffBirthdayEraseW = 30.0;
-        $staffBirthdayEraseH = 4.8;
+        $staffBirthdayEraseX = 204.5;
+        $staffBirthdayEraseY = 12.0;
+        $staffBirthdayEraseW = 40.0;
+        $staffBirthdayEraseH = 4.4;
         $this->fillPdfRect($pdf, $staffBirthdayEraseX, $staffBirthdayEraseY, $staffBirthdayEraseW, $staffBirthdayEraseH, $birthdayEraseColor);
         $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
-        $this->writePdfTextSized($pdf, 210, 12, $birthday, 7, 28);
+        $this->writePdfTextSized($pdf, 210, 13, $birthday, 7, 28);
 
-        $this->writePdfTextSized($pdf, 210, 18, $headHouse, 7, 22);
-        $this->writePdfTextSized($pdf, 210, 25, $houseRelationship, 7, 12);
-        $this->writePdfDigitsSized($pdf, 136, 26, $myNumber, 4.5, 7);
+        $this->writePdfTextSized($pdf, 210, 18, $headHouse, 8, 22);
+        $this->writePdfTextSized($pdf, 210, 25, $houseRelationship, 8, 12);
+        $this->writePdfDigitsSized($pdf, 136, 26, $myNumber, 4.5, 8);
 
         // 本人欄：郵便番号（左3桁・右4桁）
         if ($postNum !== '') {
@@ -341,14 +344,14 @@ class YearEndAdjustmentV2Controller extends Controller
         // 本人欄：配偶者の有無
         $circle = '〇';
         if ($spouse === '1') {
-            $this->writePdfTextSized($pdf, 234.0, 34.0, $circle, 11, 4);
+            $this->writePdfTextSized($pdf, 233.0, 33.0, $circle, 12, 4);
         } elseif ($spouse === '0' || $spouse === '2') {
-            $this->writePdfTextSized($pdf, 266.0, 34.0, $circle, 11, 4);
+            $this->writePdfTextSized($pdf, 266.0, 33.0, $circle, 12, 4);
         }
 
         // 本人欄：甲欄
         if (str_contains($taxAmount, '甲')) {
-            $this->writePdfTextSized($pdf, 283.0, 44.0, $circle, 11, 4);
+            $this->writePdfTextSized($pdf, 253.0, 35.0, $circle, 11, 4);
         }
     }
     private function writeFuyoPreview(Fpdi $pdf, string $staffId, int $targetYear): void
@@ -380,7 +383,8 @@ class YearEndAdjustmentV2Controller extends Controller
             }
         }
 
-        $pdf->SetTextColor(0, 0, 180);
+        $textColor = self::FUYO_PDF_TEXT_COLOR;
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
         $pdf->SetFont('kozminproregular', '', 7);
 
         // A欄：源泉控除対象配偶者
@@ -397,6 +401,9 @@ class YearEndAdjustmentV2Controller extends Controller
         foreach (array_slice($under16Rows, 0, 2) as $index => $row) {
             $this->writeFuyoPersonRow($pdf, $row, 'under16', $index);
         }
+
+        // C欄：障害者、寡婦、ひとり親又は勤労学生
+        $this->writeFuyoDisabilitySection($pdf, $rows);
     }
 
     private function writeFuyoPersonRow(Fpdi $pdf, array $row, string $section, int $index): void
@@ -407,9 +414,9 @@ class YearEndAdjustmentV2Controller extends Controller
         $relationshipLabel = $relationship === '妻' ? '' : $relationship;
         $income = $this->formatPdfMoney($row['fuyo_shunyu'] ?? null);
         $address = (string) ($row['fuyo_address'] ?? '');
-        $failure = (string) ($row['failure_judgment'] ?? '');
-        $checkMark = '✓';
-        $textColor = [0, 0, 180];
+
+        $textColor = self::FUYO_PDF_TEXT_COLOR;
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
 
         // 扶養欄：生年月日の元号などを隠す枠。調整中は色付き、確定後は [255, 255, 255] にする。
         $birthdayEraseColor = [255, 240, 120];
@@ -417,21 +424,18 @@ class YearEndAdjustmentV2Controller extends Controller
         if ($section === 'spouse') {
             // A欄：源泉控除対象配偶者
             $rowOffset = $index * 11.4;
-            $this->writePdfTextSized($pdf, 40.0, 58.5 + $rowOffset, $furi, 7, 24);
-            $this->writePdfTextSized($pdf, 42.0, 65.0 + $rowOffset, $name, 7, 24);
-            $this->writePdfDigitsSized($pdf, 72.0, 60.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
-            $this->writePdfTextSized($pdf, 83.0, 63.0 + $rowOffset, $relationshipLabel, 7, 10);
+            $this->writePdfTrackedTextSized($pdf, 40.0, 58.5 + $rowOffset, $furi, 7, 1.4, 24);
+            $this->writePdfTrackedTextSized($pdf, 42.0, 65.0 + $rowOffset, $name, 8, 3.0, 24);
+            $this->writePdfDigitsSized($pdf, 72.0, 60.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 8);
+            $this->writePdfTextSized($pdf, 83.0, 63.0 + $rowOffset, $relationshipLabel, 8, 10);
 
             // A欄：生年月日の元号などを隠す枠
-            $this->fillPdfRect($pdf, 98.5, 62.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+            $this->fillPdfRect($pdf, 90, 64.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
             $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
-            $this->writePdfTextSized($pdf, 99.0, 65.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+            $this->writePdfTextSized($pdf, 95.0, 65.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 8, 18);
 
             $this->writePdfTextRightSized($pdf, 155.0, 63.0 + $rowOffset, $income, 7, 16);
-            if (trim($failure) !== '') {
-                $this->writePdfTextSized($pdf, 132.0, 61.0 + $rowOffset, $checkMark, 11, 4);
-                $this->writePdfTextSized($pdf, 173.0, 63.0 + $rowOffset, $failure, 7, 10);
-            }
+
             $this->writePdfWrappedTextSized($pdf, 203.0, 60.0 + $rowOffset, $address, 28, 3.7, 2, 7);
             return;
         }
@@ -439,39 +443,97 @@ class YearEndAdjustmentV2Controller extends Controller
         if ($section === 'under16') {
             // 16歳未満の扶養親族欄
             $rowOffset = $index * 11.7;
-            $this->writePdfTextSized($pdf, 39.0, 178.5 + $rowOffset, $furi, 7, 24);
-            $this->writePdfTextSized($pdf, 42.0, 182.0 + $rowOffset, $name, 7, 24);
-            $this->writePdfDigitsSized($pdf, 69.0, 181.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
+            $this->writePdfTrackedTextSized($pdf, 39.0, 178.5 + $rowOffset, $furi, 7, 1.4, 24);
+            $this->writePdfTrackedTextSized($pdf, 42.0, 182.0 + $rowOffset, $name, 8, 3.0, 24);
+            $this->writePdfDigitsSized($pdf, 69.0, 181.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.3, 8);
             $this->writePdfTextSized($pdf, 121.0, 181.0 + $rowOffset, $relationshipLabel, 7, 10);
 
             // 16歳未満欄：生年月日の元号などを隠す枠
-            $this->fillPdfRect($pdf, 127.5, 178.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+            $this->fillPdfRect($pdf, 128, 179.5 + $rowOffset, 17.0, 5.4, $birthdayEraseColor);
             $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
-            $this->writePdfTextSized($pdf, 128.0, 181.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+            $this->writePdfTextSized($pdf, 128.0, 181.0 + $rowOffset, $this->formatPdfJapaneseDateShort($row['fuyo_birthday'] ?? null), 8, 18);
 
             $this->writePdfTextRightSized($pdf, 235.0, 181.0 + $rowOffset, $income, 7, 16);
-            $this->writePdfWrappedTextSized($pdf, 148.0, 180.0 + $rowOffset, $address, 36, 3.7, 2, 7);
+            $this->writePdfWrappedTextSized($pdf, 146.0, 179.0 + $rowOffset, $address, 38, 3.7, 2, 7);
             return;
         }
 
         // B欄：控除対象扶養親族（16歳以上）
-        $rowOffset = $index * 11.4;
-        $this->writePdfTextSized($pdf, 40.0, 70.5 + $rowOffset, $furi, 7, 24);
-        $this->writePdfTextSized($pdf, 42.0, 78.0 + $rowOffset, $name, 7, 24);
-        $this->writePdfDigitsSized($pdf, 72.0, 74.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
-        $this->writePdfTextSized($pdf, 78.0, 80.0 + $rowOffset, $relationshipLabel, 7, 10);
+        $rowOffset = $index * 14.1;
+        $this->writePdfTrackedTextSized($pdf, 40.0, 70.5 + $rowOffset, $furi, 7, 1.4, 24);
+        $this->writePdfTrackedTextSized($pdf, 42.0, 78.0 + $rowOffset, $name, 8, 3.0, 24);
+        $this->writePdfDigitsSized($pdf, 72.0, 74.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 8);
+        $this->writePdfTextSized($pdf, 78.0, 80.0 + $rowOffset, $relationshipLabel, 8, 10);
 
         // B欄：生年月日の元号などを隠す枠
-        $this->fillPdfRect($pdf, 98.5, 77.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+        $this->fillPdfRect($pdf, 90, 78.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
         $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
-        $this->writePdfTextSized($pdf, 99.0, 80.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+        $this->writePdfTextSized($pdf, 95.0, 80.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 8, 18);
 
-        $this->writePdfTextRightSized($pdf, 155.0, 75.0 + $rowOffset, $income, 7, 16);
-        if (trim($failure) !== '') {
-            $this->writePdfTextSized($pdf, 35.0, 127.0 + $rowOffset, $checkMark, 11, 4);
-            $this->writePdfTextSized($pdf, 135.0, 135.0 + $rowOffset, $failure, 7, 10);
-        }
+        $this->writePdfTextRightSized($pdf, 160.0, 76.0 + $rowOffset, $income, 7, 16);
+
         $this->writePdfWrappedTextSized($pdf, 203.0, 73.0 + $rowOffset, $address, 28, 3.7, 2, 7);
+    }
+    private function writeFuyoDisabilitySection(Fpdi $pdf, array $rows): void
+    {
+        $disabledRows = [];
+        $counts = [
+            'same_household_special' => 0,
+            'special' => 0,
+            'general' => 0,
+        ];
+
+        foreach ($rows as $row) {
+            $failure = trim((string) ($row['failure_judgment'] ?? ''));
+            if ($failure === '') {
+                continue;
+            }
+
+            $name = trim((string) ($row['fuyo_name'] ?? ''));
+            $notebook = trim((string) ($row['failure_notebook'] ?? ''));
+            $kyojyu = trim((string) ($row['kyojyu'] ?? ''));
+            $isSpecial = in_array($failure, ['A1', 'A2', '1級', '2級'], true);
+
+            if ($isSpecial && $kyojyu === '同居') {
+                $counts['same_household_special']++;
+            } elseif ($isSpecial) {
+                $counts['special']++;
+            } else {
+                $counts['general']++;
+            }
+
+            $parts = array_values(array_filter([$name, $notebook, $failure], static fn($value): bool => trim((string) $value) !== ''));
+            if ($parts !== []) {
+                $disabledRows[] = implode('　', $parts);
+            }
+        }
+
+        $total = array_sum($counts);
+        if ($total <= 0) {
+            return;
+        }
+
+        $textColor = self::FUYO_PDF_TEXT_COLOR;
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
+
+        // C欄：障害者チェック
+        $this->writePdfTextSized($pdf, 35.5, 127.0, 'レ', 9, 4);
+
+        // C欄：障害者人数（同居特別、特別、その他）
+        if ($counts['same_household_special'] > 0) {
+            $this->writePdfTextRightSized($pdf, 101.5, 134.5, (string) $counts['same_household_special'], 7, 4);
+        }
+        if ($counts['special'] > 0) {
+            $this->writePdfTextRightSized($pdf, 101.5, 140.5, (string) $counts['special'], 7, 4);
+        }
+        if ($counts['general'] > 0) {
+            $this->writePdfTextRightSized($pdf, 101.5, 132.5, (string) $counts['general'], 7, 4);
+        }
+
+        // C欄：障害者又は勤労学生の内容（名前、障害手帳、等級）
+        foreach (array_slice($disabledRows, 0, 2) as $index => $detail) {
+            $this->writePdfTextSized($pdf, 132.0, 133.5 + ($index * 4.0), $detail, 7, 48);
+        }
     }
     private function writeKisoPreview(Fpdi $pdf, array $nenTyo): void
     {
@@ -675,6 +737,35 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         return $era . $eraYear . '年' . (int) $date->format('n') . '月' . (int) $date->format('j') . '日';
+    }
+
+    private function formatPdfJapaneseDateShort(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable((string) $value);
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+
+        $year = (int) $date->format('Y');
+        $era = '';
+        $eraYear = $year;
+        if ($date >= new \DateTimeImmutable('2019-05-01')) {
+            $era = 'R';
+            $eraYear = $year - 2018;
+        } elseif ($date >= new \DateTimeImmutable('1989-01-08')) {
+            $era = 'H';
+            $eraYear = $year - 1988;
+        } elseif ($date >= new \DateTimeImmutable('1926-12-25')) {
+            $era = 'S';
+            $eraYear = $year - 1925;
+        }
+
+        return $era . $eraYear . '/' . (int) $date->format('n') . '/' . (int) $date->format('j');
     }
 
     private function writePdfDigits(Fpdi $pdf, float $x, float $y, string $text, float $pitch): void
@@ -1574,6 +1665,24 @@ class YearEndAdjustmentV2Controller extends Controller
         $pdf->Rect($x, $y, $w, $h, 'F');
     }
 
+    private function writePdfTrackedTextSized(Fpdi $pdf, float $x, float $y, string $text, int $fontSize, float $pitch, int $maxChars = 0): void
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return;
+        }
+
+        if ($maxChars > 0 && function_exists('mb_substr')) {
+            $text = mb_substr($text, 0, $maxChars, 'UTF-8');
+        }
+
+        $pdf->SetFont('kozminproregular', '', $fontSize);
+        $chars = function_exists('mb_str_split') ? mb_str_split($text) : preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        foreach ($chars ?: [] as $index => $char) {
+            $pdf->Text($x + ($index * $pitch), $y, $char);
+        }
+        $pdf->SetFont('kozminproregular', '', 7);
+    }
     private function writePdfTextRightSized(Fpdi $pdf, float $rightX, float $y, string $text, int $fontSize, int $maxWidth = 0): void
     {
         $pdf->SetFont('kozminproregular', '', $fontSize);

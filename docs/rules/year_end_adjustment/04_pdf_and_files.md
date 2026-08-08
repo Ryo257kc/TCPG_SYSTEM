@@ -194,3 +194,51 @@ $this->fillPdfRect($pdf, 209.0, 10.0, 30.0, 4.8, $birthdayEraseColor);
 
 PDF座標調整中は、ユーザーが合わせた座標を勝手に戻さない。
 座標を変更する場合は、変更前に理由を明確にする。
+## 扶養控除申告書の追加ルール
+
+扶養控除申告書の文字色は、Controller先頭の定数で統一する。
+扶養控除申告書内で個別に `SetTextColor()` の色値をばらばらに書かない。
+
+```php
+private const FUYO_PDF_TEXT_COLOR = [255, 0, 0];
+```
+
+フリガナや氏名のように、枠内で文字サイズを変えず文字間だけ詰めたい項目は `writePdfTrackedTextSized()` を使う。
+自動で文字サイズを下げる処理は使わない。
+
+```php
+$this->writePdfTrackedTextSized($pdf, 40.0, 70.5 + $rowOffset, $furi, 7, 1.4, 24);
+```
+
+意味:
+
+- `40.0`: X座標
+- `70.5 + $rowOffset`: Y座標
+- `$furi`: 表示文字
+- `7`: 文字サイズ
+- `1.4`: 文字間隔
+- `24`: 最大文字数
+
+生年月日の短縮表示が必要な欄は `formatPdfJapaneseDateShort()` を使う。
+現在は16歳未満欄のみ `R2/12/5` 形式にする。
+本人欄、A欄、B欄は通常の和暦表示を使う。
+
+C欄の障害者情報は `mx_fuyo` から取得する。
+対象カラムは以下。
+
+- `fuyo_name`: 名前
+- `failure_notebook`: 障害手帳
+- `failure_judgment`: 等級・判定
+- `kyojyu`: 同居判定
+
+C欄へ表示する内容は以下。
+
+- 障害者チェック
+- 障害者人数（同居特別、特別、その他）
+- 名前、障害手帳、等級・判定
+
+障害者C欄は `writeFuyoDisabilitySection()` にまとめる。
+扶養者個別行のA欄・B欄に障害者情報を重複表示しない。
+
+PDF座標はユーザーが実帳票を見ながら調整する前提。
+一度「一致した」と言われた座標は、別件修正で勝手に戻さない。
