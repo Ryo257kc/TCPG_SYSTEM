@@ -222,6 +222,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 if ($templateKey === 'kiso_koujyo_shinkoku') {
                     $this->writeKisoPreview($pdf, $nenTyo);
                 }
+                if ($templateKey === 'fuyo_koujyo_shinkoku') {
+                    $this->writeFuyoPreview($pdf, $staffId, $targetYear);
+                }
             }
         );
 
@@ -262,6 +265,11 @@ class YearEndAdjustmentV2Controller extends Controller
         $pdf->SetTextColor(0, 0, 180);
         $pdf->SetFont('kozminproregular', '', 8);
 
+        if ($templateKey === 'fuyo_koujyo_shinkoku') {
+            $this->writeFuyoHeader($pdf, $staff);
+            return;
+        }
+
         $positions = [
             'kiso_koujyo_shinkoku' => [18, 14, 42, 14, 62, 14, 122, 14],
             'fuyo_koujyo_shinkoku' => [18, 14, 42, 14, 62, 14, 122, 14],
@@ -280,24 +288,209 @@ class YearEndAdjustmentV2Controller extends Controller
         }
     }
 
+    private function writeFuyoHeader(Fpdi $pdf, array $staff): void
+    {
+        $staffName = trim((string) ($staff['staff_name'] ?? ''));
+        $staffFuri = trim((string) ($staff['staff_name_furi'] ?? ''));
+        $address = trim((string) ($staff['address'] ?? ''));
+        $postNum = preg_replace('/\D+/', '', trim((string) ($staff['post_num'] ?? ''))) ?? '';
+        if ($postNum !== '') {
+            $postNum = str_pad($postNum, 7, '0', STR_PAD_LEFT);
+        }
+        $birthday = $this->formatPdfJapaneseDate($staff['birthday'] ?? null);
+        $myNumber = trim((string) ($staff['my_number'] ?? ''));
+        $companyName = trim((string) ($staff['company_name'] ?? $staff['company'] ?? ''));
+        $companyNumber = trim((string) ($staff['corporate_number'] ?? ''));
+        $companyAddress = trim((string) ($staff['company_address'] ?? ''));
+        $headHouse = trim((string) ($staff['head_house'] ?? ''));
+        $houseRelationship = trim((string) ($staff['relationship'] ?? ''));
+        $spouse = trim((string) ($staff['spouse'] ?? ''));
+        $taxAmount = trim((string) ($staff['tax_amount'] ?? ''));
+        $textColor = [0, 0, 180];
+
+        // 会社欄
+        $this->writePdfTextSized($pdf, 62, 15, $companyName, 7, 42);
+        $this->writePdfDigitsSized($pdf, 60, 27, $companyNumber, 4.4, 7);
+        $this->writePdfWrappedTextSized($pdf, 61, 34, $companyAddress, 58, 4.0, 2, 7);
+
+        // 本人欄
+        $this->writePdfTextSized($pdf, 142, 11.5, $staffFuri, 7, 28);
+        $this->writePdfTextSized($pdf, 142, 17, $staffName, 7, 28);
+
+        // 本人欄：生年月日の元号などを隠す枠。調整中は色付き、確定後は [255, 255, 255] にする。
+        $birthdayEraseColor = [255, 240, 120];
+        $staffBirthdayEraseX = 209.0;
+        $staffBirthdayEraseY = 10.0;
+        $staffBirthdayEraseW = 30.0;
+        $staffBirthdayEraseH = 4.8;
+        $this->fillPdfRect($pdf, $staffBirthdayEraseX, $staffBirthdayEraseY, $staffBirthdayEraseW, $staffBirthdayEraseH, $birthdayEraseColor);
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
+        $this->writePdfTextSized($pdf, 210, 12, $birthday, 7, 28);
+
+        $this->writePdfTextSized($pdf, 210, 18, $headHouse, 7, 22);
+        $this->writePdfTextSized($pdf, 210, 25, $houseRelationship, 7, 12);
+        $this->writePdfDigitsSized($pdf, 136, 26, $myNumber, 4.5, 7);
+
+        // 本人欄：郵便番号（左3桁・右4桁）
+        if ($postNum !== '') {
+            $this->writePdfTextSized($pdf, 148, 31, substr($postNum, 0, 3), 7, 6);
+            $this->writePdfTextSized($pdf, 160, 31, substr($postNum, 3), 7, 8);
+        }
+        $this->writePdfWrappedTextSized($pdf, 142, 35, $address, 58, 4.0, 2, 7);
+
+        // 本人欄：配偶者の有無
+        $circle = '〇';
+        if ($spouse === '1') {
+            $this->writePdfTextSized($pdf, 234.0, 34.0, $circle, 11, 4);
+        } elseif ($spouse === '0' || $spouse === '2') {
+            $this->writePdfTextSized($pdf, 266.0, 34.0, $circle, 11, 4);
+        }
+
+        // 本人欄：甲欄
+        if (str_contains($taxAmount, '甲')) {
+            $this->writePdfTextSized($pdf, 283.0, 44.0, $circle, 11, 4);
+        }
+    }
+    private function writeFuyoPreview(Fpdi $pdf, string $staffId, int $targetYear): void
+    {
+        $rows = $this->fuyoRows($staffId, $targetYear);
+        $spouseRows = [];
+        $dependentRows = [];
+        $under16Rows = [];
+
+        foreach ($rows as $row) {
+            $relationship = trim((string) ($row['fuyo_relationship'] ?? ''));
+            $age = $this->ageAtYearEnd($row['fuyo_birthday'] ?? null, $targetYear);
+            $isTarget = ((string) ($row['deduction_target'] ?? '')) === '1';
+
+            $spouseRelationships = ['夫', '妻', '配偶者'];
+            if (in_array($relationship, $spouseRelationships, true)) {
+                $spouseRows[] = $row;
+                continue;
+            }
+
+            if (!$isTarget) {
+                continue;
+            }
+
+            if ($age < 16) {
+                $under16Rows[] = $row;
+            } else {
+                $dependentRows[] = $row;
+            }
+        }
+
+        $pdf->SetTextColor(0, 0, 180);
+        $pdf->SetFont('kozminproregular', '', 7);
+
+        // A欄：源泉控除対象配偶者
+        foreach (array_slice($spouseRows, 0, 1) as $index => $row) {
+            $this->writeFuyoPersonRow($pdf, $row, 'spouse', $index);
+        }
+
+        // B欄：控除対象扶養親族（16歳以上）
+        foreach (array_slice($dependentRows, 0, 4) as $index => $row) {
+            $this->writeFuyoPersonRow($pdf, $row, 'dependent', $index);
+        }
+
+        // 16歳未満の扶養親族欄
+        foreach (array_slice($under16Rows, 0, 2) as $index => $row) {
+            $this->writeFuyoPersonRow($pdf, $row, 'under16', $index);
+        }
+    }
+
+    private function writeFuyoPersonRow(Fpdi $pdf, array $row, string $section, int $index): void
+    {
+        $name = (string) ($row['fuyo_name'] ?? '');
+        $furi = (string) ($row['fuyo_name_furi'] ?? '');
+        $relationship = (string) ($row['fuyo_relationship'] ?? '');
+        $relationshipLabel = $relationship === '妻' ? '' : $relationship;
+        $income = $this->formatPdfMoney($row['fuyo_shunyu'] ?? null);
+        $address = (string) ($row['fuyo_address'] ?? '');
+        $failure = (string) ($row['failure_judgment'] ?? '');
+        $checkMark = '✓';
+        $textColor = [0, 0, 180];
+
+        // 扶養欄：生年月日の元号などを隠す枠。調整中は色付き、確定後は [255, 255, 255] にする。
+        $birthdayEraseColor = [255, 240, 120];
+
+        if ($section === 'spouse') {
+            // A欄：源泉控除対象配偶者
+            $rowOffset = $index * 11.4;
+            $this->writePdfTextSized($pdf, 40.0, 58.5 + $rowOffset, $furi, 7, 24);
+            $this->writePdfTextSized($pdf, 42.0, 65.0 + $rowOffset, $name, 7, 24);
+            $this->writePdfDigitsSized($pdf, 72.0, 60.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
+            $this->writePdfTextSized($pdf, 83.0, 63.0 + $rowOffset, $relationshipLabel, 7, 10);
+
+            // A欄：生年月日の元号などを隠す枠
+            $this->fillPdfRect($pdf, 98.5, 62.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+            $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
+            $this->writePdfTextSized($pdf, 99.0, 65.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+
+            $this->writePdfTextRightSized($pdf, 155.0, 63.0 + $rowOffset, $income, 7, 16);
+            if (trim($failure) !== '') {
+                $this->writePdfTextSized($pdf, 132.0, 61.0 + $rowOffset, $checkMark, 11, 4);
+                $this->writePdfTextSized($pdf, 173.0, 63.0 + $rowOffset, $failure, 7, 10);
+            }
+            $this->writePdfWrappedTextSized($pdf, 203.0, 60.0 + $rowOffset, $address, 28, 3.7, 2, 7);
+            return;
+        }
+
+        if ($section === 'under16') {
+            // 16歳未満の扶養親族欄
+            $rowOffset = $index * 11.7;
+            $this->writePdfTextSized($pdf, 39.0, 178.5 + $rowOffset, $furi, 7, 24);
+            $this->writePdfTextSized($pdf, 42.0, 182.0 + $rowOffset, $name, 7, 24);
+            $this->writePdfDigitsSized($pdf, 69.0, 181.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
+            $this->writePdfTextSized($pdf, 121.0, 181.0 + $rowOffset, $relationshipLabel, 7, 10);
+
+            // 16歳未満欄：生年月日の元号などを隠す枠
+            $this->fillPdfRect($pdf, 127.5, 178.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+            $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
+            $this->writePdfTextSized($pdf, 128.0, 181.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+
+            $this->writePdfTextRightSized($pdf, 235.0, 181.0 + $rowOffset, $income, 7, 16);
+            $this->writePdfWrappedTextSized($pdf, 148.0, 180.0 + $rowOffset, $address, 36, 3.7, 2, 7);
+            return;
+        }
+
+        // B欄：控除対象扶養親族（16歳以上）
+        $rowOffset = $index * 11.4;
+        $this->writePdfTextSized($pdf, 40.0, 70.5 + $rowOffset, $furi, 7, 24);
+        $this->writePdfTextSized($pdf, 42.0, 78.0 + $rowOffset, $name, 7, 24);
+        $this->writePdfDigitsSized($pdf, 72.0, 74.0 + $rowOffset, (string) ($row['fuyo_my_number'] ?? ''), 4.45, 7);
+        $this->writePdfTextSized($pdf, 78.0, 80.0 + $rowOffset, $relationshipLabel, 7, 10);
+
+        // B欄：生年月日の元号などを隠す枠
+        $this->fillPdfRect($pdf, 98.5, 77.5 + $rowOffset, 31.0, 5.0, $birthdayEraseColor);
+        $pdf->SetTextColor($textColor[0], $textColor[1], $textColor[2]);
+        $this->writePdfTextSized($pdf, 99.0, 80.0 + $rowOffset, $this->formatPdfJapaneseDate($row['fuyo_birthday'] ?? null), 7, 18);
+
+        $this->writePdfTextRightSized($pdf, 155.0, 75.0 + $rowOffset, $income, 7, 16);
+        if (trim($failure) !== '') {
+            $this->writePdfTextSized($pdf, 35.0, 127.0 + $rowOffset, $checkMark, 11, 4);
+            $this->writePdfTextSized($pdf, 135.0, 135.0 + $rowOffset, $failure, 7, 10);
+        }
+        $this->writePdfWrappedTextSized($pdf, 203.0, 73.0 + $rowOffset, $address, 28, 3.7, 2, 7);
+    }
     private function writeKisoPreview(Fpdi $pdf, array $nenTyo): void
     {
         $pdf->SetTextColor(0, 0, 180);
         $pdf->SetFont('kozminproregular', '', 8);
 
         $rows = [
-            ['kyuyo_teate_sum', 70, 73],
-            ['shotoku_deduction', 105, 73],
-            ['bonus_kyuyo_sum', 140, 73],
-            ['kiso_bunrui', 174, 73],
-            ['kiso_koujyo', 205, 73],
-            ['haigu_shotoku', 70, 104],
-            ['haigu_shotoku_sum', 105, 104],
-            ['haigu_bunrui', 140, 104],
-            ['haigu_toku_deduction', 174, 104],
-            ['haigu_toku_deduction_amo', 205, 104],
-            ['tyosei_koujyo_select', 105, 139],
-            ['tyosei_koujyo', 174, 139],
+            ['kyuyo_teate_sum', 86, 68],
+            ['shotoku_deduction', 124, 68],
+            ['bonus_kyuyo_sum', 160, 68],
+            ['kiso_bunrui', 189, 96],
+            ['kiso_koujyo', 214, 105],
+            ['haigu_shotoku', 166, 100],
+            ['haigu_shotoku_sum', 198, 100],
+            ['haigu_bunrui', 226, 104],
+            ['haigu_toku_deduction', 251, 110],
+            ['haigu_toku_deduction_amo', 274, 110],
+            ['tyosei_koujyo_select', 117, 184],
+            ['tyosei_koujyo', 184, 184],
         ];
 
         foreach ($rows as [$key, $x, $y]) {
@@ -341,52 +534,17 @@ class YearEndAdjustmentV2Controller extends Controller
         $pdf->SetTextColor(0, 0, 180);
         $pdf->SetFont('kozminproregular', '', 7);
 
-        $y = 107.5;
+        $y = 47.0;
         foreach (array_slice($payrollRows, 0, 14) as $row) {
-            $this->writePdfText($pdf, 12, $y, $row['month'], 16);
-            $this->writePdfTextRight($pdf, 40, $y, $row['fuyo_sum'], 10);
-            $this->writePdfTextRight($pdf, 58, $y, $row['bonus_amount'], 18);
-            $this->writePdfTextRight($pdf, 82, $y, $row['taxation_sum'], 20);
-            $this->writePdfTextRight($pdf, 107, $y, $row['syaho_sum'], 20);
-            $this->writePdfTextRight($pdf, 132, $y, $row['syaho_deduction_sum'], 20);
-            $this->writePdfTextRight($pdf, 154, $y, $row['income_tax'], 18);
-            $this->writePdfText($pdf, 161, $y, $companyName, 24);
-            $y += 5.1;
-        }
-
-        $this->writePdfTextRight($pdf, 58, 184, $this->sumPdfRows($payrollRows, 'bonus_amount'), 18);
-        $this->writePdfTextRight($pdf, 82, 184, $this->sumPdfRows($payrollRows, 'taxation_sum'), 20);
-        $this->writePdfTextRight($pdf, 107, 184, $this->sumPdfRows($payrollRows, 'syaho_sum'), 20);
-        $this->writePdfTextRight($pdf, 132, 184, $this->sumPdfRows($payrollRows, 'syaho_deduction_sum'), 20);
-        $this->writePdfTextRight($pdf, 154, 184, $this->sumPdfRows($payrollRows, 'income_tax'), 18);
-
-        $summaryRows = [
-            ['kyuyo_teate_sum', 165, 74],
-            ['bonus_etc', 165, 80],
-            ['bonus_kyuyo_sum', 165, 86],
-            ['shotoku_deduction', 165, 92],
-            ['kyu_syaho_fee_kou', 165, 98],
-            ['shin_syaho_fee_kou', 165, 104],
-            ['seimei_fee_kou', 165, 110],
-            ['jishun_fee_kou', 165, 116],
-            ['deduction_sum', 165, 122],
-            ['shotoku_deduction_sum', 165, 128],
-            ['sa_kazei_shotoku', 165, 134],
-            ['sanshutu_shotoku', 165, 140],
-            ['jyu_kari_kou', 165, 146],
-            ['nentyo_shotoku_amo', 165, 152],
-            ['nentyo_nen_tax', 165, 158],
-            ['sa_excess', 165, 164],
-            ['kyuyo_teate_tax', 222, 74],
-            ['bonus_tax', 222, 80],
-            ['siharai_shotoku', 222, 86],
-            ['kiso_koujyo', 222, 98],
-            ['haigu_toku_deduction', 222, 104],
-            ['tyosei_koujyo', 222, 110],
-        ];
-
-        foreach ($summaryRows as [$key, $x, $y]) {
-            $this->writePdfTextRight($pdf, $x, $y, (string) ($nenTyo[$key] ?? ''), 22);
+            $this->writePdfText($pdf, 25, $y, $row['month'], 16);
+            $this->writePdfTextRight($pdf, 49, $y, $row['fuyo_sum'], 10);
+            $this->writePdfTextRight($pdf, 67, $y, $row['bonus_amount'], 18);
+            $this->writePdfTextRight($pdf, 88, $y, $row['taxation_sum'], 20);
+            $this->writePdfTextRight($pdf, 114, $y, $row['syaho_sum'], 20);
+            $this->writePdfTextRight($pdf, 139, $y, $row['syaho_deduction_sum'], 20);
+            $this->writePdfTextRight($pdf, 163, $y, $row['income_tax'], 18);
+            $this->writePdfText($pdf, 170, $y, $companyName, 24);
+            $y += 9.45;
         }
     }
 
@@ -467,6 +625,68 @@ class YearEndAdjustmentV2Controller extends Controller
 
         $width = $pdf->GetStringWidth($text);
         $pdf->Text($rightX - $width, $y, $text);
+    }
+
+    private function formatPdfMoney(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        return number_format($this->money($value), 0);
+    }
+
+    private function formatPdfDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        try {
+            return (new \DateTimeImmutable((string) $value))->format('Y/m/d');
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+    }
+    private function formatPdfJapaneseDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        try {
+            $date = new \DateTimeImmutable((string) $value);
+        } catch (\Throwable) {
+            return trim((string) $value);
+        }
+
+        $year = (int) $date->format('Y');
+        $era = '西暦';
+        $eraYear = $year;
+        if ($date >= new \DateTimeImmutable('2019-05-01')) {
+            $era = '令和';
+            $eraYear = $year - 2018;
+        } elseif ($date >= new \DateTimeImmutable('1989-01-08')) {
+            $era = '平成';
+            $eraYear = $year - 1988;
+        } elseif ($date >= new \DateTimeImmutable('1926-12-25')) {
+            $era = '昭和';
+            $eraYear = $year - 1925;
+        }
+
+        return $era . $eraYear . '年' . (int) $date->format('n') . '月' . (int) $date->format('j') . '日';
+    }
+
+    private function writePdfDigits(Fpdi $pdf, float $x, float $y, string $text, float $pitch): void
+    {
+        $digits = preg_replace('/\D+/', '', $text) ?? '';
+        if ($digits === '') {
+            return;
+        }
+
+        foreach (str_split($digits) as $index => $char) {
+            $pdf->Text($x + ($index * $pitch), $y, $char);
+        }
     }
     public function hokenCertificatePreview(int $applicationId, int $hokenNo): View
     {
@@ -1348,6 +1568,58 @@ class YearEndAdjustmentV2Controller extends Controller
         abort(404, '保険料控除申告書テンプレートが見つかりません。');
     }
 
+    private function fillPdfRect(Fpdi $pdf, float $x, float $y, float $w, float $h, array $rgb): void
+    {
+        $pdf->SetFillColor((int) $rgb[0], (int) $rgb[1], (int) $rgb[2]);
+        $pdf->Rect($x, $y, $w, $h, 'F');
+    }
+
+    private function writePdfTextRightSized(Fpdi $pdf, float $rightX, float $y, string $text, int $fontSize, int $maxWidth = 0): void
+    {
+        $pdf->SetFont('kozminproregular', '', $fontSize);
+        $this->writePdfTextRight($pdf, $rightX, $y, $text, $maxWidth);
+        $pdf->SetFont('kozminproregular', '', 7);
+    }
+
+    private function writePdfDigitsSized(Fpdi $pdf, float $x, float $y, string $text, float $pitch, int $fontSize): void
+    {
+        $pdf->SetFont('kozminproregular', '', $fontSize);
+        $this->writePdfDigits($pdf, $x, $y, $text, $pitch);
+        $pdf->SetFont('kozminproregular', '', 7);
+    }
+
+    private function writePdfWrappedTextSized(Fpdi $pdf, float $x, float $y, string $text, int $maxWidth, float $lineHeight, int $maxLines, int $fontSize): void
+    {
+        $pdf->SetFont('kozminproregular', '', $fontSize);
+        $this->writePdfWrappedText($pdf, $x, $y, $text, $maxWidth, $lineHeight, $maxLines);
+        $pdf->SetFont('kozminproregular', '', 7);
+    }
+    private function writePdfTextSized(Fpdi $pdf, float $x, float $y, string $text, int $fontSize, int $maxWidth = 0): void
+    {
+        $pdf->SetFont('kozminproregular', '', $fontSize);
+        $this->writePdfText($pdf, $x, $y, $text, $maxWidth);
+        $pdf->SetFont('kozminproregular', '', 7);
+    }
+    private function writePdfWrappedText(Fpdi $pdf, float $x, float $y, string $text, int $maxWidth, float $lineHeight = 4.0, int $maxLines = 2): void
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return;
+        }
+
+        if ($maxWidth <= 0 || !function_exists('mb_strimwidth')) {
+            $pdf->Text($x, $y, $text);
+            return;
+        }
+
+        $remaining = $text;
+        for ($line = 0; $line < $maxLines && $remaining !== ''; $line++) {
+            $suffix = $line === $maxLines - 1 ? '...' : '';
+            $part = mb_strimwidth($remaining, 0, $maxWidth, $suffix, 'UTF-8');
+            $pdf->Text($x, $y + ($line * $lineHeight), $part);
+            $remaining = mb_substr($remaining, mb_strlen(str_replace($suffix, '', $part), 'UTF-8'), null, 'UTF-8');
+        }
+    }
     private function writePdfText(Fpdi $pdf, float $x, float $y, string $text, int $maxWidth = 0): void
     {
         $text = trim($text);
@@ -1424,7 +1696,34 @@ class YearEndAdjustmentV2Controller extends Controller
             ->where('staff_id', $staffId)
             ->first();
 
-        return $row ? $this->objectToArray($row) : [];
+        if (!$row) {
+            return [];
+        }
+
+        $detail = $this->objectToArray($row);
+        $section = trim((string) ($detail['section'] ?? ''));
+        $storeCode = $section !== '' && ctype_digit($section) ? str_pad($section, 3, '0', STR_PAD_LEFT) : $section;
+        if ($storeCode !== '' && Schema::connection('sqlsrv')->hasTable('mx_stores') && Schema::connection('sqlsrv')->hasTable('mx_companies')) {
+            $company = DB::connection('sqlsrv')
+                ->table('dbo.mx_stores as s')
+                ->leftJoin('dbo.mx_companies as c', 's.company_id', '=', 'c.company_id')
+                ->where('s.store_code', $storeCode)
+                ->first([
+                    'c.company_id',
+                    'c.company_name',
+                    'c.company_address',
+                    'c.corporate_number',
+                ]);
+
+            if ($company) {
+                $detail['company_id'] = trim((string) ($company->company_id ?? ''));
+                $detail['company_name'] = trim((string) ($company->company_name ?? ''));
+                $detail['company_address'] = trim((string) ($company->company_address ?? ''));
+                $detail['corporate_number'] = trim((string) ($company->corporate_number ?? ''));
+            }
+        }
+
+        return $detail;
     }
 
     /** @return array<string, string> */
@@ -1462,7 +1761,7 @@ class YearEndAdjustmentV2Controller extends Controller
             $query->whereYear('registration_date', $targetYear)->orderBy('registration_date');
         }
 
-        return $query->orderBy('fuyo_no')->get()->map(fn ($row): array => $this->objectToArray($row))->all();
+        return $query->orderBy('fuyo_no')->get()->map(fn($row): array => $this->objectToArray($row))->all();
     }
 
     /** @return list<array<string, string>> */
@@ -1478,7 +1777,7 @@ class YearEndAdjustmentV2Controller extends Controller
             ->whereYear('insurance_year', $targetYear)
             ->orderBy('hoken_no')
             ->get()
-            ->map(fn ($row): array => $this->objectToArray($row))
+            ->map(fn($row): array => $this->objectToArray($row))
             ->all();
     }
 
@@ -1682,7 +1981,7 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     private function staffListDetails(array $staffIds): array
     {
-        $staffIds = array_values(array_unique(array_filter(array_map(static fn ($value): string => trim((string) $value), $staffIds))));
+        $staffIds = array_values(array_unique(array_filter(array_map(static fn($value): string => trim((string) $value), $staffIds))));
         if ($staffIds === [] || !Schema::connection('sqlsrv')->hasTable('mx_staffs')) {
             return [];
         }

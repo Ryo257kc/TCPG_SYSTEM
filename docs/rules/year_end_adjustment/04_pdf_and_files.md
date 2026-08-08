@@ -112,3 +112,85 @@ HEICなどブラウザ確認しにくい形式は受け付けない方針。
 - `haigu_toku_deduction_amo`
 - `tyosei_koujyo_select`
 - `tyosei_koujyo`
+## 扶養控除申告書プレビュー
+
+扶養控除申告書は `mx_fuyo` の保存値を表示する。
+帳票側で扶養判定や控除対象判定を再計算しない。
+
+主要出力値は以下。
+
+- `fuyo_name`
+- `fuyo_name_furi`
+- `fuyo_relationship`
+- `fuyo_birthday`
+- `fuyo_shunyu`
+- `deduction_target`
+- `failure_judgment`
+- `kyojyu`
+- `fuyo_address`
+
+## PDF座標調整ルール
+
+扶養控除申告書などのPDF帳票は、原本PDFの上に文字を重ねて表示する。
+帳票用に別計算を作らず、保存済みDB値を表示する。
+
+座標調整中の印字行は、座標・文字サイズ・最大幅を同じ行で確認できる書き方にする。
+サイズだけの変数を別行に分けない。
+
+例:
+
+```php
+$this->writePdfTextSized($pdf, 142, 17, $staffName, 7, 28);
+```
+
+意味:
+
+- `142`: X座標
+- `17`: Y座標
+- `$staffName`: 表示文字
+- `7`: 文字サイズ
+- `28`: 最大幅
+
+数字を1文字ずつ枠に入れる場合は以下の順番にする。
+
+```php
+$this->writePdfDigitsSized($pdf, 136, 26, $myNumber, 4.5, 7);
+```
+
+意味:
+
+- `136`: X座標
+- `26`: Y座標
+- `$myNumber`: 表示文字
+- `4.5`: 文字間隔
+- `7`: 文字サイズ
+
+折り返し文字は以下の順番にする。
+
+```php
+$this->writePdfWrappedTextSized($pdf, 142, 35, $address, 58, 4.0, 2, 7);
+```
+
+意味:
+
+- `142`: X座標
+- `35`: Y座標
+- `$address`: 表示文字
+- `58`: 最大幅
+- `4.0`: 行間
+- `2`: 最大行数
+- `7`: 文字サイズ
+
+原本PDFに印字済みの文字を隠す場合は、`fillPdfRect()` で上から枠を重ねる。
+調整中は色付きにして位置を確認し、確定後に白 `[255, 255, 255]` へ変更する。
+
+```php
+$birthdayEraseColor = [255, 240, 120];
+$this->fillPdfRect($pdf, 209.0, 10.0, 30.0, 4.8, $birthdayEraseColor);
+```
+
+文字色は `SetTextColor()` または近くの `$textColor = [0, 0, 180];` で管理する。
+黒は `[0, 0, 0]`、白は `[255, 255, 255]`。
+
+PDF座標調整中は、ユーザーが合わせた座標を勝手に戻さない。
+座標を変更する場合は、変更前に理由を明確にする。
