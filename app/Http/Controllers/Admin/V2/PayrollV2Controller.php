@@ -7,15 +7,11 @@ use App\Services\Admin\V2\Attendance\AttendanceV2AttendanceStaffService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2AttendanceReflectService;
-use App\Services\Admin\V2\Payroll\PayrollV2BonusIncomeTaxCalcService;
-use App\Services\Admin\V2\Payroll\PayrollV2BonusSocialInsuranceService;
 use App\Services\Admin\V2\Payroll\PayrollV2CalculationFlowService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
 use App\Services\Admin\V2\Payroll\PayrollV2DeleteService;
-use App\Services\Admin\V2\Payroll\PayrollV2EmploymentInsuranceService;
-use App\Services\Admin\V2\Payroll\PayrollV2FuyoService;
 use App\Services\Admin\V2\Payroll\PayrollV2HomeVisitAllowanceService;
 use App\Services\Admin\V2\Payroll\PayrollV2IncomeTaxService;
 use App\Services\Admin\V2\Payroll\PayrollV2KihonService;
@@ -41,8 +37,6 @@ class PayrollV2Controller extends Controller
     public function __construct(
         private readonly PayrollV2MonthService $monthService,
         private readonly PayrollV2CompanyService $companyService,
-        private readonly PayrollV2BonusIncomeTaxCalcService $bonusIncomeTaxCalcService,
-        private readonly PayrollV2BonusSocialInsuranceService $bonusSocialInsuranceService,
         private readonly PayrollV2CreateCandidatesService $createCandidatesService,
         private readonly PayrollV2CreateService $createService,
         private readonly PayrollV2DeleteService $deleteService,
@@ -60,8 +54,6 @@ class PayrollV2Controller extends Controller
         private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
         private readonly PayrollV2UpdateService $updateService,
         private readonly PayrollV2RecalculateService $recalculateService,
-        private readonly PayrollV2EmploymentInsuranceService $employmentInsuranceService,
-        private readonly PayrollV2FuyoService $fuyoService,
         private readonly PayrollV2IncomeTaxService $incomeTaxService,
         private readonly PayrollV2SocialInsuranceAmountService $socialInsuranceAmountService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
@@ -1478,30 +1470,11 @@ class PayrollV2Controller extends Controller
             ], 409);
         }
 
-        $updated = 0;
-        $updated += (int) $this->updateBonusSummary(
+        $updated = $this->calculationFlowService->recalculateBonus(
             (string) $v['staff_id'],
             $year,
             $month,
-            ['fuyo_sum' => $this->fuyoService->resolveByPaymentDate((string) $v['staff_id'], $paymentDate)]
-        );
-        $updated += (int) $this->employmentInsuranceService->recalculateBonus(
-            (string) $v['staff_id'],
             $paymentDate
-        );
-        $updated += (int) $this->bonusSocialInsuranceService->recalculate(
-            (string) $v['staff_id'],
-            $paymentDate
-        );
-        $updated += (int) $this->bonusIncomeTaxCalcService->recalculate(
-            (string) $v['staff_id'],
-            $paymentDate
-        );
-        $updated += (int) $this->updateBonusSummary(
-            (string) $v['staff_id'],
-            $year,
-            $month,
-            []
         );
 
         return response()->json([
