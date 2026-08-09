@@ -30,7 +30,7 @@ class HighMedicalController extends Controller
                 'detail.insurance_claim_detail_id',
                 'detail.treatment_month',
                 'detail.insurer_number',
-                'detail.subject_name',
+                'detail.patient_name',
                 'detail.remarks',
                 // 'detail.department_no',
                 'department.store_category',
@@ -56,7 +56,7 @@ class HighMedicalController extends Controller
         }
 
         if ($selectedSubjectName !== '') {
-            $rowsQuery->where('detail.subject_name', $selectedSubjectName);
+            $rowsQuery->where('detail.patient_name', $selectedSubjectName);
         }
 
         if ($selectedBankDepositDate !== '') {
@@ -71,17 +71,17 @@ class HighMedicalController extends Controller
 
         // 患者選択
         $patientOptionsQuery = $this->highMedicalBaseQuery()
-            ->select(['detail.subject_name'])
-            ->whereNotNull('detail.subject_name');
+            ->select(['detail.patient_name'])
+            ->whereNotNull('detail.patient_name');
 
         if ($selectedStore !== '') {
             $patientOptionsQuery->where('department.store_category', $selectedStore);
         }
 
         $patientOptions = $patientOptionsQuery
-            ->orderBy('detail.subject_name')
+            ->orderBy('detail.patient_name')
             ->get()
-            ->map(fn($row): string => trim((string) ($row->subject_name ?? '')))
+            ->map(fn($row): string => trim((string) ($row->patient_name ?? '')))
             ->filter(fn(string $name): bool => $name !== '')
             ->unique()
             ->values()
@@ -99,7 +99,7 @@ class HighMedicalController extends Controller
         }
 
         if ($selectedSubjectName !== '') {
-            $bankDepositDateOptionsQuery->where('detail.subject_name', $selectedSubjectName);
+            $bankDepositDateOptionsQuery->where('detail.patient_name', $selectedSubjectName);
         }
 
         $bankDepositDateOptions = $bankDepositDateOptionsQuery
@@ -126,7 +126,10 @@ class HighMedicalController extends Controller
                 'treatment_month' => $this->formatDateValue($row->treatment_month, 'Y/m/d'),
                 'insurer_number' => trim((string) ($row->insurer_number ?? '')),
                 'store_name' => trim((string) (($row->store_category ?? '') !== '' ? $row->store_category : ($row->store_name ?? ''))),
-                'subject_name' => trim((string) ($row->subject_name ?? '')),
+                // 画面・JS側は昔からのキー名'subject_name'を使っているので、キー名は変えず
+                // 参照先のカラムだけmx_insurance_claim_details.patient_name（EntryController等の
+                // 通常のレセ入力と同じカラム）に合わせる。旧subject_nameは往診窓口専用の別カラム。
+                'subject_name' => trim((string) ($row->patient_name ?? '')),
                 'remarks' => trim((string) ($row->remarks ?? '')),
                 'insurance_category' => trim((string) ($row->insurance_category ?? '')),
                 'insurer_name' => trim((string) ($row->insurer_name ?? '')),
@@ -162,8 +165,10 @@ class HighMedicalController extends Controller
             'insurance_claim_detail_id' => ['required', 'integer'],
             'bank_deposit_amount' => ['nullable', 'string'],
             'is_invoiced' => ['nullable', 'boolean'],
-            'subject_name' => ['nullable', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            // mx_insurance_claim_details.patient_name/remarksの実カラム長(50/255)に合わせる
+            // （以前は255/2000まで許可していて、長い値を保存すると生のSQLエラーになっていた）。
+            'subject_name' => ['nullable', 'string', 'max:50'],
+            'remarks' => ['nullable', 'string', 'max:255'],
             'store_name' => ['nullable', 'string', 'max:255'],
             'payment_status' => ['nullable', 'string', 'max:20'],
             'filter_subject_name' => ['nullable', 'string', 'max:255'],
@@ -176,7 +181,7 @@ class HighMedicalController extends Controller
             ->update([
                 'bank_deposit_amount' => $this->parseMoneyInput($data['bank_deposit_amount'] ?? null),
                 'is_invoiced' => $request->boolean('is_invoiced'),
-                'subject_name' => trim((string) ($data['subject_name'] ?? '')),
+                'patient_name' => trim((string) ($data['subject_name'] ?? '')),
                 'remarks' => trim((string) ($data['remarks'] ?? '')),
             ]);
 

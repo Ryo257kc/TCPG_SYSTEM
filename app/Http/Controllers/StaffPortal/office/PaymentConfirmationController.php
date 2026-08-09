@@ -210,7 +210,7 @@ class PaymentConfirmationController extends Controller
                     'detail.is_uncollectible',
                     'detail.payment_date_text',
                     'detail.payment_amount',
-                    'detail.subject_name',
+                    'detail.patient_name',
                     'detail.remarks',
                     'department.store_category',
                     'payment_entry.occurred_at as payment_entry_occurred_at',
@@ -299,7 +299,7 @@ class PaymentConfirmationController extends Controller
                         - ((float) ($row->payment_amount ?? 0))
                     ),
                     'store_name' => trim((string) ($row->store_category ?? '')),
-                    'patient_name' => trim((string) ($row->subject_name ?? '')),
+                    'patient_name' => trim((string) ($row->patient_name ?? '')),
                     'is_uncollectible' => (bool) ($row->is_uncollectible ?? false),
                     'remarks' => trim((string) ($row->remarks ?? '')),
                 ])
@@ -334,7 +334,9 @@ class PaymentConfirmationController extends Controller
             'returned_amount' => ['nullable', 'string'],
             'is_high_cost_medical' => ['nullable', 'boolean'],
             'is_uncollectible' => ['nullable', 'boolean'],
-            'payment_date_text' => ['nullable', 'string', 'max:255'],
+            // mx_insurance_claim_details.payment_date_textの実カラム長(20)に合わせる
+            // （長い値だとバリデーションを通過した後に生のSQLエラーになっていた）。
+            'payment_date_text' => ['nullable', 'string', 'max:20'],
             'payment_amount' => ['nullable', 'string'],
             'patient_name' => ['nullable', 'string', 'max:50'],
             'remarks' => ['nullable', 'string', 'max:255'],
@@ -351,7 +353,7 @@ class PaymentConfirmationController extends Controller
             'is_uncollectible' => $request->boolean('is_uncollectible'),
             'payment_date_text' => trim((string) ($data['payment_date_text'] ?? '')),
             'payment_amount' => $this->parseMoneyInput($data['payment_amount'] ?? null),
-            'subject_name' => trim((string) ($data['patient_name'] ?? '')),
+            'patient_name' => trim((string) ($data['patient_name'] ?? '')),
             'remarks' => trim((string) ($data['remarks'] ?? '')),
         ];
 
@@ -375,6 +377,7 @@ class PaymentConfirmationController extends Controller
                     'store_name',
                     'deposit_name',
                     'claim_amount',
+                    'patient_name',
                 ])
                 ->where('insurance_claim_detail_id', $sourceDetailId)
                 ->first();
@@ -383,6 +386,12 @@ class PaymentConfirmationController extends Controller
                 return response()->json([
                     'message' => '複製元が見つかりません。',
                 ], 422);
+            }
+
+            // 複製元の患者名を引き継ぐ（$payloadのpatient_nameが空ならこちらを使う。
+            // フォーム側で患者名を明示的に入力していればそちらを優先）。
+            if (trim((string) ($payload['patient_name'] ?? '')) === '') {
+                $payload['patient_name'] = trim((string) ($sourceRow->patient_name ?? ''));
             }
 
             $detailId = (int) DB::connection('sqlsrv')
@@ -411,7 +420,7 @@ class PaymentConfirmationController extends Controller
                 'detail.is_uncollectible',
                 'detail.payment_date_text',
                 'detail.payment_amount',
-                'detail.subject_name',
+                'detail.patient_name',
                 'detail.remarks',
                 'payment_entry.occurred_at as payment_entry_occurred_at',
             ])
@@ -437,7 +446,7 @@ class PaymentConfirmationController extends Controller
             'remaining_amount' => $remainingAmount == 0.0 ? '0' : $this->formatMoneyValue($remainingAmount),
             'confirmed_amount' => $journalEntryAmounts['confirmed_amount'],
             'entry_remaining_amount' => $journalEntryAmounts['remaining_amount'],
-            'patient_name' => trim((string) ($savedRow?->subject_name ?? '')),
+            'patient_name' => trim((string) ($savedRow?->patient_name ?? '')),
             'remarks' => trim((string) ($savedRow?->remarks ?? '')),
             'is_high_cost_medical' => (bool) ($savedRow?->is_high_cost_medical ?? false),
             'is_uncollectible' => (bool) ($savedRow?->is_uncollectible ?? false),

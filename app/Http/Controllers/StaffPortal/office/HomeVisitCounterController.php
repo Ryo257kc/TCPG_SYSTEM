@@ -207,8 +207,11 @@ class HomeVisitCounterController extends Controller
             'row_treatment_month' => ['nullable', 'date'],
             'store_name' => ['nullable', 'string', 'max:20'],
             'deposit_name' => ['nullable', 'string', 'max:50'],
-            'patient_name' => ['nullable', 'string', 'max:50'],
-            'payment_date_text' => ['nullable', 'string', 'max:255'],
+            // mx_insurance_claim_details.subject_name/payment_date_textの実カラム長に合わせる
+            // （50/255まで許可していたせいで、長い文字列を保存するとバリデーションを通過した後に
+            // 生のSQLエラー（文字列切り捨て）で落ちていた）。
+            'patient_name' => ['nullable', 'string', 'max:20'],
+            'payment_date_text' => ['nullable', 'string', 'max:20'],
             'payment_amount' => ['nullable', 'string'],
             'cash_collected_amount' => ['nullable', 'string'],
             'staff_name' => ['nullable', 'string', 'max:20'],

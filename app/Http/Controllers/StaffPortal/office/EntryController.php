@@ -50,7 +50,7 @@ class EntryController extends Controller
                 'detail.total_parts_count',
                 'detail.returned_amount',
                 'department.store_category',
-                'detail.subject_name',
+                'detail.patient_name',
                 'detail.remarks',
                 'insurer.insurance_category',
                 'insurer.insurance_type',
@@ -122,7 +122,7 @@ class EntryController extends Controller
                 'returned_amount' => $this->formatMoneyValue($row->returned_amount),
                 'returned_amount_raw' => $row->returned_amount === null ? '' : rtrim(rtrim((string) $row->returned_amount, '0'), '.'),
                 'store_name' => trim((string) (($row->store_category ?? '') !== '' ? $row->store_category : ($row->store_name ?? ''))),
-                'patient_name' => trim((string) ($row->subject_name ?? '')),
+                'patient_name' => trim((string) ($row->patient_name ?? '')),
                 'patient_name_raw' => trim((string) ($row->patient_name ?? '')),
                 'remarks' => trim((string) ($row->remarks ?? '')),
                 'remarks_raw' => trim((string) ($row->remarks ?? '')),
@@ -830,8 +830,11 @@ class EntryController extends Controller
                 return back()->with('errorMessage', 'CSV内に文字化けの可能性がある「?」が含まれています。元データを修正してから再取込してください。対象行: ' . $lineNumber);
             }
 
+            // 以前は列数不足の行を無言でスキップしていたため、「なぜか件数が合わない」原因が
+            // わからなかった。行番号・実際の列数を明示して取込を中止する。
             if (count($row) < 9) {
-                continue;
+                fclose($handle);
+                return back()->with('errorMessage', '列数が不足しています（9列必要）。取込を中止しました。対象行: ' . $lineNumber . ' / 列数: ' . count($row));
             }
 
             $insurerNumber = trim((string) ($row[1] ?? ''));
@@ -842,10 +845,19 @@ class EntryController extends Controller
                 return back()->with('errorMessage', '保険者番号は8桁である必要があります。取込を中止しました。対象行: ' . $lineNumber . ' / 値: ' . $insurerNumber);
             }
 
+            // mx_insurance_claim_details.summary_categoryの実カラム長(10)を超えると、
+            // 何百行処理した後の最後のINSERTで初めて「文字列が切り捨てられます」という
+            // どの行が原因かわからないSQLエラーになっていた。ここで先に行番号付きで弾く。
+            $summaryCategory = trim((string) ($row[3] ?? ''));
+            if (mb_strlen($summaryCategory) > 10) {
+                fclose($handle);
+                return back()->with('errorMessage', '集計区分が10文字を超えています。取込を中止しました。対象行: ' . $lineNumber . ' / 値: ' . $summaryCategory);
+            }
+
             $importRows[] = [
                 'treatment_month' => $treatmentMonth,
                 'insurer_number' => $insurerNumber,
-                'summary_category' => trim((string) ($row[3] ?? '')),
+                'summary_category' => $summaryCategory,
                 'total_sheets' => $row[4] === '' ? null : (int) str_replace(',', '', (string) $row[4]),
                 'total_parts_count' => $row[5] === '' ? null : (int) str_replace(',', '', (string) $row[5]),
                 'total_amount' => $this->parseMoneyInput($row[6] ?? null),
