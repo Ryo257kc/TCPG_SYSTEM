@@ -93,6 +93,7 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/work/billing-list', [BillingListV2Controller::class, 'index'])->name('admin.work.billing_list');
         Route::get('/year-end-adjustments', [YearEndAdjustmentV2Controller::class, 'index'])->name('admin.work.year_end_adjustments');
         Route::post('/year-end-adjustments/create-targets', [YearEndAdjustmentV2Controller::class, 'createTargets'])->name('admin.work.year_end_adjustments.create_targets');
+        Route::get('/year-end-adjustments/bulk-preview', [YearEndAdjustmentV2Controller::class, 'bulkPreview'])->name('admin.work.year_end_adjustments.bulk_preview');
         Route::get('/year-end-adjustments/{applicationId}', [YearEndAdjustmentV2Controller::class, 'show'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.show');
         Route::get('/year-end-adjustments/{applicationId}/hoken-preview', [YearEndAdjustmentV2Controller::class, 'hokenPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.hoken.preview');
         Route::get('/year-end-adjustments/{applicationId}/kiso-preview', [YearEndAdjustmentV2Controller::class, 'kisoPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.kiso.preview');
@@ -103,6 +104,8 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/year-end-adjustments/update-status', [YearEndAdjustmentV2Controller::class, 'updateStatus'])->name('admin.work.year_end_adjustments.update_status');
         Route::post('/year-end-adjustments/delete-target', [YearEndAdjustmentV2Controller::class, 'deleteTarget'])->name('admin.work.year_end_adjustments.delete_target');
         Route::post('/year-end-adjustments/{applicationId}/calculate', [YearEndAdjustmentV2Controller::class, 'calculateSingle'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.calculate');
+        Route::post('/year-end-adjustments/{applicationId}/nen-tyo-update', [YearEndAdjustmentV2Controller::class, 'updateNenTyo'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.nen_tyo.update');
+        Route::post('/year-end-adjustments/{applicationId}/nen-tyo-lock-toggle', [YearEndAdjustmentV2Controller::class, 'toggleNenTyoLock'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.nen_tyo.lock_toggle');
         Route::post('/year-end-adjustments/{applicationId}/hoken', [YearEndAdjustmentV2Controller::class, 'createHoken'])->name('admin.work.year_end_adjustments.hoken.create');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}', [YearEndAdjustmentV2Controller::class, 'updateHoken'])->name('admin.work.year_end_adjustments.hoken.update');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/delete', [YearEndAdjustmentV2Controller::class, 'deleteHoken'])->name('admin.work.year_end_adjustments.hoken.delete');

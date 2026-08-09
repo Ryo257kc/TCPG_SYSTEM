@@ -169,6 +169,28 @@
                 <button type="submit" class="btn btn-primary" @disabled(!$tableExists)>対象者作成</button>
             </form>
 
+            <form method="get" action="{{ route('admin.work.year_end_adjustments.bulk_preview') }}" target="_blank" class="year-end-toolbar">
+                <input type="hidden" name="target_year" value="{{ $targetYear }}">
+                <label>
+                    <span>会社</span>
+                    <select name="company_id">
+                        <option value="">全社</option>
+                        @foreach (($companyOptions ?? []) as $company)
+                        <option value="{{ $company['company_id'] }}">{{ $company['company_name'] }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label>
+                    <span>帳票</span>
+                    <select name="report">
+                        @foreach (($bulkReportOptions ?? []) as $key => $label)
+                        <option value="{{ $key }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-primary">全員分まとめて出力</button>
+            </form>
+
             <div class="year-end-summary">
                 <div class="year-end-summary-item">
                     <div class="year-end-summary-label">全件</div>

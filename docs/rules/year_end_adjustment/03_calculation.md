@@ -58,16 +58,24 @@
 `mx_nen_tyo.kiso_koujyo` に既存値があれば常にそちらを優先する（過去に確定・手入力済みの金額を
 上書きしないため）。
 
-## 配偶者控除・配偶者特別控除（haigu_toku_deduction／haigu_toku_deduction_amo）
+## 配偶者控除・配偶者特別控除（haigu_deduction／haigu_toku_deduction）
 
-長らく未実装で、`haigu_toku_deduction` は常に0円のまま保存されていた（2025年8月に実装）。
+長らく未実装で、`haigu_deduction` は常に0円のまま保存されていた（2025年8月に実装）。
 `spousalDeductionAmounts()` で計算する。
+
+> **物理カラム名の変更（2026年8月、テストサーバー段階で実施）**： 旧カラム名は
+> `haigu_toku_deduction`（＝配偶者控除・regular）／`haigu_toku_deduction_amo`（＝配偶者特別控除・
+> special）で、「toku（特）」が付いている方が実は特別控除ではなく通常の配偶者控除という
+> 紛らわしい命名だった。`sp_rename`で物理カラム名ごと修正し、`haigu_toku_deduction`という名前を
+> 「特別」の方に付け直した：旧`haigu_toku_deduction`→新`haigu_deduction`、
+> 旧`haigu_toku_deduction_amo`→新`haigu_toku_deduction`。本番切り替え前のためAccess側（本番DB）
+> には影響しない。
 
 - 計算対象にするかどうかは `mx_fuyo` の配偶者行（続柄「夫」「妻」）の `deduction_target`（控除対象
   チェック）を正とする。扶養親族と同じ判定方法。
 - 配偶者の合計所得金額は `mx_nen_tyo.haigu_shotoku`（本人が申告した値）を使う。0円（専業主婦・
   主夫等）は「対象外」ではなく「58万円以下」に該当し、満額の配偶者控除が入る。
-- 配偶者控除の額＝`haigu_toku_deduction`、配偶者特別控除の額＝`haigu_toku_deduction_amo`。
+- 配偶者控除の額＝`haigu_deduction`、配偶者特別控除の額＝`haigu_toku_deduction`。
   どちらか一方のみ発生する（同時に両方が入ることはない）。
 - **`deduction_sum`（扶養控除額）に配偶者を含めない。** 国税庁資料で「扶養控除の人数に配偶者は
   含まない」「配偶者(特別)控除額は源泉徴収簿の⑰欄に別記する」と明記されている。かつて
@@ -94,25 +102,57 @@
 
 2024年以前は未確認（`spousalDeductionAmounts()` は `targetYear < 2025` なら計算しない）。
 
-## 基礎控除申告書「区分Ⅰ」（kiso_bunrui）
+## 基礎控除申告書「区分Ⅰ」（kiso_bunrui）・「区分Ⅱ」（haigu_bunrui）
 
-`mx_nen_tyo.kiso_bunrui` に保存するのは説明文そのもの（`kisoBunruiLabel()`）。
-「A」とだけ保存すると、後から見てどの年度のどの金額表のAなのか分からなくなるため、
-必ず説明文で保存する。帳票の枠に印字するときだけ、Controller側でA/B/C等の短い記号に
-変換する（保存値は変えない）。
+### 保存する値：細かい所得区分のラベルそのもの（Access運用に合わせる）
 
-本人の合計所得金額（`shotoku_deduction`）を、配偶者控除等申告書の金額表の列選択と
-同じ900万／950万／1,000万円のしきい値で分類する。
+`mx_nen_tyo.kiso_bunrui`／`haigu_bunrui` に保存するのは、**基礎控除の額（kiso_koujyo）と
+同じ細かい所得区分のラベル**（例:「655万円超900万円以下」）。「900万円以下」のように
+900万／950万／1,000万円の3区分へ丸めた説明文は保存しない。これは旧Access側のドロップダウン
+（ユーザー提供のスクリーンショットで確認：132万円以下／132万円超336万円以下／…／2,500万円超の
+12行、各行に区分記号と金額が並記されている）に合わせたもの。丸めた説明文だけを保存すると、
+再計算のたびに「700万円の人が900万円以下としか表示されない」ように見えて、選択肢と保存結果が
+一致しているように見えなかった（2025年8月に発生・修正）。
 
-| 合計所得金額 | 区分Ⅰ（保存する説明文） |
-|---|---|
-| 900万円以下 | 900万円以下 |
-| 900万円超950万円以下 | 900万円超950万円以下 |
-| 950万円超1,000万円以下 | 950万円超1000万円以下 |
-| 1,000万円超 | （空欄） |
+`kisoBunruiLabel()`（`YearEndCalculationService`）が、`basicDeductionAmount()` と同じ
+`kisoBracketManBoundaries()` の境界を使って、本人の合計所得金額（`shotoku_deduction`）に
+該当する細かい区分のラベルを返す。`haigu_bunrui` は `kiso_bunrui` と完全に同じ値・同じ判定
+（本人の所得だけで決まり、配偶者の所得には無関係）。
+
+### 帳票に印字するA/B/C・①②③記号は保存値から逆引きする
+
+帳票の「区分Ⅰ（左のA〜Cを記載）」「区分Ⅱ（①②③を記載）」の枠には、保存された細かいラベルを
+そのまま印字するのではなく、900万／950万／1,000万円のしきい値によるA/B/C（区分Ⅰ）・①②③
+（区分Ⅱ）の記号に変換してから印字する。変換は `YearEndCalculationService::kisoBunruiSymbolForLabel(
+string $label, int $targetYear)` が担う。**ラベル文字列を直接パースしない**（年度によって細かい
+区分の行数が違うため。例えば2025年分は132万円以下〜655万円超900万円以下が5行に分かれるが、
+2026年分は132万円超900万円以下の1行にまとまる。文字列マッチだと年度が変わるたびに対応漏れが
+起きる）。代わりに、その年の `kisoBracketOptions($targetYear)` の全行と突き合わせて、一致した
+行の `symbol` を返す。
+
+| 本人の合計所得金額 | 区分Ⅰ記号 | 区分Ⅱ記号 |
+|---|---|---|
+| 900万円以下 | A | ① |
+| 900万円超950万円以下 | B | ② |
+| 950万円超1,000万円以下 | C | ③ |
+| 1,000万円超 | （空欄） | （空欄） |
+
+この900万／950万／1,000万円のしきい値は、配偶者控除等申告書の金額表の列選択にのみ使う
+（本人の基礎控除の額＝`kiso_koujyo` そのものの決定には使わない。`kiso_koujyo` は上の
+「基礎控除（kiso_koujyo）」の表を使う、別の計算）。区分Ⅰ・区分Ⅱの用途はobc.co.jp記事
+（https://www.obc.co.jp/360/list/post184 ）で確認済み：「配偶者控除や配偶者特別控除を受ける
+従業員には、判定表に記載されているA/B/Cのいずれかを区分Ⅰの欄に記入」。
 
 令和7年（2025年）分のみユーザー確認済み。2024年以前はいつからこの区分になったか
 未確認のため、`targetYear < 2025` は空欄のまま（`spousalDeductionAmounts()` と同じ年度ゲート）。
+
+### 基礎控除申告書の選択肢一覧（kisoBracketOptions）
+
+画面（`show.blade.php`）の `kiso_bunrui`／`haigu_bunrui` 選択ボックスは、
+`YearEndCalculationService::kisoBracketOptions(int $targetYear)` が返す一覧をそのまま使う。
+1行＝基礎控除の額（`amount`）と区分記号（`symbol`）のどちらかが変わる境界。値は `label`
+（保存される細かいラベル）、表示だけ記号・金額を並記する。金額・記号は `basicDeductionAmount()`／
+`kisoBunruiSymbol()` から算出するので、この一覧に金額を書き直さない（ズレる事故を防ぐため）。
 
 ## 給与所得控除（shotoku_deduction）の4,000円丸め
 

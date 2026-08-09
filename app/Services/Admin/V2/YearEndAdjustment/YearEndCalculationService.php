@@ -47,8 +47,11 @@ class YearEndCalculationService
         }
 
         // 配偶者控除・配偶者特別控除：配偶者の合計所得金額(haigu_shotoku、本人が申告した値)と
-        // 本人の合計所得金額から、国税庁の金額表で計算する（配偶者控除の額＝haigu_toku_deduction／
-        // 配偶者特別控除の額＝haigu_toku_deduction_amo。どちらか一方のみ発生する）。
+        // 本人の合計所得金額から、国税庁の金額表で計算する（配偶者控除の額＝haigu_deduction／
+        // 配偶者特別控除の額＝haigu_toku_deduction。どちらか一方のみ発生する）。
+        // ※旧カラム名はhaigu_toku_deduction／haigu_toku_deduction_amoで、「toku」が付いているのが
+        // 実は「特別」ではない方（regular）という紛らわしい命名だった。テストサーバーの段階で
+        // sp_renameにより物理カラム名ごと修正済み（2026年8月）。
         // 計算対象にするかどうかは mx_fuyo の配偶者行の deduction_target（控除対象チェック）を
         // 正とする。扶養親族と同じ扱いで、控除対象チェックが入っている配偶者だけを計算する。
         $haiguShotoku = $this->money($nenTyo->haigu_shotoku ?? 0);
@@ -59,8 +62,8 @@ class YearEndCalculationService
         } else {
             $spousalDeduction = ['regular' => 0, 'special' => 0];
         }
-        $haiguTokuDeduction = (float) $spousalDeduction['regular'];
-        $haiguTokuDeductionAmo = (float) $spousalDeduction['special'];
+        $haiguDeduction = (float) $spousalDeduction['regular'];
+        $haiguTokuDeduction = (float) $spousalDeduction['special'];
 
         // 基礎控除申告書「区分Ⅰ」（A/B/C）。配偶者控除等申告書の金額表で列を選ぶ
         // spousalDeductionAmounts() の900万/950万/1000万円のしきい値と同じ判定を、
@@ -81,8 +84,8 @@ class YearEndCalculationService
             + $seimeiFeeKou
             + $jishunFeeKou
             + $deductionSum
+            + $haiguDeduction
             + $haiguTokuDeduction
-            + $haiguTokuDeductionAmo
             + $kisoKoujyo;
 
         $saKazeiShotoku = max(0, (int) floor(($shotokuDeduction - $tyoseiKoujyo - $shotokuDeductionSum) / 1000) * 1000);
@@ -97,8 +100,8 @@ class YearEndCalculationService
             $kisoKoujyo = 0;
             $kisoBunrui = '';
             $deductionSum = 0;
+            $haiguDeduction = 0;
             $haiguTokuDeduction = 0;
-            $haiguTokuDeductionAmo = 0;
             $kyuSyahoFeeKou = 0;
             $shotokuDeductionSum = 0;
             $saKazeiShotoku = 0;
@@ -110,8 +113,8 @@ class YearEndCalculationService
             $kisoKoujyo = 0;
             $kisoBunrui = '';
             $deductionSum = 0;
+            $haiguDeduction = 0;
             $haiguTokuDeduction = 0;
-            $haiguTokuDeductionAmo = 0;
             $shotokuDeduction = 0;
             $shotokuDeductionSum = 0;
             $saKazeiShotoku = 0;
@@ -140,8 +143,12 @@ class YearEndCalculationService
             'deduction_sum' => $deductionSum,
             'kiso_koujyo' => $kisoKoujyo,
             'kiso_bunrui' => $kisoBunrui,
+            // 区分Ⅱ（配偶者控除等申告書側、①②③表記）は区分Ⅰ（基礎控除申告書側、A/B/C表記）と
+            // 全く同じ900万/950万/1000万円のしきい値判定なので、同じ計算結果をそのまま使う
+            // （表示するときだけController側の記号変換を分ける）。
+            'haigu_bunrui' => $kisoBunrui,
+            'haigu_deduction' => $haiguDeduction,
             'haigu_toku_deduction' => $haiguTokuDeduction,
-            'haigu_toku_deduction_amo' => $haiguTokuDeductionAmo,
             'shotoku_deduction' => $shotokuDeduction,
             'shotoku_deduction_sum' => $shotokuDeductionSum,
             'sa_kazei_shotoku' => $saKazeiShotoku,
@@ -186,6 +193,25 @@ class YearEndCalculationService
         return $totals;
     }
 
+    /**
+     * 扶養親族等の区分ごとの控除額（正本）。yearEndDependentTotals()の計算と、源泉徴収簿PDFの
+     * 「人数×単価」内訳表示の両方がここを参照する（数字を2箇所に書いて将来ズレるのを防ぐため）。
+     *
+     * @return array<string, int>
+     */
+    public function dependentDeductionRates(): array
+    {
+        return [
+            'toku_fu' => 630000,
+            'rou_dou' => 580000,
+            'rou_dou_gai' => 480000,
+            'fuyo_ta' => 380000,
+            'shougai_dou_toku' => 750000,
+            'shougai_toku' => 400000,
+            'shougai_ta' => 270000,
+        ];
+    }
+
     /** @return array<string, int|float> */
     private function yearEndDependentTotals(string $staffId, int $targetYear): array
     {
@@ -226,7 +252,7 @@ class YearEndCalculationService
 
             if (($relationship === '夫' || $relationship === '妻')) {
                 // 配偶者控除・配偶者特別控除は扶養控除額(deduction_sum)に含めず、
-                // calculateYearEndPayload() 側で haigu_toku_deduction／haigu_toku_deduction_amo
+                // calculateYearEndPayload() 側で haigu_deduction／haigu_toku_deduction
                 // として別枠で計算する（国税庁の年末調整のしかた 18〜19ページで、扶養控除の
                 // 人数に配偶者を含めない旨、配偶者(特別)控除額は源泉徴収簿の⑰欄に別記する旨が
                 // 明記されている）。
@@ -238,33 +264,35 @@ class YearEndCalculationService
                 continue;
             }
 
+            $rates = $this->dependentDeductionRates();
+
             if ($age >= 19 && $age < 23) {
                 $totals['toku_fu']++;
-                $totals['deduction_sum'] += 630000;
+                $totals['deduction_sum'] += $rates['toku_fu'];
             } elseif ($age >= 70) {
                 if ($kyojyu === '同居') {
                     $totals['rou_dou']++;
-                    $totals['deduction_sum'] += 580000;
+                    $totals['deduction_sum'] += $rates['rou_dou'];
                 } else {
                     $totals['rou_dou_gai']++;
-                    $totals['deduction_sum'] += 480000;
+                    $totals['deduction_sum'] += $rates['rou_dou_gai'];
                 }
             } elseif (($age >= 16 && $age <= 18) || ($age >= 23 && $age < 70)) {
                 $totals['fuyo_ta']++;
-                $totals['deduction_sum'] += 380000;
+                $totals['deduction_sum'] += $rates['fuyo_ta'];
             }
 
             if (in_array($failure, ['A1', 'A2', '1級', '2級'], true)) {
                 if ($kyojyu === '同居') {
                     $totals['shougai_dou_toku']++;
-                    $totals['deduction_sum'] += 750000;
+                    $totals['deduction_sum'] += $rates['shougai_dou_toku'];
                 } else {
                     $totals['shougai_toku']++;
-                    $totals['deduction_sum'] += 400000;
+                    $totals['deduction_sum'] += $rates['shougai_toku'];
                 }
             } elseif ($failure !== '') {
                 $totals['shougai_ta']++;
-                $totals['deduction_sum'] += 270000;
+                $totals['deduction_sum'] += $rates['shougai_ta'];
             }
         }
 
@@ -349,15 +377,31 @@ class YearEndCalculationService
     }
 
     /**
-     * 基礎控除申告書の「区分Ⅰ」。保存するのは説明文そのもの（後から見て何の区分か
-     * 一意にわかるようにするため。「A」とだけ保存すると年度が変わったときにどの金額表の
-     * A なのか分からなくなる）。帳票の枠に印字するときだけ、Controller側でA/B/C等の
-     * 短い記号に変換する。
+     * 基礎控除額表の境界（万円単位、基礎控除の額と区分Ⅰのどちらかが変わる点）。
+     * kisoBunruiLabel()・kisoBracketOptions()の両方がこれを使うので、境界を
+     * 二重に書かない（ズレる事故を防ぐため）。
      *
-     * 本人の合計所得金額900万円以下＝A、900万円超950万円以下＝B、950万円超1,000万円以下＝C、
-     * 1,000万円超は区分なし（空欄）。この900万/950万/1,000万円という境界は
-     * spousalDeductionAmounts() が配偶者控除額表の列を選ぶのに使っている境界と同じもの
-     * （区分Ⅰは元々、配偶者控除等の金額表の列を選ぶための判定なので当然一致する）。
+     * @return array<int, int>
+     */
+    private function kisoBracketManBoundaries(int $targetYear): array
+    {
+        if ($targetYear < 2025) {
+            return [2400, 2450, 2500];
+        }
+        if ($targetYear === 2025) {
+            return [132, 336, 489, 655, 900, 950, 1000, 2350, 2400, 2450, 2500];
+        }
+
+        return [132, 900, 950, 1000, 2350, 2400, 2450, 2500];
+    }
+
+    /**
+     * 基礎控除申告書の「区分Ⅰ」に保存する文字列。旧Access側の運用に合わせて、
+     * 900万/950万/1,000万円の3区分にまとめず、実際に該当した細かい所得区分
+     * （「◯◯万円超◯◯万円以下」）をそのまま保存する。帳票の枠にA/B/C記号だけを
+     * 印字するときは、この文字列ではなくkisoBunruiSymbol()で改めて求める
+     * （文字列の突き合わせだと年度で行数が変わったときに対応できないため）。
+     *
      * 令和7年（2025年）分のみユーザー確認済み。2024年以前はいつからこの区分になったか
      * 未確認のため、2025年分未満は空欄のままにする。
      */
@@ -367,17 +411,87 @@ class YearEndCalculationService
             return '';
         }
 
+        $lowerMan = 0;
+        foreach ($this->kisoBracketManBoundaries($targetYear) as $upperMan) {
+            if ($totalIncome <= $upperMan * 10000) {
+                return $lowerMan === 0 ? "{$upperMan}万円以下" : "{$lowerMan}万円超{$upperMan}万円以下";
+            }
+            $lowerMan = $upperMan;
+        }
+
+        return "{$lowerMan}万円超";
+    }
+
+    /**
+     * 区分ⅠのA/B/C記号（配偶者控除等の金額表の列選択専用。900万/950万/1,000万円の
+     * 3区分のみで、基礎控除の額そのものには影響しない）。
+     */
+    private function kisoBunruiSymbol(float $totalIncome, int $targetYear): string
+    {
+        if ($targetYear < 2025) {
+            return '';
+        }
         if ($totalIncome <= 9000000) {
-            return '900万円以下';
+            return 'A';
         }
         if ($totalIncome <= 9500000) {
-            return '900万円超950万円以下';
+            return 'B';
         }
         if ($totalIncome <= 10000000) {
-            return '950万円超1000万円以下';
+            return 'C';
         }
 
         return '';
+    }
+
+    /**
+     * kiso_bunruiに保存されている文字列（kisoBunruiLabel()の戻り値）から、
+     * 帳票に印字するA/B/C記号を逆引きする。年度によって細かい区分の行数が
+     * 変わるため、文字列を直接パースせず、その年のkisoBracketOptions()と
+     * 突き合わせて求める。
+     */
+    public function kisoBunruiSymbolForLabel(string $label, int $targetYear): string
+    {
+        foreach ($this->kisoBracketOptions($targetYear) as $row) {
+            if ($row['label'] === $label) {
+                return $row['symbol'];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 基礎控除の額（kiso_koujyo）と区分Ⅰ（kiso_bunrui）を、金額・区分のどちらかが
+     * 変わる境界ごとに1行にまとめた一覧。画面の選択肢に使う。
+     * 金額・区分は既存のbasicDeductionAmount()/kisoBunruiSymbol()から算出するので、
+     * ここに金額を書き直さない（表とズレる事故を防ぐため）。
+     *
+     * @return array<int, array{label: string, amount: int, symbol: string}>
+     */
+    public function kisoBracketOptions(int $targetYear): array
+    {
+        $manBoundaries = $this->kisoBracketManBoundaries($targetYear);
+
+        $rows = [];
+        $lowerMan = 0;
+        foreach ($manBoundaries as $upperMan) {
+            $sampleIncome = (float) ($upperMan * 10000);
+            $rows[] = [
+                'label' => $lowerMan === 0 ? "{$upperMan}万円以下" : "{$lowerMan}万円超{$upperMan}万円以下",
+                'amount' => $this->basicDeductionAmount($sampleIncome, $targetYear),
+                'symbol' => $this->kisoBunruiSymbol($sampleIncome, $targetYear),
+            ];
+            $lowerMan = $upperMan;
+        }
+        $sampleIncome = (float) ($lowerMan * 10000 + 1);
+        $rows[] = [
+            'label' => "{$lowerMan}万円超",
+            'amount' => $this->basicDeductionAmount($sampleIncome, $targetYear),
+            'symbol' => $this->kisoBunruiSymbol($sampleIncome, $targetYear),
+        ];
+
+        return $rows;
     }
 
     /**

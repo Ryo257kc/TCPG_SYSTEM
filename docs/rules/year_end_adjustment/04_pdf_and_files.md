@@ -105,11 +105,13 @@ HEICなどブラウザ確認しにくい形式は受け付けない方針。
 - `bonus_kyuyo_sum`
 - `kiso_bunrui`
 - `kiso_koujyo`
-- `haigu_shotoku`
-- `haigu_shotoku_sum`
+- `haigu_shotoku`（配偶者の所得金額の見積額。実運用では配偶者に他の所得があっても合算して
+  この1列に手入力するので、給与所得の所得金額欄・合計所得金額の見積額欄の両方にこの値を使う。
+  `haigu_shotoku_sum`という別カラムが存在したが、全レコードでゼロ＝一度も使われていなかった
+  ため2026年8月に削除した）
 - `haigu_bunrui`
-- `haigu_toku_deduction`
-- `haigu_toku_deduction_amo`
+- `haigu_deduction`（配偶者控除）
+- `haigu_toku_deduction`（配偶者特別控除。2026年8月に物理カラム名変更：旧`haigu_toku_deduction`→`haigu_deduction`、旧`haigu_toku_deduction_amo`→`haigu_toku_deduction`）
 - `tyosei_koujyo_select`
 - `tyosei_koujyo`
 ## 扶養控除申告書プレビュー

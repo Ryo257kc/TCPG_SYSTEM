@@ -11,11 +11,13 @@
     <style>
         .year-end-detail-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(12, minmax(0, 1fr));
             gap: 10px;
         }
 
         .year-end-detail-card {
+            box-sizing: border-box;
+            min-width: 0;
             border: 1px solid #d3dff0;
             border-radius: 8px;
             background: #fff;
@@ -67,11 +69,13 @@
 
         .year-end-summary-blocks {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(12, minmax(0, 1fr));
             gap: 10px;
         }
 
         .year-end-summary-block {
+            box-sizing: border-box;
+            min-width: 0;
             border: 1px solid #d3dff0;
             border-radius: 8px;
             background: #fff;
@@ -82,6 +86,7 @@
             margin: 0 0 10px;
             font-size: 14px;
         }
+
         .year-end-insurance-list {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
@@ -251,10 +256,55 @@
             .year-end-hoken-field {
                 grid-template-columns: 1fr;
             }
-        }        @media (max-width: 1000px) {
+        }
+
+        @media (max-width: 1000px) {
             .year-end-detail-grid {
                 grid-template-columns: 1fr;
             }
+        }
+
+        /* 計算結果サマリー：給与画面と同じ「編集ボタン→保存」の見せ方 */
+        #nen-tyo-summary .actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        #nen-tyo-summary .actions .section-title {
+            margin: 0;
+        }
+
+        #nen-tyo-summary .actions form {
+            margin: 0;
+        }
+
+        #nen-tyo-summary .actions .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .year-end-summary-edit-input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #cfd8e3;
+            border-radius: 4px;
+            background: #fff;
+            padding: 2px 4px;
+            font-size: 13px;
+        }
+
+        .edit-only {
+            display: none;
+        }
+
+        .is-editing .edit-only {
+            display: inline-block;
+        }
+
+        .is-editing .view-only {
+            display: none;
         }
     </style>
 </head>
@@ -264,12 +314,8 @@
 
     <div class="wrap">
         <div class="top">
-            <h1 class="title">年末調整詳細</h1>
+            <h1 class="title">{{ $targetYear }}年　年末調整詳細</h1>
             <a href="{{ route('admin.work.year_end_adjustments', ['target_year' => $targetYear]) }}" class="btn btn-outline">一覧へ戻る</a>
-            <form method="post" action="{{ route('admin.work.year_end_adjustments.calculate', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('この対象者を再計算します。処理済の場合は更新されません。よろしいですか？');">
-                @csrf
-                <button type="submit" class="btn btn-primary">この1件を再計算</button>
-            </form>
             <a href="{{ route('admin.work.year_end_adjustments.hoken.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">保険料控除申告書</a>
             <a href="{{ route('admin.work.year_end_adjustments.kiso.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">基礎控除申告書</a>
             <a href="{{ route('admin.work.year_end_adjustments.fuyo.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">扶養控除申告書</a>
@@ -283,29 +329,50 @@
 
         <section class="panel">
             <div class="year-end-detail-grid">
-                <div class="year-end-detail-card">
+
+                <div class="year-end-detail-card" style="grid-column: span 5;">
+                    <h2>スタッフ情報</h2>
+                    <dl class="year-end-fields">
+                        <dt>スタッフID</dt>
+                        <dd>{{ $application['staff_id'] }}</dd>
+                        <dt>氏名カナ</dt>
+                        <dd>{{ $staff['staff_name_furi'] ?? '---' }}</dd>
+                        <dt>氏名</dt>
+                        <dd class="f_size18"><b>{{ $staff['staff_name'] ?? '---' }}</b></dd>
+                        <dt>生年月日</dt>
+                        <dd>{{ $staff['birthday'] ?? '---' }}</dd>
+                        <dt>性別</dt>
+                        <dd>{{ $staff['sex'] ?? '---' }}</dd>
+                        <dt>住所</dt>
+                        <dd>{{ $staff['address'] ?? '---' }}</dd>
+                        <dt>住所フリガナ</dt>
+                        <dd>{{ $staff['address_furi'] ?? '---' }}</dd>
+                        <dt>雇用区分</dt>
+                        <dd>{{ $staff['employment'] ?? '---' }}</dd>
+                        <dt>税区分</dt>
+                        <dd>{{ $staff['tax_amount'] ?? '---' }}</dd>
+                    </dl>
+                </div>
+
+                <div class="year-end-detail-card" style="grid-column: span 3;">
                     <h2>申請状況</h2>
                     <dl class="year-end-fields">
                         <dt>状態</dt>
                         <dd><span class="year-end-status">{{ $application['status_label'] }}</span></dd>
                         <dt>計算処理</dt>
                         <dd>{{ isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true) ? '処理済' : '未処理' }}</dd>
-                        <dt>対象年</dt>
-                        <dd>{{ $application['target_year'] }}</dd>
-                        <dt>スタッフID</dt>
-                        <dd>{{ $application['staff_id'] }}</dd>
-                        <dt>氏名</dt>
-                        <dd>{{ $staff['staff_name'] ?? '---' }}</dd>
-                        <dt>年調No</dt>
-                        <dd>{{ $application['nen_tyo_no'] !== '' ? $application['nen_tyo_no'] : '---' }}</dd>
                         <dt>年末調整</dt>
                         <dd>{{ $application['year_end_adjustment'] !== '' ? $application['year_end_adjustment'] : '未回答' }}</dd>
                         <dt>特徴希望</dt>
                         <dd>{{ $application['special_collection_requested'] !== '' ? $application['special_collection_requested'] : '未回答' }}</dd>
+                        <dt>普通徴収</dt>
+                        <dd>{{ $nenTyo['futu_tyoushu'] ?? '---' }}</dd>
+                        <dt>処理済</dt>
+                        <dd>{{ isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true) ? '済' : '未' }}</dd>
                     </dl>
                 </div>
 
-                <div class="year-end-detail-card">
+                <div class="year-end-detail-card" style="grid-column: span 4;">
                     <h2>変更申告</h2>
                     <dl class="year-end-fields">
                         <dt>個人情報</dt>
@@ -325,52 +392,86 @@
                     </dl>
                 </div>
 
-                <div class="year-end-detail-card">
-                    <h2>スタッフ情報</h2>
-                    <dl class="year-end-fields">
-                        <dt>氏名カナ</dt>
-                        <dd>{{ $staff['staff_name_furi'] ?? '---' }}</dd>
-                        <dt>生年月日</dt>
-                        <dd>{{ $staff['birthday'] ?? '---' }}</dd>
-                        <dt>性別</dt>
-                        <dd>{{ $staff['sex'] ?? '---' }}</dd>
-                        <dt>住所</dt>
-                        <dd>{{ $staff['address'] ?? '---' }}</dd>
-                        <dt>住所フリガナ</dt>
-                        <dd>{{ $staff['address_furi'] ?? '---' }}</dd>
-                        <dt>雇用区分</dt>
-                        <dd>{{ $staff['employment'] ?? '---' }}</dd>
-                        <dt>税区分</dt>
-                        <dd>{{ $staff['tax_amount'] ?? '---' }}</dd>
-                    </dl>
-                </div>
-
-                <div class="year-end-detail-card">
-                    <h2>年調計算テーブル</h2>
-                    <dl class="year-end-fields">
-                        <dt>年調No</dt>
-                        <dd>{{ $nenTyo['nen_tyo_no'] ?? '---' }}</dd>
-                        <dt>対象年</dt>
-                        <dd>{{ $nenTyo['year_end'] ?? '---' }}</dd>
-                        <dt>普通徴収</dt>
-                        <dd>{{ $nenTyo['futu_tyoushu'] ?? '---' }}</dd>
-                        <dt>処理済</dt>
-                        <dd>{{ isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true) ? '済' : '未' }}</dd>
-                    </dl>
-                </div>
             </div>
         </section>
 
-        <section class="panel">
-            <h2 class="section-title">計算結果サマリー</h2>
+        @php
+        $isNenTyoLocked = isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true);
+        $hasNenTyoNo = ($nenTyo['nen_tyo_no'] ?? '') !== '';
+        @endphp
+        <section class="panel" id="nen-tyo-summary">
+            <div class="actions">
+                <h2 class="section-title">計算結果サマリー</h2>
+                <span class="year-end-status" id="nen-tyo-lock-status">{{ $isNenTyoLocked ? '処理済' : '未処理' }}</span>
+                <button class="btn" type="button" id="nen-tyo-edit-toggle-btn" @disabled($isNenTyoLocked || !$hasNenTyoNo)>編集</button>
+                <button class="btn edit-only" type="button" id="nen-tyo-edit-cancel-btn">取消</button>
+                <button class="btn btn-primary" type="button" id="nen-tyo-lock-toggle-btn" data-locked="{{ $isNenTyoLocked ? '1' : '0' }}" @disabled(!$hasNenTyoNo)>{{ $isNenTyoLocked ? '未確定に戻す' : '確定' }}</button>
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.calculate', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('この対象者を再計算します。よろしいですか？');">
+                    @csrf
+                    <button type="submit" class="btn" @disabled($isNenTyoLocked)>再計算</button>
+                </form>
+            </div>
+            @php
+            // グループごとの幅（12分割グリッドの何マス分か）。項目数や値の長さに応じてここで
+            // 個別に調整する（画面幅が変わっても行の列位置が揃うよう、px直接指定ではなく
+            // grid-column: span Nにしている）。
+            $summaryBlockSpans = [
+            '本人関係' => 3,
+            '給与・税額' => 4,
+            '社保・控除' => 5,
+            '配偶者関係' => 3,
+            '扶養関係' => 3,
+            '前職情報' => 3,
+            '住宅・定額減税' => 3,
+            ];
+            @endphp
             <div class="year-end-summary-blocks">
                 @foreach ($nenTyoSummaryGroups as $groupLabel => $items)
-                <div class="year-end-summary-block">
+                <div class="year-end-summary-block" style="grid-column: span {{ $summaryBlockSpans[$groupLabel] ?? 3 }};">
                     <h3>{{ $groupLabel }}</h3>
                     <dl class="year-end-fields">
                         @foreach ($items as $key => $label)
                         <dt>{{ $label }}</dt>
-                        <dd>{{ ($nenTyo[$key] ?? '') !== '' ? $nenTyo[$key] : '---' }}</dd>
+                        @if (in_array($key, ['kiso_bunrui', 'haigu_bunrui'], true))
+                        @php
+                        $bunruiValue = (string) ($nenTyo[$key] ?? '');
+                        $symbolKey = $key === 'haigu_bunrui' ? 'haiguBunruiSymbol' : 'kisoBunruiSymbol';
+                        // 所得の細かい表（kisoBracketOptions）をそのまま選択肢にする。値は旧Access側と
+                        // 同じ細かい所得区分のラベル（例:「655万円超900万円以下」）そのものを保存する。
+                        // 選択肢の見た目には記号（A/B/C・①②③）・金額も一緒に出す。
+                        $bunruiOptionsForSelect = [];
+                        $bunruiMatchedExisting = false;
+                        foreach (($kisoBracketOptions ?? []) as $bracket) {
+                        $isSelected = !$bunruiMatchedExisting && $bunruiValue !== '' && $bunruiValue === $bracket['label'];
+                        if ($isSelected) { $bunruiMatchedExisting = true; }
+                        $bunruiOptionsForSelect[] = [
+                        'value' => $bracket['label'],
+                        'text' => $bracket['label'] . '　' . $bracket[$symbolKey] . '　' . number_format($bracket['amount']) . '円',
+                        'selected' => $isSelected,
+                        ];
+                        }
+                        // 保存値が上の選択肢のどれにも一致しない場合（未計算・旧データ等）に
+                        // 選択肢を開いた瞬間に空欄扱いで保存されてしまわないよう、現在値をそのまま
+                        // 選択肢の先頭に足して選択させておく。
+                        if ($bunruiValue !== '' && !$bunruiMatchedExisting) {
+                        array_unshift($bunruiOptionsForSelect, ['value' => $bunruiValue, 'text' => $bunruiValue . '（保存されている値）', 'selected' => true]);
+                        }
+                        array_unshift($bunruiOptionsForSelect, ['value' => '', 'text' => '（空欄）', 'selected' => $bunruiValue === '']);
+                        @endphp
+                        <dd>
+                            <span class="view-only">{{ $bunruiValue !== '' ? $bunruiValue : '---' }}</span>
+                            <select class="year-end-summary-edit-input edit-only" data-key="{{ $key }}">
+                                @foreach ($bunruiOptionsForSelect as $opt)
+                                <option value="{{ $opt['value'] }}" @selected($opt['selected'])>{{ $opt['text'] }}</option>
+                                @endforeach
+                            </select>
+                        </dd>
+                        @else
+                        <dd>
+                            <span class="view-only">{{ ($nenTyo[$key] ?? '') !== '' ? $nenTyo[$key] : '---' }}</span>
+                            <input class="year-end-summary-edit-input edit-only" type="text" value="{{ $nenTyo[$key] ?? '' }}" data-key="{{ $key }}">
+                        </dd>
+                        @endif
                         @endforeach
                     </dl>
                 </div>
@@ -379,7 +480,7 @@
         </section>
         <section class="panel">
             <h2 class="section-title">扶養情報</h2>
-            <div class="year-end-table-wrap">
+            <div class="year-end-table-wrap f_size12">
                 <table class="data-table year-end-table">
                     <thead>
                         <tr>
@@ -422,24 +523,24 @@
             <div class="year-end-insurance-list">
                 @forelse ($hokenRows as $row)
                 @php
-                    $company = $row['insurance_company'] ?? '';
-                    $type = $row['insurance_type'] ?? '';
-                    $category = $row['category'] ?? '';
-                    $amount = $row['declared_amount'] ?? '';
-                    $period = $row['insurance_period'] ?? '';
-                    $contractor = $row['policy_holder_name'] ?? '';
-                    $recipient = $row['beneficiary_name'] ?? '';
-                    $recipientRelation = $row['beneficiary_relationship'] ?? '';
-                    $system = $row['applied_system'] ?? '';
-                    $pensionStart = $row['pension_payment_start_date'] ?? '';
-                    $pensionInput = $pensionStart !== '' ? str_replace('/', '-', substr($pensionStart, 0, 10)) : '';
-                    $note = $row['year_end_insurance_note'] ?? '';
-                    $proofPath = $row['certificate_file_path'] ?? '';
-                    $proofName = $row['certificate_original_name'] ?? '';
-                    $proofUrl = '';
-                    if ($proofPath !== '') {
-                        $proofUrl = preg_match('/^https?:\/\//', $proofPath) === 1 ? $proofPath : asset(ltrim($proofPath, '/'));
-                    }
+                $company = $row['insurance_company'] ?? '';
+                $type = $row['insurance_type'] ?? '';
+                $category = $row['category'] ?? '';
+                $amount = $row['declared_amount'] ?? '';
+                $period = $row['insurance_period'] ?? '';
+                $contractor = $row['policy_holder_name'] ?? '';
+                $recipient = $row['beneficiary_name'] ?? '';
+                $recipientRelation = $row['beneficiary_relationship'] ?? '';
+                $system = $row['applied_system'] ?? '';
+                $pensionStart = $row['pension_payment_start_date'] ?? '';
+                $pensionInput = $pensionStart !== '' ? str_replace('/', '-', substr($pensionStart, 0, 10)) : '';
+                $note = $row['year_end_insurance_note'] ?? '';
+                $proofPath = $row['certificate_file_path'] ?? '';
+                $proofName = $row['certificate_original_name'] ?? '';
+                $proofUrl = '';
+                if ($proofPath !== '') {
+                $proofUrl = preg_match('/^https?:\/\//', $proofPath) === 1 ? $proofPath : asset(ltrim($proofPath, '/'));
+                }
                 @endphp
                 <article class="year-end-insurance-item">
                     <form method="post" action="{{ route('admin.work.year_end_adjustments.hoken.update', ['applicationId' => $applicationId, 'hokenNo' => $row['hoken_no'] ?? 0]) }}" enctype="multipart/form-data" class="year-end-hoken-form">
@@ -589,6 +690,112 @@
             </div>
         </section>
     </div>
+
+    <script>
+        (function() {
+            var editBtn = document.getElementById('nen-tyo-edit-toggle-btn');
+            var cancelBtn = document.getElementById('nen-tyo-edit-cancel-btn');
+            var root = document.getElementById('nen-tyo-summary');
+            if (!editBtn || !root) return;
+
+            var saveUrl = @json(route('admin.work.year_end_adjustments.nen_tyo.update', ['applicationId' => $applicationId]));
+            var csrf = @json(csrf_token());
+
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', function() {
+                    // 入力欄の値を保存せずに表示モードへ戻す。値そのものはページ再読み込みで
+                    // 元の保存値に戻すのが一番確実（入力途中の値をDOM上で個別に巻き戻さない）。
+                    location.reload();
+                });
+            }
+
+            editBtn.addEventListener('click', function() {
+                if (!root.classList.contains('is-editing')) {
+                    root.classList.add('is-editing');
+                    editBtn.textContent = '保存';
+                    return;
+                }
+
+                editBtn.disabled = true;
+                var values = {};
+                root.querySelectorAll('.year-end-summary-edit-input[data-key]').forEach(function(input) {
+                    var key = (input.getAttribute('data-key') || '').trim();
+                    if (!key) return;
+                    values[key] = input.value;
+                });
+
+                fetch(saveUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrf,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            values: values
+                        })
+                    })
+                    .then(function(res) {
+                        return res.json();
+                    })
+                    .then(function(json) {
+                        if (!json || json.ok !== true) {
+                            throw new Error(json && json.message ? json.message : 'save failed');
+                        }
+                        root.classList.remove('is-editing');
+                        editBtn.textContent = '編集';
+                        location.reload();
+                    })
+                    .catch(function(err) {
+                        alert(err && err.message ? err.message : '保存に失敗しました。');
+                    })
+                    .finally(function() {
+                        editBtn.disabled = false;
+                    });
+            });
+        })();
+
+        (function() {
+            var lockBtn = document.getElementById('nen-tyo-lock-toggle-btn');
+            if (!lockBtn) return;
+
+            var toggleUrl = @json(route('admin.work.year_end_adjustments.nen_tyo.lock_toggle', ['applicationId' => $applicationId]));
+            var csrf = @json(csrf_token());
+
+            lockBtn.addEventListener('click', function() {
+                var confirmMessage = lockBtn.getAttribute('data-locked') === '1' ?
+                    '未確定に戻します。よろしいですか？' :
+                    '確定します。確定後はこのレコードを編集できなくなります。よろしいですか？';
+                if (!confirm(confirmMessage)) return;
+
+                lockBtn.disabled = true;
+                fetch(toggleUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrf,
+                            'Accept': 'application/json'
+                        },
+                        body: '{}'
+                    })
+                    .then(function(res) {
+                        return res.json();
+                    })
+                    .then(function(json) {
+                        if (!json || json.ok !== true) {
+                            throw new Error(json && json.message ? json.message : 'failed');
+                        }
+                        location.reload();
+                    })
+                    .catch(function(err) {
+                        alert(err && err.message ? err.message : '処理に失敗しました。');
+                    })
+                    .finally(function() {
+                        lockBtn.disabled = false;
+                    });
+            });
+        })();
+    </script>
 </body>
 
 </html>
