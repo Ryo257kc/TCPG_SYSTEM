@@ -235,23 +235,16 @@ class AttendanceController extends Controller
             return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '確定済のため編集できません。');
         }
 
-        $submitted = array_values($request->except([
-            '_token',
-            'month',
-            'return_mode',
-            'return_staff_id',
-            'return_month',
-            '_action',
-        ]));
-        [
-            $attendanceCategory,
-            $changeStart,
-            $changeLeave,
-            $changeBreakOut,
-            $changeEnd,
-            $overtime,
-            $timecardNote,
-        ] = array_pad($submitted, 7, '');
+        // 以前はフォームの送信順（配列の位置）で項目を振り分けていて、フォーム側の
+        // input順序が変わると気づかず違うカラムに値が入る危険な状態だった
+        // （resources/views/staff_portal/attendance/edit.blade.phpのinput name属性で受け取る）。
+        $attendanceCategory = (string) $request->input('区分', '');
+        $changeStart = (string) $request->input('変更始業', '');
+        $changeLeave = (string) $request->input('変更退出', '');
+        $changeBreakOut = (string) $request->input('変更入出', '');
+        $changeEnd = (string) $request->input('変更終業', '');
+        $overtime = (string) $request->input('残業', '');
+        $timecardNote = (string) $request->input('備考', '');
 
         $paid_leave_used = null;
         $paid_leave_requested_at = null;
