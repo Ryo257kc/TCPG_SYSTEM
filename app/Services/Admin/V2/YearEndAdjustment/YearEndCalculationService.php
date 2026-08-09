@@ -62,6 +62,11 @@ class YearEndCalculationService
         $haiguTokuDeduction = (float) $spousalDeduction['regular'];
         $haiguTokuDeductionAmo = (float) $spousalDeduction['special'];
 
+        // 基礎控除申告書「区分Ⅰ」（A/B/C）。配偶者控除等申告書の金額表で列を選ぶ
+        // spousalDeductionAmounts() の900万/950万/1000万円のしきい値と同じ判定を、
+        // 表示用の記号として求めるだけ（計算式はspousalDeductionAmounts()と共通）。
+        $kisoBunrui = $this->kisoBunruiLabel($shotokuDeduction, $targetYear);
+
         $shinSyahoFeeKou = $this->money($nenTyo->shin_syaho_fee_kou ?? 0);
         $shunKigyouFeeKou = $this->money($nenTyo->shun_kigyou_fee_kou ?? 0);
         $seimeiFeeKou = $this->money($nenTyo->seimei_fee_kou ?? 0);
@@ -90,6 +95,7 @@ class YearEndCalculationService
         $taxAmount = trim((string) ($nenTyo->tax_amount ?? ''));
         if ($taxAmount === '乙欄') {
             $kisoKoujyo = 0;
+            $kisoBunrui = '';
             $deductionSum = 0;
             $haiguTokuDeduction = 0;
             $haiguTokuDeductionAmo = 0;
@@ -102,6 +108,7 @@ class YearEndCalculationService
             $saExcess = 0;
         } elseif (!$fuyoReport || $retired) {
             $kisoKoujyo = 0;
+            $kisoBunrui = '';
             $deductionSum = 0;
             $haiguTokuDeduction = 0;
             $haiguTokuDeductionAmo = 0;
@@ -132,6 +139,7 @@ class YearEndCalculationService
             'dependent_under_16' => $dependents['dependent_under_16'],
             'deduction_sum' => $deductionSum,
             'kiso_koujyo' => $kisoKoujyo,
+            'kiso_bunrui' => $kisoBunrui,
             'haigu_toku_deduction' => $haiguTokuDeduction,
             'haigu_toku_deduction_amo' => $haiguTokuDeductionAmo,
             'shotoku_deduction' => $shotokuDeduction,
@@ -269,14 +277,36 @@ class YearEndCalculationService
      * 年度ごとに国税庁の表が変わるため targetYear で分岐する。年調是正で過去年分を
      * 再計算する場合でも、その年の表で計算されるよう年度ごとに分けて実装すること。
      *
-     * 令和7年（2025年）分はユーザー確認済みの表。それより前の年分は未確認のため、
-     * 従来どおり一律480,000円（旧・合計所得金額2,400万円以下の額）を使う。
-     * 2024年以前の年調是正が必要になった場合は、その年の国税庁の表を確認してから
-     * 分岐を追加すること。
+     * 令和6年（2024年）分以前・令和7年（2025年）分・令和8年（2026年）分以後、
+     * いずれも国税庁公式サイトで確認済み
+     * （https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1199.htm）。
+     * 900万/950万/1,000万円というサブ区分（kiso_bunrui用）は基礎控除額そのものには
+     * 影響しない（配偶者控除等申告書の金額表の列選択にのみ使う別の区分）。
      */
     private function basicDeductionAmount(float $totalIncome, int $targetYear): int
     {
-        if ($targetYear >= 2025) {
+        if ($targetYear >= 2026) {
+            // 令和8年（2026年）分以後：令和7年分にあった132万超2,350万円以下の
+            // 4段階（88万/68万/63万/58万）が一律58万円に統合される。
+            if ($totalIncome <= 1320000) {
+                return 950000;
+            }
+            if ($totalIncome <= 23500000) {
+                return 580000;
+            }
+            if ($totalIncome <= 24000000) {
+                return 480000;
+            }
+            if ($totalIncome <= 24500000) {
+                return 320000;
+            }
+            if ($totalIncome <= 25000000) {
+                return 160000;
+            }
+            return 0;
+        }
+
+        if ($targetYear === 2025) {
             if ($totalIncome <= 1320000) {
                 return 950000;
             }
@@ -295,14 +325,59 @@ class YearEndCalculationService
             if ($totalIncome <= 24000000) {
                 return 480000;
             }
-            if ($totalIncome <= 25000000) {
+            if ($totalIncome <= 24500000) {
                 return 320000;
+            }
+            if ($totalIncome <= 25000000) {
+                return 160000;
             }
             return 0;
         }
 
-        // 2024年以前：未確認のため従来の一律480,000円を維持（要確認）。
-        return 480000;
+        // 令和6年（2024年）分以前。
+        if ($totalIncome <= 24000000) {
+            return 480000;
+        }
+        if ($totalIncome <= 24500000) {
+            return 320000;
+        }
+        if ($totalIncome <= 25000000) {
+            return 160000;
+        }
+
+        return 0;
+    }
+
+    /**
+     * 基礎控除申告書の「区分Ⅰ」。保存するのは説明文そのもの（後から見て何の区分か
+     * 一意にわかるようにするため。「A」とだけ保存すると年度が変わったときにどの金額表の
+     * A なのか分からなくなる）。帳票の枠に印字するときだけ、Controller側でA/B/C等の
+     * 短い記号に変換する。
+     *
+     * 本人の合計所得金額900万円以下＝A、900万円超950万円以下＝B、950万円超1,000万円以下＝C、
+     * 1,000万円超は区分なし（空欄）。この900万/950万/1,000万円という境界は
+     * spousalDeductionAmounts() が配偶者控除額表の列を選ぶのに使っている境界と同じもの
+     * （区分Ⅰは元々、配偶者控除等の金額表の列を選ぶための判定なので当然一致する）。
+     * 令和7年（2025年）分のみユーザー確認済み。2024年以前はいつからこの区分になったか
+     * 未確認のため、2025年分未満は空欄のままにする。
+     */
+    private function kisoBunruiLabel(float $totalIncome, int $targetYear): string
+    {
+        if ($targetYear < 2025) {
+            return '';
+        }
+
+        if ($totalIncome <= 9000000) {
+            return '900万円以下';
+        }
+        if ($totalIncome <= 9500000) {
+            return '900万円超950万円以下';
+        }
+        if ($totalIncome <= 10000000) {
+            return '950万円超1000万円以下';
+        }
+
+        return '';
     }
 
     /**
