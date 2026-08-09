@@ -176,12 +176,8 @@ class ReportV2SanteiCsvService
 
     private function hasCompanyColumn(string $column): bool
     {
-        try {
-            return Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
-                || Schema::connection('sqlsrv')->hasColumn('dbo.mx_companies', $column);
-        } catch (\Throwable) {
-            return false;
-        }
+        return Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
+            || Schema::connection('sqlsrv')->hasColumn('dbo.mx_companies', $column);
     }
 
     private function monthlyAmoCode(float $amount): string

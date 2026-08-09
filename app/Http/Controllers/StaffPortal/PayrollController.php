@@ -106,6 +106,48 @@ class PayrollController extends Controller
         ]);
     }
 
+    private function useMxStaffTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv')->hasTable('mx_staffs')
+            || Schema::connection('sqlsrv')->hasTable('dbo.mx_staffs');
+
+        return $cached;
+    }
+
+    private function useMxPayrollTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')
+            || Schema::connection('sqlsrv_payroll')->hasTable('dbo.mx_kyuyo_shou');
+
+        return $cached;
+    }
+
+    private function useMxStoreTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv')->hasTable('mx_stores')
+            || Schema::connection('sqlsrv')->hasTable('dbo.mx_stores');
+
+        return $cached;
+    }
+
     private function getStaffRow(string $staffId): ?array
     {
         if ($this->useMxStaffTable()) {
@@ -127,24 +169,6 @@ class PayrollController extends Controller
         }
 
         return null;
-    }
-
-    private function useMxStaffTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        try {
-            $cached = Schema::connection('sqlsrv')->hasTable('mx_staffs')
-                || Schema::connection('sqlsrv')->hasTable('dbo.mx_staffs');
-        } catch (\Throwable) {
-            $cached = false;
-        }
-
-        return $cached;
     }
 
     private function resolveDisplayName(?array $staffRow, string $fallback): string
@@ -289,7 +313,8 @@ class PayrollController extends Controller
     private function normalizePayrollRowForDisplay(array $row): array
     {
         unset($row['raw_payload']);
-        $row['transfer_amount'] = $this->summaryService->transferAmount($row);
+        // 差引支給額は保存値をそのまま表示する（帳票側で計算し直さない）。
+        $row['transfer_amount'] = (float) ($row['supply_deduction_sum'] ?? 0);
 
         return $row;
     }
@@ -307,24 +332,6 @@ class PayrollController extends Controller
             ->where('bonus', $isBonus ? 1 : 0)
             ->where('edit_lock', 1)
             ->where('kyuyo_staff_id', $targetStaffId);
-    }
-
-    private function useMxPayrollTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        try {
-            $cached = Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')
-                || Schema::connection('sqlsrv_payroll')->hasTable('dbo.mx_kyuyo_shou');
-        } catch (\Throwable) {
-            $cached = false;
-        }
-
-        return $cached;
     }
 
     private function resolveStaffOrganization(?array $staffRow): array
@@ -354,24 +361,6 @@ class PayrollController extends Controller
         }
 
         return ['company_name' => '-', 'store_name' => $storeCode, 'company_code' => ''];
-    }
-
-    private function useMxStoreTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        try {
-            $cached = Schema::connection('sqlsrv')->hasTable('mx_stores')
-                || Schema::connection('sqlsrv')->hasTable('dbo.mx_stores');
-        } catch (\Throwable) {
-            $cached = false;
-        }
-
-        return $cached;
     }
 
     private function payrollVisibleFromDate(): string
@@ -464,49 +453,48 @@ class PayrollController extends Controller
             return $cache[$companyCode];
         }
 
-        try {
-            $hasSlotNo = $this->payrollAllowanceHasColumn('slot_no');
-            $hasAmountKey = $this->payrollAllowanceHasColumn('amount_column_key');
-            $hasDisplayOrder = $this->payrollAllowanceHasColumn('display_order');
+        // テーブル名・カラム名が間違っている等の本当のエラーはここで握りつぶさず、
+        // そのまま例外を投げさせる（会社ごとの手当名カスタマイズが静かに無効化されたまま
+        // 誰も気づかない、という事故が過去に実際にあったため。t_allowanceの誤参照を参照）。
+        $hasSlotNo = $this->payrollAllowanceHasColumn('slot_no');
+        $hasAmountKey = $this->payrollAllowanceHasColumn('amount_column_key');
+        $hasDisplayOrder = $this->payrollAllowanceHasColumn('display_order');
 
-            $rows = DB::connection('sqlsrv_payroll')
-                ->table('dbo.t_allowance')
-                ->whereRaw('LTRIM(RTRIM(office_name)) = ?', [$companyCode])
-                ->orderByRaw(($hasDisplayOrder ? 'ISNULL(display_order, 9999)' : '9999') . ' asc')
-                ->orderByRaw(($hasSlotNo ? 'ISNULL(slot_no, 9999)' : '9999') . ' asc')
-                ->orderBy('allowance_no')
-                ->get([
-                    'allowance_no',
-                    'allowance_name',
-                    DB::raw($hasSlotNo ? 'slot_no' : 'NULL as slot_no'),
-                    DB::raw($hasAmountKey ? 'amount_column_key' : 'NULL as amount_column_key'),
-                ]);
+        $rows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_allowance')
+            ->whereRaw('LTRIM(RTRIM(office_name)) = ?', [$companyCode])
+            ->orderByRaw(($hasDisplayOrder ? 'ISNULL(display_order, 9999)' : '9999') . ' asc')
+            ->orderByRaw(($hasSlotNo ? 'ISNULL(slot_no, 9999)' : '9999') . ' asc')
+            ->orderBy('allowance_no')
+            ->get([
+                'allowance_no',
+                'allowance_name',
+                DB::raw($hasSlotNo ? 'slot_no' : 'NULL as slot_no'),
+                DB::raw($hasAmountKey ? 'amount_column_key' : 'NULL as amount_column_key'),
+            ]);
 
-            $defs = [];
-            $nextFallbackSlot = 1;
-            foreach ($rows as $row) {
-                $slotNo = (int) ($row->slot_no ?? 0);
-                if ($slotNo <= 0 || $slotNo > 17) {
-                    while ($nextFallbackSlot <= 17 && array_key_exists($nextFallbackSlot, $defs)) {
-                        $nextFallbackSlot++;
-                    }
-                    if ($nextFallbackSlot > 17) {
-                        continue;
-                    }
-                    $slotNo = $nextFallbackSlot;
+        $defs = [];
+        $nextFallbackSlot = 1;
+        foreach ($rows as $row) {
+            $slotNo = (int) ($row->slot_no ?? 0);
+            if ($slotNo <= 0 || $slotNo > 17) {
+                while ($nextFallbackSlot <= 17 && array_key_exists($nextFallbackSlot, $defs)) {
+                    $nextFallbackSlot++;
                 }
-
-                $defs[$slotNo] = [
-                    'allowance_no' => (int) ($row->allowance_no ?? 0),
-                    'allowance_name' => (string) ($row->allowance_name ?? ''),
-                    'amount_column_key' => (string) ($row->amount_column_key ?? ''),
-                ];
+                if ($nextFallbackSlot > 17) {
+                    continue;
+                }
+                $slotNo = $nextFallbackSlot;
             }
 
-            $cache[$companyCode] = $defs;
-        } catch (\Throwable) {
-            $cache[$companyCode] = [];
+            $defs[$slotNo] = [
+                'allowance_no' => (int) ($row->allowance_no ?? 0),
+                'allowance_name' => (string) ($row->allowance_name ?? ''),
+                'amount_column_key' => (string) ($row->amount_column_key ?? ''),
+            ];
         }
+
+        $cache[$companyCode] = $defs;
 
         return $cache[$companyCode];
     }
@@ -518,48 +506,45 @@ class PayrollController extends Controller
             return [];
         }
 
-        try {
-            $hasSlotNo = $this->payrollAllowanceHasColumn('slot_no');
-            $hasAmountKey = $this->payrollAllowanceHasColumn('amount_column_key');
-            $hasDisplayOrder = $this->payrollAllowanceHasColumn('display_order');
+        // resolveAllowanceDefinitionsBySlot()と同じ理由でtry/catchによる握りつぶしはしない。
+        $hasSlotNo = $this->payrollAllowanceHasColumn('slot_no');
+        $hasAmountKey = $this->payrollAllowanceHasColumn('amount_column_key');
+        $hasDisplayOrder = $this->payrollAllowanceHasColumn('display_order');
 
-            $rows = DB::connection('sqlsrv_payroll')
-                ->table('dbo.t_allowance')
-                ->whereRaw('LTRIM(RTRIM(office_name)) = ?', [$companyCode])
-                ->orderByRaw(($hasDisplayOrder ? 'ISNULL(display_order, 9999)' : '9999') . ' asc')
-                ->orderBy('allowance_no')
-                ->get([
-                    'allowance_no',
-                    'allowance_name',
-                    DB::raw($hasSlotNo ? 'slot_no' : 'NULL as slot_no'),
-                    DB::raw($hasAmountKey ? 'amount_column_key' : 'NULL as amount_column_key'),
-                    DB::raw($hasDisplayOrder ? 'display_order' : 'NULL as display_order'),
-                ]);
+        $rows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_allowance')
+            ->whereRaw('LTRIM(RTRIM(office_name)) = ?', [$companyCode])
+            ->orderByRaw(($hasDisplayOrder ? 'ISNULL(display_order, 9999)' : '9999') . ' asc')
+            ->orderBy('allowance_no')
+            ->get([
+                'allowance_no',
+                'allowance_name',
+                DB::raw($hasSlotNo ? 'slot_no' : 'NULL as slot_no'),
+                DB::raw($hasAmountKey ? 'amount_column_key' : 'NULL as amount_column_key'),
+                DB::raw($hasDisplayOrder ? 'display_order' : 'NULL as display_order'),
+            ]);
 
-            $defs = [];
-            foreach ($rows as $row) {
-                $key = trim((string) ($row->amount_column_key ?? ''));
-                if ($key === '') {
-                    $slotNo = (int) ($row->slot_no ?? 0);
-                    if ($slotNo >= 1 && $slotNo <= 17) {
-                        $key = 'allowance_amo_' . $slotNo;
-                    } else {
-                        continue;
-                    }
+        $defs = [];
+        foreach ($rows as $row) {
+            $key = trim((string) ($row->amount_column_key ?? ''));
+            if ($key === '') {
+                $slotNo = (int) ($row->slot_no ?? 0);
+                if ($slotNo >= 1 && $slotNo <= 17) {
+                    $key = 'allowance_amo_' . $slotNo;
+                } else {
+                    continue;
                 }
-
-                $defs[] = [
-                    'allowance_no' => (int) ($row->allowance_no ?? 0),
-                    'allowance_name' => trim((string) ($row->allowance_name ?? '')),
-                    'amount_column_key' => $key,
-                    'display_order' => (int) ($row->display_order ?? 9999),
-                ];
             }
 
-            return $defs;
-        } catch (\Throwable) {
-            return [];
+            $defs[] = [
+                'allowance_no' => (int) ($row->allowance_no ?? 0),
+                'allowance_name' => trim((string) ($row->allowance_name ?? '')),
+                'amount_column_key' => $key,
+                'display_order' => (int) ($row->display_order ?? 9999),
+            ];
         }
+
+        return $defs;
     }
 
     private function payrollAllowanceHasColumn(string $column): bool
@@ -570,12 +555,8 @@ class PayrollController extends Controller
             return $cache[$column];
         }
 
-        try {
-            $cache[$column] = Schema::connection('sqlsrv_payroll')->hasColumn('t_allowance', $column)
-                || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.t_allowance', $column);
-        } catch (\Throwable) {
-            $cache[$column] = false;
-        }
+        $cache[$column] = Schema::connection('sqlsrv_payroll')->hasColumn('mx_allowance', $column)
+            || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.mx_allowance', $column);
 
         return $cache[$column];
     }

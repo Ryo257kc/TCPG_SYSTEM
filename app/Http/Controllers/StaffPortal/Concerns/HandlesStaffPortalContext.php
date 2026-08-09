@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 trait HandlesStaffPortalContext
 {
@@ -120,38 +121,79 @@ trait HandlesStaffPortalContext
             || str_contains($division, '委託');
     }
 
+    /**
+     * mx_staffs／mx_kyuyo_shou／mx_storesへの移行が済んでいるかの判定。
+     * 以前はPayrollController・AuthControllerにそれぞれ同じ内容が複製されていて、
+     * commonViewData()経由でshouldShowPayrollLinks()が全コントローラーから呼ばれる際に
+     * ここが未定義（他のコントローラーにはこの3つが存在しない）で即死エラーになっていた
+     * （catchで握りつぶされていたため画面上は「給与リンクが消えるだけ」に見えていた）。
+     * 1箇所にまとめ、使う側は複製しない。
+     */
+    private function useMxStaffTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv')->hasTable('mx_staffs')
+            || Schema::connection('sqlsrv')->hasTable('dbo.mx_staffs');
+
+        return $cached;
+    }
+
+    private function useMxPayrollTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')
+            || Schema::connection('sqlsrv_payroll')->hasTable('dbo.mx_kyuyo_shou');
+
+        return $cached;
+    }
+
+    private function useMxStoreTable(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $cached = Schema::connection('sqlsrv')->hasTable('mx_stores')
+            || Schema::connection('sqlsrv')->hasTable('dbo.mx_stores');
+
+        return $cached;
+    }
+
     private function shouldShowPayrollLinks(string $staffId, ?array $staffRow): bool
     {
         if ($this->isContractor($staffRow)) {
             return false;
         }
 
-        try {
-            $query = DB::connection('sqlsrv_payroll');
+        $query = DB::connection('sqlsrv_payroll');
 
-            if ($this->useMxPayrollTable()) {
-                $count = (int) $query
-                    ->table('dbo.mx_kyuyo_shou')
-                    ->whereRaw('LTRIM(RTRIM(kyuyo_staff_id)) = ?', [$staffId])
-                    ->where('edit_lock', 1)
-                    ->count();
-            } else {
-                $count = (int) $query
-                    ->table('dbo.t_kyuyo_shou')
-                    ->where('kyuyo_staff_id', $staffId)
-                    ->where('edit_lock', 1)
-                    ->count();
-            }
-
-            return $count > 0;
-        } catch (\Throwable $e) {
-            Log::warning('Payroll visibility fallback: sqlsrv_payroll check failed.', [
-                'staff_id' => $staffId,
-                'error' => $e->getMessage(),
-            ]);
-
-            return false;
+        if ($this->useMxPayrollTable()) {
+            $count = (int) $query
+                ->table('dbo.mx_kyuyo_shou')
+                ->whereRaw('LTRIM(RTRIM(kyuyo_staff_id)) = ?', [$staffId])
+                ->where('edit_lock', 1)
+                ->count();
+        } else {
+            $count = (int) $query
+                ->table('dbo.t_kyuyo_shou')
+                ->where('kyuyo_staff_id', $staffId)
+                ->where('edit_lock', 1)
+                ->count();
         }
+
+        return $count > 0;
     }
 
 

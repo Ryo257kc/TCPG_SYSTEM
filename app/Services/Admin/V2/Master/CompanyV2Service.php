@@ -102,15 +102,11 @@ class CompanyV2Service
             return $this->columnExistsCache[$column];
         }
 
-        try {
-            $exists = Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
-                || Schema::connection('sqlsrv')->hasColumn('dbo.mx_companies', $column);
-            $this->columnExistsCache[$column] = $exists;
-            return $exists;
-        } catch (\Throwable) {
-            $this->columnExistsCache[$column] = false;
-            return false;
-        }
+        $exists = Schema::connection('sqlsrv')->hasColumn('mx_companies', $column)
+            || Schema::connection('sqlsrv')->hasColumn('dbo.mx_companies', $column);
+        $this->columnExistsCache[$column] = $exists;
+
+        return $exists;
     }
 
     public function list(string $keyword): array

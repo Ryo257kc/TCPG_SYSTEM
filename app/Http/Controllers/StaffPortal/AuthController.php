@@ -241,41 +241,6 @@ class AuthController extends Controller
         ];
     }
 
-    private function useMxStaffTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        try {
-            $cached = Schema::connection('sqlsrv')->hasTable('mx_staffs')
-                || Schema::connection('sqlsrv')->hasTable('dbo.mx_staffs');
-        } catch (\Throwable) {
-            $cached = false;
-        }
-
-        return $cached;
-    }
-
-    private function useMxPayrollTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        try {
-            $cached = Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')
-                || Schema::connection('sqlsrv_payroll')->hasTable('dbo.mx_kyuyo_shou');
-        } catch (\Throwable) {
-            $cached = false;
-        }
-
-        return $cached;
-    }
     // private function resolveDisplayName(?array $staffRow, string $fallback): string
     // {
     //     $name = (string) ($staffRow['staff_name'] ?? '');

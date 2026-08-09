@@ -9,12 +9,8 @@ class AllowanceV2Service
 {
     private function hasPayrollColumn(string $column): bool
     {
-        try {
-            return Schema::connection('sqlsrv_payroll')->hasColumn('mx_allowance', $column)
-                || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.mx_allowance', $column);
-        } catch (\Throwable) {
-            return false;
-        }
+        return Schema::connection('sqlsrv_payroll')->hasColumn('mx_allowance', $column)
+            || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.mx_allowance', $column);
     }
 
     public function list(string $officeName): array

@@ -35,13 +35,9 @@ class PayrollV2StaffMasterService
     private function staffIdColumn(): ?string
     {
         foreach (['staff_id', 'kyuyo_staff_id'] as $candidate) {
-            try {
-                if (Schema::connection('sqlsrv')->hasColumn('mx_staffs', $candidate)
-                    || Schema::connection('sqlsrv')->hasColumn('dbo.mx_staffs', $candidate)) {
-                    return $candidate;
-                }
-            } catch (\Throwable) {
-                return null;
+            if (Schema::connection('sqlsrv')->hasColumn('mx_staffs', $candidate)
+                || Schema::connection('sqlsrv')->hasColumn('dbo.mx_staffs', $candidate)) {
+                return $candidate;
             }
         }
 

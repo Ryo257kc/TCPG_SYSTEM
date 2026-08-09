@@ -67,12 +67,8 @@ class PayrollV2FuyoService
     private function fuyoConnection(): string
     {
         foreach (['sqlsrv_payroll', 'sqlsrv'] as $connection) {
-            try {
-                if (Schema::connection($connection)->hasTable('mx_fuyo') || Schema::connection($connection)->hasTable('dbo.mx_fuyo')) {
-                    return $connection;
-                }
-            } catch (\Throwable) {
-                continue;
+            if (Schema::connection($connection)->hasTable('mx_fuyo') || Schema::connection($connection)->hasTable('dbo.mx_fuyo')) {
+                return $connection;
             }
         }
 

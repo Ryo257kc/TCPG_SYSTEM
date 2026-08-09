@@ -9,10 +9,13 @@
 
 ## 退避済み
 
-給与DB:
+給与DB（`mx_kyuyo_shou`）:
 
 - `officer_com` -> `x_officer_com`
 - `allowance_2` -> `x_allowance_2`
+- `allowance_1`、`allowance_3`〜`allowance_16` -> `x_allowance_1`、`x_allowance_3`〜`x_allowance_16`（2026年8月、手当名称の列。
+  `mx_allowance`マスタ（会社ごとの`allowance_name`/`slot_no`/`amount_column_key`）に完全に置き換わっており、
+  コード（app/・resources/）に参照なしを確認してから退避した。金額は引き続き`allowance_amo_1`〜`17`を使う）
 
 レセDB:
 
@@ -35,8 +38,10 @@ EXEC sp_rename 'dbo.mx_kyuyo_shou.allowance_2', 'x_allowance_2', 'COLUMN';
 ```text
 列名 'officer_com' が無効です
 列名 'allowance_2' が無効です
+列名 'allowance_1' が無効です（allowance_3〜16も同様）
 Invalid column name 'officer_com'
 Invalid column name 'allowance_2'
+Invalid column name 'allowance_1'（allowance_3〜16も同様）
 ```
 
 このエラーが出た場合は、出た画面、操作、対象年月、スタッフを記録してからコード側を確認する。
