@@ -159,7 +159,9 @@ class PayrollV2Controller extends Controller
                 $accountNo = trim((string) ($staffMaster['account_num2'] ?? ''));
             }
 
-            $transferAmount = $this->summaryService->transferAmount($summary);
+            // $summaryはPayrollV2SummaryService::normalizeSummaryRow()を経由済みで、
+            // transfer_amountは保存済みsupply_deduction_sumから既に入っている（帳票側で再計算しない）。
+            $transferAmount = (float) ($summary['transfer_amount'] ?? 0);
 
             $transferRows[] = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -310,7 +312,9 @@ class PayrollV2Controller extends Controller
             $kihon = (array) ($row['kihon'] ?? []);
             $shaho = (array) ($row['shaho'] ?? []);
 
-            $transferAmount = $this->summaryService->transferAmount($summary);
+            // $summaryはPayrollV2SummaryService::normalizeSummaryRow()を経由済みで、
+            // transfer_amountは保存済みsupply_deduction_sumから既に入っている（帳票側で再計算しない）。
+            $transferAmount = (float) ($summary['transfer_amount'] ?? 0);
 
             $ledgerRow = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
@@ -927,7 +931,9 @@ class PayrollV2Controller extends Controller
                 continue;
             }
 
-            $transferAmount = $this->summaryService->transferAmount($summary);
+            // $summaryはPayrollV2SummaryService::normalizeSummaryRow()を経由済みで、
+            // transfer_amountは保存済みsupply_deduction_sumから既に入っている（帳票側で再計算しない）。
+            $transferAmount = (float) ($summary['transfer_amount'] ?? 0);
 
             $rows[] = array_merge($summary, [
                 'staff_id' => trim((string) ($row['staff_id'] ?? '')),
@@ -1047,7 +1053,8 @@ class PayrollV2Controller extends Controller
     private function personalWageLedgerRow(array $summary, array $staffInfo, array $shaho, array $allowanceEntries): array
     {
         $isBonus = ((int) ($summary['bonus'] ?? 0)) === 1;
-        $transferAmount = $this->summaryService->transferAmount($summary);
+        // 差引支給額は保存値をそのまま表示する（帳票側で計算し直さない）。
+        $transferAmount = (float) ($summary['supply_deduction_sum'] ?? 0);
 
         $paymentDate = trim((string) ($summary['supply_month'] ?? ''));
         $paymentTime = strtotime($paymentDate);
@@ -1923,7 +1930,7 @@ class PayrollV2Controller extends Controller
 
         $historyRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->select(['kyuyo_staff_id', 'supply_month', 'bonus_amo'])
+            ->select(['kyuyo_sho_no', 'kyuyo_staff_id', 'supply_month', 'bonus_amo'])
             ->where('bonus', 1)
             ->whereIn('kyuyo_staff_id', $staffIds)
             ->whereNotNull('supply_month')
@@ -1948,6 +1955,7 @@ class PayrollV2Controller extends Controller
             $standard = floor($gross / 1000) * 1000;
 
             $historyMap[$staffId][] = [
+                'kyuyo_sho_no' => (int) ($historyRow->kyuyo_sho_no ?? 0),
                 'date' => date('Y-m-d', $paymentTs),
                 'gross' => $gross,
                 'standard' => $standard,
@@ -1957,14 +1965,35 @@ class PayrollV2Controller extends Controller
         foreach ($rows as &$row) {
             $staffId = trim((string) ($row['staff_id'] ?? ''));
             $summary = (array) ($row['summary'] ?? []);
+            $currentRowId = (int) ($summary['kyuyo_sho_no'] ?? 0);
             $currentGross = $this->num($summary['bonus_amo'] ?? 0);
             $currentStandard = floor($currentGross / 1000) * 1000;
 
+            $ownHistory = array_values(array_filter(
+                $historyMap[$staffId] ?? [],
+                static fn (array $history): bool => (int) ($history['kyuyo_sho_no'] ?? 0) !== $currentRowId
+            ));
+
+            // 上限判定（区分Ⅰと同じで、金額表を持つ側が正本）はPayrollV2BonusSocialInsuranceService
+            // ::computeTargetStandards()に合わせる。以前はここで別の式（自分より前の日付だけを
+            // 合算する、という違う境界条件）を独自に持っていた。
+            $targets = \App\Services\Admin\V2\Payroll\PayrollV2BonusSocialInsuranceService::computeTargetStandards(
+                array_map(static fn (array $history): array => [
+                    'supply_month' => $history['date'],
+                    'bonus_amo' => $history['gross'],
+                ], $ownHistory),
+                $selectedPaymentDate,
+                $currentStandard
+            );
+            $kenpoTargetStandard = $targets['kenpo_target_standard'];
+            $kounenTargetStandard = $targets['kounen_target_standard'];
+
+            // 以下は画面の内訳表示専用（この賞与より前の分だけの参考累計）。上限判定そのものには使わない。
             $sameMonthPrior = 0.0;
             $sameMonthOtherGross = 0.0;
             $fiscalPrior = 0.0;
 
-            foreach (($historyMap[$staffId] ?? []) as $history) {
+            foreach ($ownHistory as $history) {
                 $historyDate = (string) ($history['date'] ?? '');
                 $historyGross = $this->num($history['gross'] ?? 0);
                 $historyStandard = $this->num($history['standard'] ?? 0);
@@ -1979,12 +2008,7 @@ class PayrollV2Controller extends Controller
                 }
             }
 
-            $kenpoCapRemainingBefore = max(5730000 - $fiscalPrior, 0);
-            $kenpoTargetStandard = min($currentStandard, $kenpoCapRemainingBefore);
             $fiscalAfter = $fiscalPrior + $currentStandard;
-
-            $kounenCapRemainingBefore = max(1500000 - $sameMonthPrior, 0);
-            $kounenTargetStandard = min($currentStandard, $kounenCapRemainingBefore);
             $sameMonthAfter = $sameMonthPrior + $currentStandard;
 
             $row['bonus_calc'] = [

@@ -89,7 +89,6 @@ class PayrollV2BonusSocialInsuranceService
             ];
         }
 
-        $sameMonthStart = date('Y-m-01', $selectedTs);
         $sameMonthEnd = date('Y-m-t', $selectedTs);
         $fiscalStart = ((int) date('n', $selectedTs) >= 4)
             ? date('Y-04-01', $selectedTs)
@@ -104,19 +103,50 @@ class PayrollV2BonusSocialInsuranceService
             ->whereRaw('CONVERT(date, [supply_month]) >= ?', [$fiscalStart])
             ->whereRaw('CONVERT(date, [supply_month]) <= ?', [$sameMonthEnd])
             ->where('kyuyo_sho_no', '<>', $currentRowId)
-            ->get();
+            ->get()
+            ->map(static fn ($row): array => [
+                'supply_month' => (string) ($row->supply_month ?? ''),
+                'bonus_amo' => $row->bonus_amo ?? 0,
+            ])
+            ->all();
+
+        return self::computeTargetStandards($historyRows, $paymentDate, $currentStandard);
+    }
+
+    /**
+     * 標準報酬月額の上限判定（健保：年度累計573万円、厚年：同月累計150万円）の正本。
+     * 賞与一覧画面の表示（PayrollV2Controller::attachBonusCalc()）もここを呼ぶ
+     * （以前は表示側が独自に同じような式を持っていて、同月境界の扱いが少しズレていた）。
+     *
+     * @param list<array{supply_month:string,bonus_amo:mixed}> $historyRows 自分自身の行は含めない、他の賞与履歴
+     * @return array{kenpo_target_standard:float,kounen_target_standard:float}
+     */
+    public static function computeTargetStandards(array $historyRows, string $paymentDate, float $currentStandard): array
+    {
+        $selectedTs = strtotime($paymentDate);
+        if ($selectedTs === false) {
+            return [
+                'kenpo_target_standard' => 0.0,
+                'kounen_target_standard' => 0.0,
+            ];
+        }
+
+        $sameMonthStart = date('Y-m-01', $selectedTs);
+        $sameMonthEnd = date('Y-m-t', $selectedTs);
 
         $sameMonthOtherStandard = 0.0;
         $fiscalPrior = 0.0;
 
         foreach ($historyRows as $historyRow) {
-            $historyDate = trim((string) ($historyRow->supply_month ?? ''));
+            $historyDate = trim((string) ($historyRow['supply_month'] ?? ''));
             $historyTs = strtotime($historyDate);
             if ($historyTs === false) {
                 continue;
             }
 
-            $historyStandard = floor($this->num($historyRow->bonus_amo ?? 0) / 1000) * 1000;
+            $historyGross = $historyRow['bonus_amo'] ?? 0;
+            $historyGross = is_numeric($historyGross) ? (float) $historyGross : 0.0;
+            $historyStandard = floor($historyGross / 1000) * 1000;
             $historyYmd = date('Y-m-d', $historyTs);
 
             if ($historyYmd < $paymentDate) {
@@ -208,12 +238,8 @@ class PayrollV2BonusSocialInsuranceService
 
     private function hasPayrollColumn(string $table, string $column): bool
     {
-        try {
-            return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column)
-                || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
-        } catch (\Throwable) {
-            return false;
-        }
+        return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column)
+            || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
     }
 
     private function shouldApplyKaigo(?\DateTimeImmutable $birthday, int $year, int $month): bool

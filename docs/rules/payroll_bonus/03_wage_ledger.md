@@ -24,6 +24,21 @@
 - 差引支給額には立替経費、会社立替、振込残額などの扱いを計算根拠に合わせる。
 - 欠勤、遅早控除はマイナス値として保存・表示する。
 
+## 差引支給額（supply_deduction_sum）は保存値、帳票では計算しない
+
+差引支給額の計算式（支給合計 - 控除合計 - 年末調整 + 立替経費精算 + 会社立替費用 - 振込残額）は
+`PayrollV2SummaryService::transferAmount()`が正本。ただし**この式を呼ぶのは保存処理
+（`PayrollV2UpdateService::rebuildTotals()`／`rebuildBonusTotals()`）だけ**で、計算結果を
+`mx_kyuyo_shou.supply_deduction_sum`に保存する。表示側（Controller・帳票・スタッフポータル）は
+`transferAmount()`を直接呼ばず、保存済みの`supply_deduction_sum`（`transfer_amount`として
+正規化される）を読むだけにする。
+
+一時期、保存を経由せず表示のたびに`transferAmount()`をライブ計算する形になっていて、
+`supply_deduction_sum`列への書き込みが失われていた（2026年2月分を最後に、それ以降のレコードで
+一度も保存されていなかった）。誰にも確認されないまま「帳票側で再計算しない」というこの
+ルール自体に反する状態になっていたため、2026年8月に保存する形へ戻した。過去データ（〜2026年2月）は
+本番サーバーからの同期で埋まる想定のため、Laravel側でのバックフィルはしていない。
+
 ## 禁止
 
 - DBの値を賃金台帳用に別加工して保存しない。

@@ -120,51 +120,6 @@ class PayrollV2RecalculateService
         return (int) $this->updateService->save($staffId, $year, $month, $payload, $companyName);
     }
 
-    private function loadSocialInsuranceRates(string|int $officeNo, string $paymentDate): array
-    {
-        $cutoffMonth = (new \DateTimeImmutable($paymentDate))
-            ->modify('first day of this month')
-            ->format('Y-m-01');
-
-        $base = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_syaho')
-            ->whereRaw('office_no = ?', [(int) $officeNo]);
-
-        $kenpoRow = (clone $base)
-            ->where('kenpo_apply_date', '<', $cutoffMonth)
-            ->orderByDesc('kenpo_apply_date')
-            ->first(['kenpo_apply_date', 'kenpo_rate']);
-
-        $kaigoRow = (clone $base)
-            ->where('kaigo_apply_date', '<', $cutoffMonth)
-            ->orderByDesc('kaigo_apply_date')
-            ->first(['kaigo_apply_date', 'kaigo_rate']);
-
-        $kounenRow = (clone $base)
-            ->where('kou_apply_date', '<', $cutoffMonth)
-            ->orderByDesc('kou_apply_date')
-            ->first(['kou_apply_date', 'kounen_rate']);
-
-        $jidouRow = (clone $base)
-            ->where('jidou_apply_date', '<', $cutoffMonth)
-            ->orderByDesc('jidou_apply_date')
-            ->first(['jidou_apply_date', 'jidou_rate']);
-
-        $kodomoRow = (clone $base)
-            ->where('kodomo_shien_date', '<', $cutoffMonth)
-            ->orderByDesc('kodomo_shien_date')
-            ->first(['kodomo_shien_date', 'kodomo_shien']);
-
-        return [
-            'kenpo_rate' => $this->num($kenpoRow->kenpo_rate ?? 0),
-            'kaigo_rate' => $this->num($kaigoRow->kaigo_rate ?? 0),
-            'kounen_rate' => $this->num($kounenRow->kounen_rate ?? 0),
-            'jidou_rate' => $this->num($jidouRow->jidou_rate ?? 0),
-            'kodomo_shien' => $this->num($kodomoRow->kodomo_shien ?? 0),
-        ];
-    }
-
-
     /** @return array<string,int|float> */
     private function zeroPayload(): array
     {
@@ -484,18 +439,6 @@ class PayrollV2RecalculateService
     }
 
 
-    private function shouldApplyKaigo(?\DateTimeImmutable $birthday, int $year, int $month): bool
-    {
-        if ($birthday === null) {
-            return false;
-        }
-
-        $start = $birthday->modify('+40 years')->modify('-1 day');
-        $targetMonthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month));
-
-        return $targetMonthStart >= $start->modify('first day of this month')->setTime(0, 0);
-    }
-
     private function toDate(mixed $value): ?\DateTimeImmutable
     {
         if ($value instanceof \DateTimeInterface) {
@@ -535,64 +478,5 @@ class PayrollV2RecalculateService
 
         $s = str_replace([',', ' '], '', $s);
         return is_numeric($s) ? (float) $s : 0.0;
-    }
-
-
-    // 社保計算
-    private function calculateSocialInsurance(array $shaho, ?\DateTimeImmutable $birthday, int $year, int $month): array
-    {
-        $kenpoStandard = $this->num($shaho['kenpo_monthly_amo'] ?? 0);
-        $kounenStandard = $this->num($shaho['kounen_monthly_amo'] ?? 0);
-
-        $kenpoRate = $this->num($shaho['kenpo_rate'] ?? 0);
-        $kaigoIncludedRate = $this->num($shaho['kaigo_rate'] ?? 0);
-        $kounenRate = $this->num($shaho['kounen_rate'] ?? 0);
-
-        $kaigoRate = max(0.0, $kaigoIncludedRate - $kenpoRate);
-
-        $kenpo = $this->employeeInsuranceAmount($kenpoStandard, $kenpoRate);
-
-        $kaigo = 0;
-        if ($this->shouldApplyKaigo($birthday, $year, $month)) {
-            // 介護ありの場合は「健保＋介護込み料率」で本人負担合計を先に出す
-            $kenpoKaigoTotal = $this->employeeInsuranceAmount($kenpoStandard, $kaigoIncludedRate);
-
-            // 介護分は、本人負担合計から健保分を差し引く
-            $kaigo = max(0, $kenpoKaigoTotal - $kenpo);
-        }
-
-        $kounen = $this->employeeInsuranceAmount($kounenStandard, $kounenRate);
-
-        $jidouRate = $this->num($shaho['jidou_rate'] ?? 0);
-        $kodomoShienRate = $this->num($shaho['kodomo_shien'] ?? 0);
-
-        $jidouOffice = $this->officeInsuranceAmount($kounenStandard, $jidouRate);
-        $childSupportFunds = $this->employeeInsuranceAmount($kenpoStandard, $kodomoShienRate);
-
-        return [
-            'kenpo' => $kenpo,
-            'kaigo' => $kaigo,
-            'kounen' => $kounen,
-            'jidou_office' => $jidouOffice,
-            'child_support_funds' => $childSupportFunds,
-        ];
-    }
-
-    private function employeeInsuranceAmount(float $standard, float $ratePercent): int
-    {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-        $total = (int) ceil($standard * ($ratePercent / 100));
-        return (int) ceil($total / 2);
-    }
-
-    private function officeInsuranceAmount(float $standard, float $ratePercent): int
-    {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-
-        return (int) ceil($standard * ($ratePercent / 100));
     }
 }

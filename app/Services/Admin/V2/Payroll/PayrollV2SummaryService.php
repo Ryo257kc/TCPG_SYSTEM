@@ -156,15 +156,20 @@ class PayrollV2SummaryService
             }
         }
 
-        $row['transfer_amount'] = $this->transferAmount($row);
+        // 差引支給額は保存値（supply_deduction_sum）をそのまま表示する。帳票側で計算し直さない
+        // （PayrollV2UpdateService::rebuildTotals()/rebuildBonusTotals()の保存時にtransferAmount()で
+        // 確定・保存済み。ここでは読むだけ）。
+        $row['transfer_amount'] = $this->toFloat($row['supply_deduction_sum'] ?? 0);
 
         return $row;
     }
 
     /**
-     * 振込額（差引支給額）の正本計算。
+     * 振込額（差引支給額）の正本計算。保存処理（PayrollV2UpdateService）だけが呼ぶ。
      * 支給合計 - 控除合計 - 年末調整 + 立替経費精算 + 会社立替費用 - 振込残額。
      * `docs/rules/payroll_bonus/03_wage_ledger.md` の規定式と一致させること。
+     * 表示側（Controller・帳票・スタッフポータル）はこれを直接呼ばず、保存済みの
+     * supply_deduction_sumを読むこと（「帳票側で再計算しない」というルールのため）。
      * @param array<string, mixed> $summary
      */
     public function transferAmount(array $summary): float

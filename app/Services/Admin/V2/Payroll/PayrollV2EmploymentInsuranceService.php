@@ -230,10 +230,13 @@ class PayrollV2EmploymentInsuranceService
                 ]);
         }
 
+        // 元は文字化けした文字列リテラルで判定しており「保育事業部」「鍼灸整骨院」に
+        // 一度も一致していなかった（recalculate()と同じ判定のはずが、賞与側だけ化けていた）。
+        // recalculate()と同じくhex2binで安全にエンコードする。
         $isExcluded =
             $staffId === '001'
-            || mb_strpos($division, '菫晁ご莠区･ｭ驛ｨ') !== false
-            || mb_strpos($division, '骰ｼ轣ｸ謨ｴ鬪ｨ髯｢') !== false
+            || mb_strpos($division, hex2bin('e4bf9de882b2e4ba8be6a5ade983a8')) !== false // 保育事業部
+            || mb_strpos($division, hex2bin('e98dbce781b8e695b4e9aaa8e999a2')) !== false // 鍼灸整骨院
             || !$hasKoyou;
 
         $koyou = 0;
@@ -277,12 +280,8 @@ class PayrollV2EmploymentInsuranceService
 
     private function hasPayrollColumn(string $table, string $column): bool
     {
-        try {
-            return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column)
-                || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
-        } catch (\Throwable) {
-            return false;
-        }
+        return Schema::connection('sqlsrv_payroll')->hasColumn($table, $column)
+            || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
     }
 
     private function resolveCompanyId(string $staffId): string

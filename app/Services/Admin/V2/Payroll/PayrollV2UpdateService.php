@@ -10,6 +10,7 @@ class PayrollV2UpdateService
 {
     public function __construct(
         private readonly AttendanceV2ConfirmedStateService $confirmedStateService,
+        private readonly PayrollV2SummaryService $summaryService,
     ) {}
 
     /**
@@ -323,7 +324,7 @@ class PayrollV2UpdateService
             $syahoTarget = 0.0;
         }
 
-        return [
+        $totals = [
             'taxation_sum' => (int) $taxable,
             'not_taxation_sum' => (int) $nonTaxable,
             'supply_sum' => (int) round($taxable + $nonTaxable, 0),
@@ -335,6 +336,16 @@ class PayrollV2UpdateService
             'deduction_sum' => (int) round(max(0.0, $deduction), 0),
             'syaho_deduction_sum' => (int) round(max(0.0, $taxable - $syaho), 0),
         ];
+
+        // 振込額（差引支給額）はPayrollV2SummaryService::transferAmount()を正本として、
+        // ここで確定した合計と合わせて計算し、保存する（帳票側で毎回計算し直さない。
+        // 「帳票は保存値のみ」というルールに合わせて2026年8月に復活させた）。
+        $totals['supply_deduction_sum'] = (int) round(
+            $this->summaryService->transferAmount(array_merge($row, $totals)),
+            0
+        );
+
+        return $totals;
     }
 
     /**
@@ -356,7 +367,7 @@ class PayrollV2UpdateService
         $syahoSum = $isOutsource ? 0.0 : $this->socialInsuranceSum($row);
         $deductionSum = $this->deductionSum($row, $syahoSum);
 
-        return [
+        $totals = [
             'taxation_sum' => (int) $taxationSum,
             'not_taxation_sum' => (int) $notTaxationSum,
             'supply_sum' => (int) $supplySum,
@@ -365,6 +376,14 @@ class PayrollV2UpdateService
             'deduction_sum' => (int) round($deductionSum, 0),
             'syaho_deduction_sum' => (int) round(max(0.0, $taxationSum - $syahoSum), 0),
         ];
+
+        // rebuildTotals()と同じ理由。賞与も差引支給額を保存する。
+        $totals['supply_deduction_sum'] = (int) round(
+            $this->summaryService->transferAmount(array_merge($row, $totals)),
+            0
+        );
+
+        return $totals;
     }
 
     /** @param array<string,mixed> $row */
