@@ -15,12 +15,9 @@ class ApplyController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.apply.index', [
-            'displayName' => $this->resolveDisplayName($staffId),
+            'displayName' => $this->resolveDisplayName($this->staffPortalStaffRow($staffId), $staffId),
         ]);
     }
 }

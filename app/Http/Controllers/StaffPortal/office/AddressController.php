@@ -16,9 +16,6 @@ class AddressController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $keyword = trim((string) $request->query('q', ''));
         $selectedCategory = trim((string) $request->query('category', ''));

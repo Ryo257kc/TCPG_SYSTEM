@@ -166,15 +166,15 @@ Route::prefix('admin')->group(function (): void {
 });
 
 // staff_portal 側の大枠開始
-Route::prefix('staff')->group(function (): void {
+Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::get('/', [AuthController::class, 'dashboard'])->name('staff_portal.dashboard');
     Route::get('/dashboard', [AuthController::class, 'dashboard'])->name('dashboard');
-    Route::get('/admin-login', [AuthController::class, 'adminLogin'])->name('staff_portal.admin_login');
+    Route::get('/admin-login', [AuthController::class, 'adminLogin'])->withoutMiddleware('staff.auth')->name('staff_portal.admin_login');
 
-    Route::get('/login', [AuthController::class, 'index'])->name('login.portal');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.portal.submit');
-    Route::get('/password/change', [AuthController::class, 'passwordChange'])->name('staff_portal.password_change');
-    Route::post('/password/change', [AuthController::class, 'updatePassword'])->name('staff_portal.password_change.update');
+    Route::get('/login', [AuthController::class, 'index'])->withoutMiddleware('staff.auth')->name('login.portal');
+    Route::post('/login', [AuthController::class, 'login'])->withoutMiddleware('staff.auth')->name('login.portal.submit');
+    Route::get('/password/change', [AuthController::class, 'passwordChange'])->withoutMiddleware('staff.auth')->name('staff_portal.password_change');
+    Route::post('/password/change', [AuthController::class, 'updatePassword'])->withoutMiddleware('staff.auth')->name('staff_portal.password_change.update');
 
     Route::get('/attendance/monthly', [AttendanceController::class, 'attendanceMonthly'])->name('attendance.monthly');
     Route::post('/attendance/monthly/apply', [AttendanceController::class, 'attendanceMonthlyApply'])->name('attendance.monthly.apply');

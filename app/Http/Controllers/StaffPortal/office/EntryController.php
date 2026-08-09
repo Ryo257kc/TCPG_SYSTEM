@@ -23,9 +23,6 @@ class EntryController extends Controller
         $staffId = (string) $request->session()->get('staff_id', '');
         $staffRow = $this->staffPortalStaffRow($staffId);
         $is_admin = $this->isAdmin($staffRow);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $targetMonth = $this->targetMonth($request);
         $selectedStore = trim((string) $request->query('store_name', ''));
@@ -207,9 +204,6 @@ class EntryController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $data = $request->validate(
             [
@@ -325,9 +319,6 @@ class EntryController extends Controller
     public function delete(Request $request): JsonResponse|RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],
@@ -363,9 +354,6 @@ class EntryController extends Controller
     public function closeMonthly(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
@@ -406,9 +394,6 @@ class EntryController extends Controller
     public function unlockMonthly(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         if (!$this->isAdmin($staffRow)) {

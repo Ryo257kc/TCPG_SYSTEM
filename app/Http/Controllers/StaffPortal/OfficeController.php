@@ -23,9 +23,6 @@ class OfficeController extends Controller
     public function salesMenu(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $companyRows = $this->companyService->list('')['rows'] ?? [];
         $companyOptions = array_values(array_filter(array_map(
@@ -45,9 +42,6 @@ class OfficeController extends Controller
     public function sales(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $companyRows = $this->companyService->list('')['rows'] ?? [];
         $companyOptions = array_values(array_filter(array_map(
@@ -74,9 +68,6 @@ class OfficeController extends Controller
     public function salesPrint(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $companyRows = $this->companyService->list('')['rows'] ?? [];
         $companyOptions = array_values(array_filter(array_map(
@@ -112,9 +103,6 @@ class OfficeController extends Controller
     public function uncollectedReceivables(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
@@ -129,7 +117,7 @@ class OfficeController extends Controller
             $companyRows
         ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
 
-        $remainingAmountSql = '(COALESCE(detail.claim_amount, 0) + COALESCE(detail.returned_amount, 0) + COALESCE(detail.adjustment_amount, 0) - COALESCE(detail.payment_amount, 0))';
+        $remainingAmountSql = $this->remainingAmountSql();
 
         $rowsQuery = $this->receiptDetailBaseQuery()
             ->select([
@@ -210,9 +198,6 @@ class OfficeController extends Controller
     public function uncollectedReceivablesPrint(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
@@ -225,7 +210,7 @@ class OfficeController extends Controller
             $monthEnd = Carbon::createFromFormat('Y-m', $paymentMonth)->endOfMonth();
         }
 
-        $remainingAmountSql = '(COALESCE(detail.claim_amount, 0) + COALESCE(detail.returned_amount, 0) + COALESCE(detail.adjustment_amount, 0) - COALESCE(detail.payment_amount, 0))';
+        $remainingAmountSql = $this->remainingAmountSql();
 
         $rowsQuery = $this->receiptDetailBaseQuery()
             ->leftJoin('dbo.mx_journal_entries as payment_entry', function ($join): void {
@@ -302,9 +287,6 @@ class OfficeController extends Controller
     public function uncollectedReceivablesDetailPrint(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
@@ -317,7 +299,7 @@ class OfficeController extends Controller
             $monthEnd = Carbon::createFromFormat('Y-m', $paymentMonth)->endOfMonth();
         }
 
-        $remainingAmountSql = '(COALESCE(detail.claim_amount, 0) + COALESCE(detail.returned_amount, 0) + COALESCE(detail.adjustment_amount, 0) - COALESCE(detail.payment_amount, 0))';
+        $remainingAmountSql = $this->remainingAmountSql();
 
         $rowsQuery = $this->receiptDetailBaseQuery()
             ->leftJoin('dbo.mx_journal_entries as payment_entry', function ($join): void {
@@ -402,9 +384,6 @@ class OfficeController extends Controller
     public function receipt(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.office.receipt.index', $this->commonViewData($request, []));
     }
@@ -414,10 +393,17 @@ class OfficeController extends Controller
     public function officeMenu(Request $request): RedirectResponse|View
     {
         $staffId = (string) session('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください。');
-        }
 
         return view('staff_portal.office.office_menu.index', $this->commonViewData($request, []));
+    }
+
+    /**
+     * 未収入金の残額計算式（正本）。uncollectedReceivables/uncollectedReceivablesPrint/
+     * uncollectedReceivablesDetailPrintの3箇所に同じ文字列がそのままコピーされていたのを
+     * ここ1箇所にまとめた。
+     */
+    private function remainingAmountSql(): string
+    {
+        return '(COALESCE(detail.claim_amount, 0) + COALESCE(detail.returned_amount, 0) + COALESCE(detail.adjustment_amount, 0) - COALESCE(detail.payment_amount, 0))';
     }
 }

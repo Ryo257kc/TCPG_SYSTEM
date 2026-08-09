@@ -22,9 +22,6 @@ class StoreSalesController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.admin.sales.index', $this->commonViewData($request, []));
     }
@@ -32,9 +29,6 @@ class StoreSalesController extends Controller
     public function personal(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.admin.sales.personal', $this->commonViewData($request, $this->personalSalesViewData($request)));
     }
@@ -42,9 +36,6 @@ class StoreSalesController extends Controller
     public function consignment(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.admin.sales.consignment', $this->commonViewData($request, $this->consignmentSalesViewData($request)));
     }
@@ -52,9 +43,6 @@ class StoreSalesController extends Controller
     public function daily(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.admin.sales.daily', $this->commonViewData($request, $this->dailySalesViewData($request)));
     }
@@ -62,9 +50,6 @@ class StoreSalesController extends Controller
     public function monthly(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.admin.sales.monthly', $this->commonViewData($request, $this->monthlySalesViewData($request)));
     }

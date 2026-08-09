@@ -22,9 +22,6 @@ class AttendanceController extends Controller
     public function attendanceMonthly(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -65,9 +62,6 @@ class AttendanceController extends Controller
     public function attendanceMonthlyApply(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -91,9 +85,6 @@ class AttendanceController extends Controller
     public function attendancePunch(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $today = now('Asia/Tokyo');
         $card = DB::connection('sqlsrv')
@@ -131,9 +122,6 @@ class AttendanceController extends Controller
     public function attendancePunchStore(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $columnMap = [
             'start' => 'actual_start',
@@ -177,9 +165,6 @@ class AttendanceController extends Controller
     public function attendanceEdit(Request $request, int $timeNo): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $card = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
@@ -226,9 +211,6 @@ class AttendanceController extends Controller
     public function attendanceUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $card = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
@@ -301,8 +283,9 @@ class AttendanceController extends Controller
     public function managementApprove(Request $request, string $staffId): RedirectResponse
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
-        if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+
+        if (!$this->isStoreManager($this->staffPortalStaffRow($loginStaffId))) {
+            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -326,8 +309,9 @@ class AttendanceController extends Controller
     public function managementRemand(Request $request, string $staffId): RedirectResponse
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
-        if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+
+        if (!$this->isStoreManager($this->staffPortalStaffRow($loginStaffId))) {
+            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
@@ -355,9 +339,6 @@ class AttendanceController extends Controller
     public function punchList(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedDate = $this->resolveDate((string) $request->query('date', now('Asia/Tokyo')->format('Y-m-d')));
 
@@ -400,8 +381,9 @@ class AttendanceController extends Controller
     public function management(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+
+        if (!$this->isStoreManager($this->staffPortalStaffRow($staffId))) {
+            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
@@ -499,9 +481,6 @@ class AttendanceController extends Controller
     public function paidLeave(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -546,8 +525,9 @@ class AttendanceController extends Controller
     public function managementDetail(Request $request, string $staffId): RedirectResponse|View
     {
         $loginStaffId = (string) $request->session()->get('staff_id', '');
-        if ($loginStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
+
+        if (!$this->isStoreManager($this->staffPortalStaffRow($loginStaffId))) {
+            return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
         }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));

@@ -19,9 +19,6 @@ class PaymentConfirmationController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $targetMonth = $this->targetMonth($request);
         $selectedBankAccount = trim((string) $request->query('bank_account', ''));
@@ -328,9 +325,6 @@ class PaymentConfirmationController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $data = $request->validate([
             'journal_entry_id' => ['nullable', 'integer'],
@@ -453,11 +447,6 @@ class PaymentConfirmationController extends Controller
     public function delete(Request $request): JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return response()->json([
-                'message' => 'ログインしてください。',
-            ], 401);
-        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],

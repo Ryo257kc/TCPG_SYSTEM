@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin.auth' => \App\Http\Middleware\AdminAuthenticate::class,
+            'staff.auth' => \App\Http\Middleware\StaffPortalAuthenticate::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

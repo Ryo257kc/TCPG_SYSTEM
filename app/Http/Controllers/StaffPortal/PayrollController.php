@@ -34,16 +34,11 @@ class PayrollController extends Controller
     private function renderPayrollPage(Request $request, bool $isBonus): RedirectResponse|View
     {
         $sessionStaffId = (string) $request->session()->get('staff_id', '');
-        if ($sessionStaffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください。');
-        }
 
         $staffRow = $this->getStaffRow($sessionStaffId);
-        $isPayrollManager = $this->resolveIsPayrollManager($staffRow);
-        $targetStaffId = $this->resolveTargetStaffId($request, $sessionStaffId, $isPayrollManager);
+        $targetStaffId = $sessionStaffId;
 
         $connection = DB::connection('sqlsrv_payroll');
-        $staffOptions = $isPayrollManager ? $this->getStaffOptions() : [];
         $visibleFrom = $this->payrollVisibleFromDate();
         $today = now('Asia/Tokyo')->toDateString();
 
@@ -82,10 +77,7 @@ class PayrollController extends Controller
         $selectedRowIndex = $this->resolveSelectedRowIndex((string) $request->query('row', '0'), $rows->count());
         $selectedRow = $rows->get($selectedRowIndex);
 
-        $targetStaffRow = $targetStaffId === $sessionStaffId
-            ? $staffRow
-            : $this->getStaffRow($targetStaffId);
-        $organization = $this->resolveStaffOrganization($targetStaffRow);
+        $organization = $this->resolveStaffOrganization($staffRow);
         $allowanceLabels = $this->resolveAllowanceLabels($organization['company_code'] ?? null);
         $allowanceAmountKeysBySlot = $this->resolveAllowanceAmountKeysBySlot($organization['company_code'] ?? null);
         $allowanceSlotOrder = $this->resolveAllowanceSlotOrder($organization['company_code'] ?? null);
@@ -96,17 +88,14 @@ class PayrollController extends Controller
             'isBonus' => $isBonus,
             'displayName' => $this->resolveDisplayName($staffRow, $sessionStaffId),
             'isAdmin' => $this->resolveIsAdmin($staffRow),
-            'isPayrollManager' => $isPayrollManager,
             'selectedMonth' => $selectedMonth,
             'availableMonths' => $availableMonths,
-            'staffOptions' => $staffOptions,
             'rawRows' => $rawRows->all(),
             'rows' => $rows->all(),
             'selectedRow' => $selectedRow,
             'selectedRowIndex' => $selectedRowIndex,
-            'targetStaffId' => $targetStaffId,
-            'targetStaffName' => (string) ($targetStaffRow['staff_name'] ?? $targetStaffId),
-            'targetTaxCategory' => (string) ($targetStaffRow['tax_amount'] ?? ''),
+            'targetStaffName' => (string) ($staffRow['staff_name'] ?? $sessionStaffId),
+            'targetTaxCategory' => (string) ($staffRow['tax_amount'] ?? ''),
             'companyName' => $organization['company_name'],
             'companyCode' => $organization['company_code'],
             'storeName' => $organization['store_name'],
@@ -132,37 +121,12 @@ class PayrollController extends Controller
                     'store_code' => (string) ($row->section ?? ''),
                     'tax_category' => (string) ($row->tax_category ?? ''),
                     'tax_amount' => (string) ($row->tax_amount ?? ''),
-                    'is_store_manager' => (int) ($row->is_store_management_user ?? 0),
-                    'is_admin' => (int) ($row->is_store_management_user ?? 0),
+                    'is_admin' => (int) ($row->is_admin ?? 0),
                 ];
             }
         }
 
         return null;
-    }
-
-    private function getStaffOptions(): array
-    {
-        if ($this->useMxStaffTable()) {
-            return DB::connection('sqlsrv')
-                ->table('dbo.mx_staffs as st')
-                ->whereNotNull('st.staff_id')
-                ->whereRaw("LTRIM(RTRIM(st.staff_id)) <> ''")
-                ->orderByRaw('LTRIM(RTRIM(st.staff_id)) asc')
-                ->get([
-                    DB::raw('LTRIM(RTRIM(st.staff_id)) as staff_id'),
-                    'st.staff_name',
-                ])
-                ->map(fn($r) => [
-                    'staff_id' => (string) ($r->staff_id ?? ''),
-                    'staff_name' => (string) ($r->staff_name ?? ''),
-                ])
-                ->filter(fn($r) => $r['staff_id'] !== '')
-                ->values()
-                ->all();
-        }
-
-        return [];
     }
 
     private function useMxStaffTable(): bool
@@ -183,17 +147,6 @@ class PayrollController extends Controller
         return $cached;
     }
 
-    private function resolveTargetStaffId(Request $request, string $sessionStaffId, bool $isPayrollManager): string
-    {
-        if (!$isPayrollManager) {
-            return $sessionStaffId;
-        }
-
-        $queryStaffId = trim((string) $request->query('staff_id', ''));
-
-        return $queryStaffId !== '' ? $queryStaffId : $sessionStaffId;
-    }
-
     private function resolveDisplayName(?array $staffRow, string $fallback): string
     {
         $name = (string) ($staffRow['staff_name'] ?? '');
@@ -204,11 +157,6 @@ class PayrollController extends Controller
     private function resolveIsAdmin(?array $staffRow): bool
     {
         return ((int) ($staffRow['is_admin'] ?? 0)) === 1;
-    }
-
-    private function resolveIsPayrollManager(?array $staffRow): bool
-    {
-        return ((int) ($staffRow['is_store_manager'] ?? 0)) === 1;
     }
 
     private function resolveMonth(?string $month, ?string $fallback = null): string

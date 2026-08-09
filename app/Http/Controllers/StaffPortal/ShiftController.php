@@ -18,9 +18,6 @@ class ShiftController extends Controller
     public function adminShiftChange(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -115,9 +112,6 @@ class ShiftController extends Controller
     public function officeAttendance(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -142,9 +136,6 @@ class ShiftController extends Controller
     public function adminShiftUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         if (!$this->isStoreManager($this->staffPortalStaffRow($staffId))) {
             return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');
@@ -202,9 +193,6 @@ class ShiftController extends Controller
     public function officeAttendanceUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
         if ($this->isTimeCardConfirmed($timeNo, $staffId)) {
@@ -258,9 +246,6 @@ class ShiftController extends Controller
     public function adminBasicShift(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -345,9 +330,6 @@ class ShiftController extends Controller
     public function adminBasicShiftUpdate(Request $request, int $shiftNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         if (!$this->canManageBasicShift($this->staffPortalStaffRow($staffId))) {
             return redirect()->route('dashboard')->with('statusMessage', 'Admin access only.');

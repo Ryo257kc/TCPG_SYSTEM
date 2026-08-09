@@ -16,9 +16,6 @@ class MyPageController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $staffRow = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
@@ -34,9 +31,6 @@ class MyPageController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $action = (string) $request->input('_action', '');
         $updates = [];

@@ -20,9 +20,6 @@ class StoreDailyReportController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         return view('staff_portal.office.store_daily_report.index', $this->commonViewData($request, []));
     }
@@ -32,9 +29,6 @@ class StoreDailyReportController extends Controller
     {
         $staffId = $this->staffPortalStaffId($request);
 
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
         $staffRow = $this->staffPortalStaffRow($staffId);
         $is_admin = $this->isAdmin($staffRow);
 
@@ -137,9 +131,6 @@ class StoreDailyReportController extends Controller
     public function dailySummaryMonthlyPrint(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
@@ -182,9 +173,6 @@ class StoreDailyReportController extends Controller
     public function requestHistory(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $selectedStatus = $request->has('status_filter')
             ? trim((string) $request->query('status_filter', ''))
@@ -233,9 +221,6 @@ class StoreDailyReportController extends Controller
     public function returnNote(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $targetYear = (int) $request->query('target_year', now()->format('Y'));
         if ($targetYear < 2000 || $targetYear > 2100) {
@@ -315,9 +300,6 @@ class StoreDailyReportController extends Controller
     public function saveReturnNote(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $henrei_no = trim((string) $request->input('henrei_no', ''));
         $入金日 = $this->normalizeDateValue($request->input('入金日'));
@@ -352,9 +334,6 @@ class StoreDailyReportController extends Controller
     public function otherList(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
@@ -421,9 +400,6 @@ class StoreDailyReportController extends Controller
     public function otherListPrint(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
@@ -481,9 +457,6 @@ class StoreDailyReportController extends Controller
     public function itemSummary(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
@@ -557,9 +530,6 @@ class StoreDailyReportController extends Controller
     public function saveRequestHistory(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $対象日 = trim((string) $request->input('original_対象日', ''));
         $内容 = trim((string) $request->input('original_内容', ''));
@@ -595,9 +565,6 @@ class StoreDailyReportController extends Controller
     public function dailySummaryDetail(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
@@ -847,9 +814,6 @@ class StoreDailyReportController extends Controller
     public function dailySummaryPrint(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
@@ -1114,9 +1078,6 @@ class StoreDailyReportController extends Controller
     public function saveDailySummaryHeader(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         if ($dailySummaryId === '') {
@@ -1155,9 +1116,6 @@ class StoreDailyReportController extends Controller
     public function saveDailySummarySummary(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         $targetMonth = trim((string) $request->input('target_month', now()->format('Y-m')));
@@ -1215,9 +1173,6 @@ class StoreDailyReportController extends Controller
     public function saveDailySummaryExpense(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         if ($dailySummaryId === '') {
@@ -1344,9 +1299,6 @@ class StoreDailyReportController extends Controller
     public function saveMonthlyWindowInput(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
@@ -1388,9 +1340,6 @@ class StoreDailyReportController extends Controller
     public function closeDailySummaryMonthly(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $data = $request->validate([
             'daily_summary_id' => ['required', 'string'],
@@ -1474,9 +1423,6 @@ class StoreDailyReportController extends Controller
     public function unlockDailySummaryMonthly(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         if (!$this->isAdmin($staffRow)) {
@@ -1515,9 +1461,6 @@ class StoreDailyReportController extends Controller
     public function addDailySummaryPatient(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         $targetDate = $this->normalizeDateValue($request->input('日付'));
@@ -1569,9 +1512,6 @@ class StoreDailyReportController extends Controller
     public function bulkCheckDailySummaryDetail(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         if ($dailySummaryId === '') {
@@ -1629,9 +1569,6 @@ class StoreDailyReportController extends Controller
     public function saveDailySummaryDetail(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         $patientDailyReportNo = trim((string) $request->input('No', ''));

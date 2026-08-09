@@ -16,9 +16,6 @@ class DocumentsController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
-        if ($staffId === '') {
-            return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください');
-        }
 
         return view('staff_portal.admin.documents.index', [
             'displayName' => $this->resolveDisplayName($staffId),

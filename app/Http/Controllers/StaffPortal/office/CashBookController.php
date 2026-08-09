@@ -21,9 +21,6 @@ class CashBookController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
         $staffRow = $this->staffPortalStaffRow($staffId);
         $is_admin = $this->isAdmin($staffRow);
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
@@ -239,9 +236,6 @@ class CashBookController extends Controller
     public function unlockMonthly(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         if (!$this->isAdmin($staffRow)) {
@@ -272,9 +266,6 @@ class CashBookController extends Controller
     public function closeMonthly(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
@@ -422,9 +413,6 @@ class CashBookController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $data = $request->validate([
             'journal_entry_id' => ['nullable', 'integer'],
@@ -566,9 +554,6 @@ class CashBookController extends Controller
     public function delete(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
 
         $data = $request->validate([
             'journal_entry_id' => ['required', 'integer'],
