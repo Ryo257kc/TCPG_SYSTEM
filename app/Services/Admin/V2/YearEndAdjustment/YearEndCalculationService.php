@@ -39,12 +39,11 @@ class YearEndCalculationService
         $shotokuDeduction = $this->salaryIncomeAfterDeduction($bonusKyuyoSum, $targetYear);
 
         // 基礎控除は合計所得金額に応じた段階制。年度で表が変わるため targetYear で分岐する
-        // basicDeductionAmount() を使う。mx_nen_tyo.kiso_koujyo に既存値があれば、それを
-        // 優先する（年調是正などで過去に手入力・確定した金額を上書きしないため）。
-        $kisoKoujyo = $this->money($nenTyo->kiso_koujyo ?? 0);
-        if ($kisoKoujyo <= 0) {
-            $kisoKoujyo = $this->basicDeductionAmount($shotokuDeduction, $targetYear);
-        }
+        // basicDeductionAmount() を使う。年調是正（過去年分の再計算）はtargetYearの分岐で
+        // その年の表が使われるので別途対応済み。確定済みデータの保護はedit_lock（行単位、
+        // 確定済みなら再計算自体させない）で行うため、ここでkiso_koujyoの既存値をフィールド
+        // 単位で保護する必要はない（むしろ同期データ等の古い値が残り続ける事故のもとだった）。
+        $kisoKoujyo = $this->basicDeductionAmount($shotokuDeduction, $targetYear);
 
         // 配偶者控除・配偶者特別控除：配偶者の合計所得金額(haigu_shotoku、本人が申告した値)と
         // 本人の合計所得金額から、国税庁の金額表で計算する（配偶者控除の額＝haigu_deduction／
