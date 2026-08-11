@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\V2;
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Master\CompanyV2Service;
 use App\Services\Admin\V2\YearEndAdjustment\YearEndCalculationService;
+use App\Services\YearEnd\CertificateFileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,7 +19,14 @@ class YearEndAdjustmentV2Controller extends Controller
     public function __construct(
         private readonly YearEndCalculationService $calculationService,
         private readonly CompanyV2Service $companyService,
+        private readonly CertificateFileService $certificateFileService,
     ) {}
+
+    /**
+     * 配偶者はmx_fuyoに続柄「夫/妻/配偶者」の行として保存する（帳票生成側の
+     * 配偶者判定・スタッフ側YearEndApplicationControllerと同じ条件）。
+     */
+    private const SPOUSE_RELATIONSHIPS = ['夫', '妻', '配偶者'];
 
     /** 保険料控除申告書：各欄が1ページに収まる行数（超過分は複製ページへ回す） */
     private const HOKEN_ROW_CAPACITY = [
@@ -74,6 +82,23 @@ class YearEndAdjustmentV2Controller extends Controller
 
                 $staffId = trim((string) ($application->staff_id ?? ''));
                 $staffDetail = $staffDetails[$staffId] ?? ['staff_name' => '', 'nyu_date' => '', 'tai_date' => ''];
+
+                // 下書きは「対象者作成直後で未着手」と「入力途中でまだ提出前」の両方を含み
+                // 一覧上で見分けがつかなかったため、いずれかのセクションを一度でも保存済み
+                // （＝changed系カラムのどれかがNULLでない）かどうかで下書きの内訳を分ける。
+                $hasStartedAnySection = $application->personal_info_changed !== null
+                    || $application->dependents_changed !== null
+                    || $application->spouse_changed !== null
+                    || $application->insurance_deduction_changed !== null
+                    || $application->housing_loan_changed !== null
+                    || $application->previous_job_withholding_changed !== null;
+                $statusLabel = $this->statusLabel($status);
+                $statusBadgeKey = $status;
+                if ($status === 'draft') {
+                    $statusLabel .= $hasStartedAnySection ? '（作業中）' : '（未着手）';
+                    $statusBadgeKey = $hasStartedAnySection ? 'draft-started' : 'draft-empty';
+                }
+
                 $rows[] = [
                     'application_id' => (string) ($application->application_id ?? ''),
                     'staff_id' => $staffId,
@@ -81,7 +106,8 @@ class YearEndAdjustmentV2Controller extends Controller
                     'nyu_date' => $staffDetail['nyu_date'],
                     'tai_date' => $staffDetail['tai_date'],
                     'status' => $status,
-                    'status_label' => $this->statusLabel($status),
+                    'status_label' => $statusLabel,
+                    'status_badge_key' => $statusBadgeKey,
                     'can_delete' => $status === 'draft',
                     'year_end_adjustment' => $this->bitLabel($application->year_end_adjustment ?? null),
                     'personal_info_changed' => $this->bitLabel($application->personal_info_changed ?? null),
@@ -153,7 +179,29 @@ class YearEndAdjustmentV2Controller extends Controller
             'kisoBracketOptions' => $this->kisoBracketOptionsForView($targetYear),
             'fuyoRows' => $this->fuyoRows($staffId, $targetYear),
             'hokenRows' => $this->hokenRows($staffId, $targetYear),
+            'spouseFuyoRow' => $spouseFuyoRow = $this->spouseFuyoRow($staffId, $targetYear),
+            'spouseComputedIncomePreview' => $spouseFuyoRow !== null && $spouseFuyoRow['fuyo_shunyu'] !== null
+                ? $this->calculationService->salaryIncomeAfterDeduction((float) $spouseFuyoRow['fuyo_shunyu'], $targetYear)
+                : null,
         ]);
+    }
+
+    /**
+     * 配偶者はmx_fuyoに続柄「夫/妻/配偶者」の行として保存されている（スタッフ側と同じ判定）。
+     * ステージングを廃止したため、実データから直接取得する。
+     *
+     * @return array<string, mixed>|null
+     */
+    private function spouseFuyoRow(string $staffId, int $targetYear): ?array
+    {
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_fuyo')
+            ->where('staff_id', $staffId)
+            ->whereYear('registration_date', $targetYear)
+            ->whereIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
+            ->first();
+
+        return $row !== null ? (array) $row : null;
     }
 
     /**
@@ -1897,7 +1945,12 @@ class YearEndAdjustmentV2Controller extends Controller
             $fileUrl = $path;
             $urlPath = (string) parse_url($path, PHP_URL_PATH);
             $extension = strtolower(pathinfo($urlPath, PATHINFO_EXTENSION));
+        } elseif ($this->certificateFileService->exists($path)) {
+            $fileUrl = route('admin.work.year_end_adjustments.hoken.certificate_file', ['applicationId' => $applicationId, 'hokenNo' => $hokenNo]);
+            $extension = $this->certificateFileService->extension($path);
         } else {
+            // 旧保存方式（public_path直下）の残存ファイル向けフォールバック。
+            // 新規アップロードは必ずlocalディスク（storage/app/private）へ保存される。
             $relativePath = ltrim(str_replace('\\', '/', $path), '/');
             $fullPath = public_path($relativePath);
             abort_unless(is_file($fullPath), 404);
@@ -1914,6 +1967,154 @@ class YearEndAdjustmentV2Controller extends Controller
             'hokenNo' => $hokenNo,
             'targetYear' => $targetYear,
         ]);
+    }
+
+    public function hokenCertificateFile(int $applicationId, int $hokenNo)
+    {
+        [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+        $row = $this->hokenRowOrFail($hokenNo, $staffId, $targetYear);
+        $path = trim((string) ($row->certificate_file_path ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+        $downloadName = trim((string) ($row->certificate_original_name ?? '')) ?: basename($path);
+
+        return $this->certificateFileService->response($path, $downloadName);
+    }
+
+    /**
+     * 氏名変更・住所変更の証憑はstaff_year_end_applications（引き続きステージング）から、
+     * 障害者手帳の証憑はmx_nen_tyo（直書き化）から配信する。
+     */
+    public function personalInfoCertificateFile(int $applicationId, string $type)
+    {
+        if ($type === 'disability') {
+            $application = DB::connection('sqlsrv_payroll')
+                ->table('dbo.staff_year_end_applications')
+                ->where('application_id', $applicationId)
+                ->first();
+            abort_unless($application, 404);
+
+            $nenTyo = $this->nenTyoRowForApplication($application);
+            abort_unless($nenTyo, 404);
+
+            $path = trim((string) ($nenTyo->disability_certificate_file_path ?? ''));
+            abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+            $downloadName = trim((string) ($nenTyo->disability_certificate_original_name ?? '')) ?: basename($path);
+
+            return $this->certificateFileService->response($path, $downloadName);
+        }
+
+        $columnPrefix = match ($type) {
+            'address' => 'address_change_certificate',
+            'name' => 'name_change_certificate',
+            default => abort(404),
+        };
+
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        $path = trim((string) ($application->{$columnPrefix . '_file_path'} ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+        $downloadName = trim((string) ($application->{$columnPrefix . '_original_name'} ?? '')) ?: basename($path);
+
+        return $this->certificateFileService->response($path, $downloadName);
+    }
+
+    public function previousJobCertificateFile(int $applicationId)
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        $nenTyo = $this->nenTyoRowForApplication($application);
+        abort_unless($nenTyo, 404);
+
+        $path = trim((string) ($nenTyo->previous_job_certificate_file_path ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+        $downloadName = trim((string) ($nenTyo->previous_job_certificate_original_name ?? '')) ?: basename($path);
+
+        return $this->certificateFileService->response($path, $downloadName);
+    }
+
+    public function housingLoanCertificateFile(int $applicationId)
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        $nenTyo = $this->nenTyoRowForApplication($application);
+        abort_unless($nenTyo, 404);
+
+        $path = trim((string) ($nenTyo->housing_loan_certificate_file_path ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+        $downloadName = trim((string) ($nenTyo->housing_loan_certificate_original_name ?? '')) ?: basename($path);
+
+        return $this->certificateFileService->response($path, $downloadName);
+    }
+
+    /** 作成はしない（GETの証憑配信で副作用を起こさないため）。無ければnull。 */
+    private function nenTyoRowForApplication(object $application): ?object
+    {
+        $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
+        if ($nenTyoNo > 0) {
+            $row = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo')->where('nen_tyo_no', $nenTyoNo)->first();
+            if ($row !== null) {
+                return $row;
+            }
+        }
+
+        $staffId = trim((string) ($application->staff_id ?? ''));
+        $targetYear = (int) ($application->target_year ?? date('Y'));
+
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('staff_id', $staffId)
+            ->whereYear('year_end', $targetYear)
+            ->orderBy('nen_tyo_no')
+            ->first();
+    }
+
+    /**
+     * mx_fuyoの障害者手帳証憑を直接配信する（ステージング廃止に伴う置き換え）。
+     * applicationIdから対象スタッフ・年を特定し、そのfuyo_noが同一スタッフ・年の
+     * ものであることを確認してから配信する（他スタッフの証憑を覗けないように）。
+     */
+    public function fuyoCertificateFile(int $applicationId, int $fuyoNo)
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        $staffId = trim((string) ($application->staff_id ?? ''));
+        $targetYear = (int) ($application->target_year ?? date('Y'));
+
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_fuyo')
+            ->where('fuyo_no', $fuyoNo)
+            ->where('staff_id', $staffId)
+            ->whereYear('registration_date', $targetYear)
+            ->first();
+        abort_unless($row, 404);
+
+        $path = trim((string) ($row->failure_certificate_file_path ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+
+        $downloadName = trim((string) ($row->failure_certificate_original_name ?? '')) ?: basename($path);
+
+        return $this->certificateFileService->response($path, $downloadName);
     }
 
     public function createTargets(Request $request): RedirectResponse
@@ -1985,6 +2186,132 @@ class YearEndAdjustmentV2Controller extends Controller
         return redirect()
             ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
             ->with('status', "{$targetYear}年の対象者を作成しました。追加 {$created}件 / 作成済 {$skipped}件 / 年調リンク補完 {$linked}件");
+    }
+
+    public function confirmApplication(int $applicationId): RedirectResponse
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        if (trim((string) $application->status) !== 'submitted') {
+            return redirect()
+                ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+                ->with('status', '提出済みの申請のみ確認済みにできます。');
+        }
+
+        $staffId = trim((string) $application->staff_id);
+        $targetYear = (int) ($application->target_year ?? date('Y'));
+
+        // 保険料控除はステージングを介さずmx_hokenへ直書きされているため、確認済みボタンで
+        // 対象スタッフ・年のmx_hoken行を一括でchecked_flag=1にする（既存の未使用カラムを再利用）。
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_hoken')
+            ->where('insurance_staff_no', $staffId)
+            ->whereYear('insurance_year', $targetYear)
+            ->update(['checked_flag' => 1]);
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '確認済みにしました。');
+    }
+
+    public function returnApplication(Request $request, int $applicationId): RedirectResponse
+    {
+        $values = $request->validate([
+            'return_note' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        if (trim((string) $application->status) !== 'submitted') {
+            return redirect()
+                ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+                ->with('status', '提出済みの申請のみ差し戻せます。');
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->update([
+                'status' => 'returned',
+                'return_note' => $values['return_note'],
+            ]);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '差し戻しました。');
+    }
+
+    /**
+     * 確認済みの申請を実データへ反映する。扶養・配偶者(mx_fuyo)・保険料控除(mx_hoken)・
+     * 住宅ローン控除/前職/本人状況フラグ(mx_nen_tyo)は、スタッフの申告時点で既に実データへ
+     * 直接書き込まれているため、ここでの反映対象はmx_staffs（氏名・住所・生年月日、
+     * 履歴を持たない単一マスタのため唯一ステージングを経由する）のみ。
+     */
+    public function reflectApplication(int $applicationId): RedirectResponse
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        if (trim((string) $application->status) !== 'confirmed') {
+            return redirect()
+                ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+                ->with('status', '確認済みの申請のみ反映できます。');
+        }
+
+        $staffId = trim((string) $application->staff_id);
+        $personalInfoChanged = (int) ($application->personal_info_changed ?? 0) === 1;
+        $newAddress = trim((string) ($application->new_address ?? ''));
+        $newStaffName = trim((string) ($application->new_staff_name ?? ''));
+
+        if ($personalInfoChanged && ($newAddress !== '' || $newStaffName !== '')) {
+            $staffUpdate = [];
+            if ($newAddress !== '') {
+                $staffUpdate['address'] = $newAddress;
+                $staffUpdate['address_furi'] = trim((string) ($application->new_address_furi ?? ''));
+            }
+            if ($newStaffName !== '') {
+                $staffUpdate['staff_name'] = $newStaffName;
+                $staffUpdate['staff_name_furi'] = trim((string) ($application->new_staff_name_furi ?? ''));
+            }
+            if ($application->new_birthday !== null) {
+                $staffUpdate['birthday'] = $application->new_birthday;
+            }
+            $staffUpdate['head_house'] = trim((string) ($application->setai_nushi ?? ''));
+            $staffUpdate['relationship'] = trim((string) ($application->setai_zoku_gara ?? ''));
+
+            DB::connection('sqlsrv')
+                ->table('dbo.mx_staffs')
+                ->where('staff_id', $staffId)
+                ->update($staffUpdate);
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->update([
+                'status' => 'reflected',
+                'reflected_at' => now(),
+            ]);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '実データへ反映しました。');
     }
 
     public function updateStatus(Request $request): RedirectResponse
@@ -2226,6 +2553,268 @@ class YearEndAdjustmentV2Controller extends Controller
     }
 
     /**
+     * 住宅ローン控除をmx_nen_tyoへ直接保存する（保険と同じ、確認しながらその場で
+     * 修正できる専用フォーム）。
+     */
+    public function updateHousingLoanNenTyo(Request $request, int $applicationId): RedirectResponse
+    {
+        [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+        $nenTyo = $this->findOrCreateNenTyoRow($application, $staffId, $targetYear);
+
+        $values = $request->validate([
+            'housing_loan_declared_amount' => ['nullable', 'numeric'],
+            'jyu_kojyo_kubun' => ['nullable', 'string', 'max:50'],
+            'toku_kubun' => ['nullable', 'string', 'max:50'],
+            'koujyo_kubun_no' => ['nullable', 'string', 'max:50'],
+            'certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ], [
+            'certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'certificate_file.max' => '証明書は10MB以内で添付してください。',
+        ]);
+
+        $payload = [
+            'jyu_kari_kou' => $this->nullableMoney($values['housing_loan_declared_amount'] ?? null),
+            'jyu_kojyo_kubun' => $this->nullableText($values['jyu_kojyo_kubun'] ?? null),
+            'toku_kubun' => $this->nullableText($values['toku_kubun'] ?? null),
+            'koujyo_kubun_no' => $this->nullableText($values['koujyo_kubun_no'] ?? null),
+        ];
+
+        $file = $request->file('certificate_file');
+        if ($file !== null && $file->isValid()) {
+            $existingPath = trim((string) ($nenTyo->housing_loan_certificate_file_path ?? ''));
+            if ($existingPath !== '') {
+                $this->certificateFileService->delete($existingPath);
+            }
+            $stored = $this->certificateFileService->store(
+                $file,
+                "year_end/{$targetYear}/{$staffId}/housing_loan",
+                'jyutaku_' . date('YmdHis'),
+            );
+            $payload['housing_loan_certificate_file_path'] = $stored['path'];
+            $payload['housing_loan_certificate_original_name'] = $stored['original_name'];
+            $payload['housing_loan_certificate_uploaded_at'] = $stored['uploaded_at'];
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo->nen_tyo_no)
+            ->update($payload);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '住宅ローン控除を保存しました。');
+    }
+
+    /**
+     * 前職情報をmx_nen_tyoへ直接保存する（保険・住宅ローンと同じ専用フォーム）。
+     */
+    public function updatePreviousJobNenTyo(Request $request, int $applicationId): RedirectResponse
+    {
+        [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+        $nenTyo = $this->findOrCreateNenTyoRow($application, $staffId, $targetYear);
+
+        $values = $request->validate([
+            'zen_syamei' => ['nullable', 'string', 'max:60'],
+            'zen_add' => ['nullable', 'string', 'max:120'],
+            'zen_tai_date' => ['nullable', 'date'],
+            'zen_shotoku' => ['nullable', 'numeric'],
+            'zen_syaho_kou' => ['nullable', 'numeric'],
+            'zen_kyuyo_tax' => ['nullable', 'numeric'],
+            'zen_bonus_tax' => ['nullable', 'numeric'],
+            'certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ], [
+            'certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'certificate_file.max' => '証明書は10MB以内で添付してください。',
+        ]);
+
+        $zenTaiDate = trim((string) ($values['zen_tai_date'] ?? ''));
+
+        $payload = [
+            'zen_syamei' => $this->nullableText($values['zen_syamei'] ?? null),
+            'zen_add' => $this->nullableText($values['zen_add'] ?? null),
+            'zen_tai_date' => $zenTaiDate !== '' ? date('Y-m-d', strtotime($zenTaiDate)) : null,
+            'zen_shotoku' => $this->nullableMoney($values['zen_shotoku'] ?? null),
+            'zen_syaho_kou' => $this->nullableMoney($values['zen_syaho_kou'] ?? null),
+            'zen_kyuyo_tax' => $this->nullableMoney($values['zen_kyuyo_tax'] ?? null),
+            'zen_bonus_tax' => $this->nullableMoney($values['zen_bonus_tax'] ?? null),
+        ];
+
+        $file = $request->file('certificate_file');
+        if ($file !== null && $file->isValid()) {
+            $existingPath = trim((string) ($nenTyo->previous_job_certificate_file_path ?? ''));
+            if ($existingPath !== '') {
+                $this->certificateFileService->delete($existingPath);
+            }
+            $stored = $this->certificateFileService->store(
+                $file,
+                "year_end/{$targetYear}/{$staffId}/previous_job",
+                'zenshoku_' . date('YmdHis'),
+            );
+            $payload['previous_job_certificate_file_path'] = $stored['path'];
+            $payload['previous_job_certificate_original_name'] = $stored['original_name'];
+            $payload['previous_job_certificate_uploaded_at'] = $stored['uploaded_at'];
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo->nen_tyo_no)
+            ->update($payload);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '前職情報を保存しました。');
+    }
+
+    /**
+     * 本人情報（氏名・住所・生年月日・世帯主）のスタッフ申告内容を、事務所側でその場で
+     * 訂正できるようにする。mx_staffsへは反映しない（それは既存のreflectApplication()の
+     * 役目）。ここはstaff_year_end_applicationsのステージング値を直すだけ。
+     */
+    public function updatePersonalInfoStaging(Request $request, int $applicationId): RedirectResponse
+    {
+        $application = DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->first();
+        abort_unless($application, 404);
+
+        $staffId = trim((string) ($application->staff_id ?? ''));
+        $targetYear = (int) ($application->target_year ?? date('Y'));
+
+        $values = $request->validate([
+            'new_staff_name' => ['nullable', 'string', 'max:50'],
+            'new_staff_name_furi' => ['nullable', 'string', 'max:50'],
+            'new_birthday' => ['nullable', 'date'],
+            'new_address' => ['nullable', 'string', 'max:255'],
+            'new_address_furi' => ['nullable', 'string', 'max:255'],
+            'setai_nushi' => ['nullable', 'string', 'max:50'],
+            'setai_zoku_gara' => ['nullable', 'string', 'max:20'],
+            'name_change_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'address_change_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ], [
+            'name_change_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'address_change_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+        ]);
+
+        $payload = [
+            'new_staff_name' => $this->nullableText($values['new_staff_name'] ?? null),
+            'new_staff_name_furi' => $this->nullableText($values['new_staff_name_furi'] ?? null),
+            'new_birthday' => !empty($values['new_birthday']) ? $values['new_birthday'] : null,
+            'new_address' => $this->nullableText($values['new_address'] ?? null),
+            'new_address_furi' => $this->nullableText($values['new_address_furi'] ?? null),
+            'setai_nushi' => $this->nullableText($values['setai_nushi'] ?? null),
+            'setai_zoku_gara' => $this->nullableText($values['setai_zoku_gara'] ?? null),
+        ];
+
+        $nameFile = $request->file('name_change_certificate_file');
+        if ($nameFile !== null && $nameFile->isValid()) {
+            $existing = trim((string) ($application->name_change_certificate_file_path ?? ''));
+            if ($existing !== '') {
+                $this->certificateFileService->delete($existing);
+            }
+            $stored = $this->certificateFileService->store($nameFile, "year_end/{$targetYear}/{$staffId}/personal_info", 'shimei_' . date('YmdHis'));
+            $payload['name_change_certificate_file_path'] = $stored['path'];
+            $payload['name_change_certificate_original_name'] = $stored['original_name'];
+            $payload['name_change_certificate_uploaded_at'] = $stored['uploaded_at'];
+        }
+
+        $addressFile = $request->file('address_change_certificate_file');
+        if ($addressFile !== null && $addressFile->isValid()) {
+            $existing = trim((string) ($application->address_change_certificate_file_path ?? ''));
+            if ($existing !== '') {
+                $this->certificateFileService->delete($existing);
+            }
+            $stored = $this->certificateFileService->store($addressFile, "year_end/{$targetYear}/{$staffId}/personal_info", 'jusho_' . date('YmdHis'));
+            $payload['address_change_certificate_file_path'] = $stored['path'];
+            $payload['address_change_certificate_original_name'] = $stored['original_name'];
+            $payload['address_change_certificate_uploaded_at'] = $stored['uploaded_at'];
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('application_id', $applicationId)
+            ->update($payload);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '本人情報の申告内容を修正しました。');
+    }
+
+    /**
+     * 扶養情報をmx_fuyoへ直接保存する（保険と同じ、その場で訂正・保存できる専用フォーム）。
+     */
+    public function updateFuyoRow(Request $request, int $applicationId, int $fuyoNo): RedirectResponse
+    {
+        [, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+
+        $row = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_fuyo')
+            ->where('fuyo_no', $fuyoNo)
+            ->where('staff_id', $staffId)
+            ->whereYear('registration_date', $targetYear)
+            ->first();
+        abort_unless($row, 404);
+
+        $values = $request->validate([
+            'fuyo_name' => ['nullable', 'string', 'max:50'],
+            'fuyo_name_furi' => ['nullable', 'string', 'max:50'],
+            'fuyo_relationship' => ['nullable', 'string', 'max:50'],
+            'fuyo_birthday' => ['nullable', 'date'],
+            'fuyo_address' => ['nullable', 'string', 'max:255'],
+            'fuyo_sex' => ['nullable', 'string', 'max:5'],
+            'kyojyu' => ['nullable', 'string', 'max:5'],
+            'fuyo_shunyu' => ['nullable', 'numeric'],
+            'failure_notebook' => ['nullable', 'string', 'max:50'],
+            'failure_judgment' => ['nullable', 'string', 'max:50'],
+            'certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ], [
+            'certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'certificate_file.max' => '証明書は10MB以内で添付してください。',
+        ]);
+
+        $payload = [
+            'fuyo_name' => $this->nullableText($values['fuyo_name'] ?? null),
+            'fuyo_name_furi' => $this->nullableText($values['fuyo_name_furi'] ?? null),
+            'fuyo_relationship' => $this->nullableText($values['fuyo_relationship'] ?? null),
+            'fuyo_birthday' => !empty($values['fuyo_birthday']) ? $values['fuyo_birthday'] : null,
+            'fuyo_address' => $this->nullableText($values['fuyo_address'] ?? null),
+            'fuyo_sex' => $this->nullableText($values['fuyo_sex'] ?? null),
+            'kyojyu' => $this->nullableText($values['kyojyu'] ?? null),
+            'fuyo_shunyu' => $this->nullableMoney($values['fuyo_shunyu'] ?? null),
+            'deduction_target' => $request->boolean('deduction_target') ? 1 : 0,
+            'widow' => $request->boolean('widow') ? 1 : 0,
+            'failure_notebook' => $this->nullableText($values['failure_notebook'] ?? null),
+            'failure_judgment' => $this->nullableText($values['failure_judgment'] ?? null),
+        ];
+
+        $file = $request->file('certificate_file');
+        if ($file !== null && $file->isValid()) {
+            $existingPath = trim((string) ($row->failure_certificate_file_path ?? ''));
+            if ($existingPath !== '') {
+                $this->certificateFileService->delete($existingPath);
+            }
+            $stored = $this->certificateFileService->store(
+                $file,
+                "year_end/{$targetYear}/{$staffId}/fuyo",
+                'fuyo_' . $fuyoNo . '_' . date('YmdHis'),
+            );
+            $payload['failure_certificate_file_path'] = $stored['path'];
+            $payload['failure_certificate_original_name'] = $stored['original_name'];
+            $payload['failure_certificate_uploaded_at'] = $stored['uploaded_at'];
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_fuyo')
+            ->where('fuyo_no', $fuyoNo)
+            ->where('staff_id', $staffId)
+            ->update($payload);
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+            ->with('status', '扶養情報を保存しました。');
+    }
+
+    /**
      * @return array{0:object,1:string,2:int}
      */
     private function hokenApplicationContext(int $applicationId): array
@@ -2331,7 +2920,6 @@ class YearEndAdjustmentV2Controller extends Controller
             ->update($payload);
     }
 
-    /** @return array<string, mixed> */
     private function deleteHokenCertificateFile(string $path): void
     {
         $path = trim($path);
@@ -2339,6 +2927,12 @@ class YearEndAdjustmentV2Controller extends Controller
             return;
         }
 
+        if ($this->certificateFileService->exists($path)) {
+            $this->certificateFileService->delete($path);
+            return;
+        }
+
+        // 旧保存方式（public_path直下）の残存ファイル向けフォールバック。
         $fullPath = public_path(ltrim($path, '/'));
         if (is_file($fullPath)) {
             @unlink($fullPath);
@@ -2352,82 +2946,17 @@ class YearEndAdjustmentV2Controller extends Controller
             return [];
         }
 
-        $directory = public_path("uploads/year_end/{$targetYear}/{$staffId}/insurance");
-        if (!is_dir($directory)) {
-            mkdir($directory, 0775, true);
-        }
-
-        $extension = strtolower((string) $file->getClientOriginalExtension());
-        $mime = strtolower((string) $file->getMimeType());
-        $baseName = 'hoken_' . $hokenNo . '_' . date('YmdHis');
-
-        if ($extension === 'pdf' || $mime === 'application/pdf') {
-            $fileName = $baseName . '.pdf';
-            $file->move($directory, $fileName);
-        } else {
-            $fileName = $baseName . '.jpg';
-            $targetPath = $directory . DIRECTORY_SEPARATOR . $fileName;
-            if (!$this->storeCompressedHokenImage($file->getRealPath(), $targetPath)) {
-                $fallbackExtension = in_array($extension, ['jpg', 'jpeg', 'png'], true) ? $extension : 'jpg';
-                $fileName = $baseName . '.' . $fallbackExtension;
-                $file->move($directory, $fileName);
-            }
-        }
+        $stored = $this->certificateFileService->store(
+            $file,
+            "year_end/{$targetYear}/{$staffId}/insurance",
+            'hoken_' . $hokenNo . '_' . date('YmdHis'),
+        );
 
         return [
-            'certificate_file_path' => "uploads/year_end/{$targetYear}/{$staffId}/insurance/{$fileName}",
-            'certificate_original_name' => function_exists('mb_substr') ? mb_substr($file->getClientOriginalName(), 0, 255) : substr($file->getClientOriginalName(), 0, 255),
-            'certificate_uploaded_at' => now(),
+            'certificate_file_path' => $stored['path'],
+            'certificate_original_name' => $stored['original_name'],
+            'certificate_uploaded_at' => $stored['uploaded_at'],
         ];
-    }
-
-    private function storeCompressedHokenImage(string $sourcePath, string $targetPath): bool
-    {
-        if (!function_exists('imagejpeg') || !function_exists('imagecreatetruecolor')) {
-            return false;
-        }
-
-        $info = @getimagesize($sourcePath);
-        if (!$info) {
-            return false;
-        }
-
-        [$width, $height, $type] = $info;
-        if ($width <= 0 || $height <= 0) {
-            return false;
-        }
-
-        $source = null;
-        if ($type === IMAGETYPE_JPEG && function_exists('imagecreatefromjpeg')) {
-            $source = @imagecreatefromjpeg($sourcePath);
-        } elseif ($type === IMAGETYPE_PNG && function_exists('imagecreatefrompng')) {
-            $source = @imagecreatefrompng($sourcePath);
-        }
-
-        if (!$source) {
-            return false;
-        }
-
-        $maxSide = 1600;
-        $scale = min(1, $maxSide / max($width, $height));
-        $newWidth = max(1, (int) round($width * $scale));
-        $newHeight = max(1, (int) round($height * $scale));
-
-        $canvas = imagecreatetruecolor($newWidth, $newHeight);
-        if (!$canvas) {
-            imagedestroy($source);
-            return false;
-        }
-
-        $white = imagecolorallocate($canvas, 255, 255, 255);
-        imagefilledrectangle($canvas, 0, 0, $newWidth, $newHeight, $white);
-        imagecopyresampled($canvas, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-
-        $saved = imagejpeg($canvas, $targetPath, 78);
-        imagedestroy($canvas);
-        imagedestroy($source);
-
-        return $saved;
     }
     private function yearEndPdfTemplatePath(int $targetYear, string $templateKey): string
     {
@@ -2603,10 +3132,22 @@ class YearEndAdjustmentV2Controller extends Controller
             'insurance_deduction_changed' => $this->bitLabel($application->insurance_deduction_changed ?? null),
             'housing_loan_changed' => $this->bitLabel($application->housing_loan_changed ?? null),
             'previous_job_withholding_changed' => $this->bitLabel($application->previous_job_withholding_changed ?? null),
+            'previous_job_already_submitted' => $this->bitLabel($application->previous_job_already_submitted ?? null),
             'special_collection_requested' => $this->bitLabel($application->special_collection_requested ?? null),
             'submitted_at' => $this->dateLabel($application->submitted_at ?? null),
             'confirmed_at' => $this->dateLabel($application->confirmed_at ?? null),
             'reflected_at' => $this->dateLabel($application->reflected_at ?? null),
+            'new_address' => trim((string) ($application->new_address ?? '')),
+            'new_address_furi' => trim((string) ($application->new_address_furi ?? '')),
+            'new_staff_name' => trim((string) ($application->new_staff_name ?? '')),
+            'new_staff_name_furi' => trim((string) ($application->new_staff_name_furi ?? '')),
+            'new_birthday' => trim((string) ($application->new_birthday ?? '')),
+            'setai_nushi' => trim((string) ($application->setai_nushi ?? '')),
+            'setai_zoku_gara' => trim((string) ($application->setai_zoku_gara ?? '')),
+            'address_change_certificate_original_name' => trim((string) ($application->address_change_certificate_original_name ?? '')),
+            'name_change_certificate_original_name' => trim((string) ($application->name_change_certificate_original_name ?? '')),
+            'return_note' => trim((string) ($application->return_note ?? '')),
+            'spouse_changed' => $this->bitLabel($application->spouse_changed ?? null),
         ];
     }
 
@@ -2739,8 +3280,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 'tax_amount' => '税額欄',
                 'hon_shougai_toku' => '本人 特別障害者',
                 'hon_shougai_ta' => '本人 一般障害者',
-                'ippan_kafu' => '一般寡婦',
-                'toku_kafu' => '特別寡婦',
+                'ippan_kafu' => '一般寡婦（旧・現在は使用しない）',
+                'toku_kafu' => '特別寡婦（旧・現在は使用しない）',
+                'hitori_oya' => 'ひとり親',
                 'kafu' => '寡婦',
                 'student' => '勤労学生',
                 'halfway' => '中途',

@@ -306,6 +306,24 @@
         .is-editing .view-only {
             display: none;
         }
+
+        .year-end-changed-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .year-end-changed-badge.is-changed {
+            background: #ffe3e3;
+            color: #c53030;
+        }
+
+        .year-end-changed-badge.is-unchanged {
+            background: #eee;
+            color: #888;
+        }
     </style>
 </head>
 
@@ -395,6 +413,146 @@
             </div>
         </section>
 
+        @if ($application['personal_info_changed'] === 'あり' || $application['dependents_changed'] === 'あり' || $application['spouse_changed'] === 'あり' || $application['insurance_deduction_changed'] === 'あり' || $application['previous_job_withholding_changed'] === 'あり' || $application['housing_loan_changed'] === 'あり' || in_array($application['status'], ['submitted', 'confirmed', 'returned', 'reflected'], true))
+        <section class="panel" id="personal-info-section">
+            <h2 class="section-title">スタッフ申告内容の確認</h2>
+            <p class="year-end-note">氏名・住所・生年月日・世帯主情報はスタッフマスタにしか無く上書きされたら戻せないため、下の表で現在の登録内容と申告内容を見比べ、証憑を確認したうえで「実データへ反映」してください。それ以外（扶養・配偶者・保険料控除・住宅ローン・前職・本人状況）はスタッフの保存と同時に実データへ反映済みです。詳細確認・修正は各項目のリンク先で行えます。</p>
+
+            @if ($application['personal_info_changed'] === 'あり')
+            <h3>本人情報（変更あり・マスタへの反映が必要）</h3>
+            <form method="post" action="{{ route('admin.work.year_end_adjustments.personal_info.update', ['applicationId' => $applicationId]) }}" enctype="multipart/form-data">
+                @csrf
+                <div class="year-end-table-wrap f_size12">
+                    <table class="data-table year-end-table">
+                        <thead>
+                            <tr>
+                                <th>項目</th>
+                                <th>現在の登録（マスタ）</th>
+                                <th>申告内容（訂正可）</th>
+                                <th>証憑</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>氏名</td>
+                                <td>{{ $staff['staff_name'] ?? '---' }}</td>
+                                <td><input type="text" name="new_staff_name" value="{{ $application['new_staff_name'] }}" maxlength="50"></td>
+                                <td rowspan="2">
+                                    @if ($application['name_change_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.year_end_adjustments.personal_info.certificate_file', ['applicationId' => $applicationId, 'type' => 'name']) }}" target="_blank" rel="noopener">{{ $application['name_change_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="name_change_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>フリガナ（氏名）</td>
+                                <td>{{ $staff['staff_name_furi'] ?? '---' }}</td>
+                                <td><input type="text" name="new_staff_name_furi" value="{{ $application['new_staff_name_furi'] }}" maxlength="50"></td>
+                            </tr>
+                            <tr>
+                                <td>生年月日</td>
+                                <td>{{ $staff['birthday'] ?? '---' }}</td>
+                                <td><input type="date" name="new_birthday" value="{{ substr($application['new_birthday'], 0, 10) }}"></td>
+                                <td>---</td>
+                            </tr>
+                            <tr>
+                                <td>住所</td>
+                                <td>{{ $staff['address'] ?? '---' }}</td>
+                                <td><input type="text" name="new_address" value="{{ $application['new_address'] }}" maxlength="255"></td>
+                                <td rowspan="2">
+                                    @if ($application['address_change_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.year_end_adjustments.personal_info.certificate_file', ['applicationId' => $applicationId, 'type' => 'address']) }}" target="_blank" rel="noopener">{{ $application['address_change_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="address_change_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>フリガナ（住所）</td>
+                                <td>{{ $staff['address_furi'] ?? '---' }}</td>
+                                <td><input type="text" name="new_address_furi" value="{{ $application['new_address_furi'] }}" maxlength="255"></td>
+                            </tr>
+                            <tr>
+                                <td>世帯主の氏名</td>
+                                <td>{{ ($staff['head_house'] ?? '') !== '' ? $staff['head_house'] : '---' }}</td>
+                                <td><input type="text" name="setai_nushi" value="{{ $application['setai_nushi'] }}" maxlength="50"></td>
+                                <td>---</td>
+                            </tr>
+                            <tr>
+                                <td>世帯主との続柄</td>
+                                <td>{{ ($staff['relationship'] ?? '') !== '' ? $staff['relationship'] : '---' }}</td>
+                                <td><input type="text" name="setai_zoku_gara" value="{{ $application['setai_zoku_gara'] }}" maxlength="20"></td>
+                                <td>---</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="year-end-hoken-actions">
+                    <button type="submit" class="btn btn-primary">申告内容を訂正して保存</button>
+                </div>
+            </form>
+            @endif
+
+            <h3 style="margin-top:16px;">その他の申告内容（実データ反映済み・各リンク先で確認・修正）</h3>
+            @php
+            $statusIcon = fn(string $key) => '<span class="year-end-changed-badge ' . ($application[$key] === 'あり' ? 'is-changed">●変更あり' : 'is-unchanged">変更なし') . '</span>';
+            @endphp
+            <dl class="year-end-fields">
+                <dt>本人状況（障害者・ひとり親・寡婦・勤労学生）</dt>
+                <dd>{!! $statusIcon('personal_info_changed') !!}　<a href="#nen-tyo-summary">計算結果サマリーで確認・修正</a></dd>
+                <dt>扶養親族</dt>
+                <dd>{!! $statusIcon('dependents_changed') !!}　<a href="#fuyo-section">扶養情報で確認・訂正</a></dd>
+                <dt>配偶者</dt>
+                <dd>
+                    {!! $statusIcon('spouse_changed') !!}　<a href="#fuyo-section">扶養情報で確認・訂正</a>
+                    （配偶者控除等申告書の有無：{{ $nenTyo['haigu_umu'] ?? '---' }} / 配偶者の所得（換算後）：{{ $nenTyo['haigu_shotoku'] ?? '---' }}{{ $spouseComputedIncomePreview !== null ? '　参考：換算所得 ' . number_format($spouseComputedIncomePreview) : '' }}）
+                </dd>
+                <dt>保険料控除</dt>
+                <dd>{!! $statusIcon('insurance_deduction_changed') !!}　<a href="#hoken-section">保険料控除情報で確認・修正</a></dd>
+                <dt>住宅ローン控除</dt>
+                <dd>{!! $statusIcon('housing_loan_changed') !!}　<a href="#housing-loan-section">住宅ローン控除で確認・修正</a></dd>
+                <dt>前職情報</dt>
+                <dd>
+                    {!! $statusIcon('previous_job_withholding_changed') !!}　<a href="#previous-job-section">前職情報で確認・修正</a>
+                    @if ($application['previous_job_already_submitted'] === 'あり')
+                    （入社時に提出済みと申告。詳細は未入力のため入社時の書類を確認してください）
+                    @endif
+                </dd>
+            </dl>
+
+            @if ($application['status'] === 'returned' && $application['return_note'] !== '')
+            <p><strong>差戻し理由：</strong>{{ $application['return_note'] }}</p>
+            @endif
+
+            @if ($application['status'] === 'submitted')
+            <div class="actions">
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.confirm', ['applicationId' => $applicationId]) }}" style="display:inline-block" onsubmit="return confirm('確認済みにします。よろしいですか？');">
+                    @csrf
+                    <button class="btn btn-primary" type="submit">確認済みにする</button>
+                </form>
+            </div>
+            <form method="post" action="{{ route('admin.work.year_end_adjustments.return', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('差し戻します。よろしいですか？');" style="margin-top:8px;">
+                @csrf
+                <label>差戻し理由</label>
+                <textarea name="return_note" maxlength="2000" rows="2" style="width:100%;" required></textarea>
+                <button class="btn" type="submit">差し戻す</button>
+            </form>
+            @endif
+
+            @if ($application['status'] === 'confirmed')
+            <div class="actions">
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.reflect', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('スタッフマスタ（氏名・生年月日・住所）へ反映します。扶養・配偶者・保険料控除・住宅ローン・前職・本人状況は既に実データへ反映済みです。よろしいですか？');">
+                    @csrf
+                    <button class="btn btn-primary" type="submit">実データへ反映</button>
+                </form>
+            </div>
+            @endif
+
+            @if ($application['status'] === 'reflected')
+            <p>反映済み（{{ $application['reflected_at'] }}）</p>
+            @endif
+        </section>
+        @endif
+
         @php
         $isNenTyoLocked = isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true);
         $hasNenTyoNo = ($nenTyo['nen_tyo_no'] ?? '') !== '';
@@ -478,47 +636,109 @@
                 @endforeach
             </div>
         </section>
-        <section class="panel">
+        <section class="panel" id="fuyo-section">
             <h2 class="section-title">扶養情報</h2>
-            <div class="year-end-table-wrap f_size12">
-                <table class="data-table year-end-table">
-                    <thead>
-                        <tr>
-                            <th>登録日</th>
-                            <th>氏名</th>
-                            <th>フリガナ</th>
-                            <th>続柄</th>
-                            <th>生年月日</th>
-                            <th>性別</th>
-                            <th>収入</th>
-                            <th>控除対象</th>
-                            <th>住所</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($fuyoRows as $row)
-                        <tr>
-                            <td>{{ $row['registration_date'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_name'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_name_furi'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_relationship'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_birthday'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_sex'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_shunyu'] ?? '' }}</td>
-                            <td>{{ $row['deduction_target'] ?? '' }}</td>
-                            <td>{{ $row['fuyo_address'] ?? '' }}</td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="9" class="empty">扶養情報がありません。</td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            <div class="year-end-insurance-list">
+                @forelse ($fuyoRows as $row)
+                @php
+                $fuyoNo = (int) ($row['fuyo_no'] ?? 0);
+                $fuyoBirthdayInput = substr((string) ($row['fuyo_birthday'] ?? ''), 0, 10);
+                $fuyoIncomeInput = str_replace(',', '', (string) ($row['fuyo_shunyu'] ?? ''));
+                @endphp
+                <article class="year-end-insurance-item">
+                    <form method="post" action="{{ route('admin.work.year_end_adjustments.fuyo.update', ['applicationId' => $applicationId, 'fuyoNo' => $fuyoNo]) }}" enctype="multipart/form-data" class="year-end-hoken-form">
+                        @csrf
+                        <div class="year-end-insurance-head">
+                            <div>
+                                <div class="year-end-insurance-title">{{ $row['fuyo_name'] ?? '氏名未登録' }}（{{ $row['fuyo_relationship'] ?? '続柄未登録' }}）</div>
+                                <div class="year-end-insurance-meta">No.{{ $fuyoNo }} / 登録日 {{ $row['registration_date'] ?? '---' }}</div>
+                            </div>
+                        </div>
+
+                        <div class="year-end-hoken-edit-grid">
+                            <label class="year-end-hoken-field">
+                                氏名
+                                <input type="text" name="fuyo_name" value="{{ $row['fuyo_name'] ?? '' }}" maxlength="50">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                フリガナ
+                                <input type="text" name="fuyo_name_furi" value="{{ $row['fuyo_name_furi'] ?? '' }}" maxlength="50">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                続柄
+                                <input type="text" name="fuyo_relationship" value="{{ $row['fuyo_relationship'] ?? '' }}" maxlength="50">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                生年月日
+                                <input type="date" name="fuyo_birthday" value="{{ $fuyoBirthdayInput }}">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                性別
+                                <select name="fuyo_sex">
+                                    <option value="" @selected(($row['fuyo_sex'] ?? '') === '')>選択</option>
+                                    <option value="男" @selected(($row['fuyo_sex'] ?? '') === '男')>男</option>
+                                    <option value="女" @selected(($row['fuyo_sex'] ?? '') === '女')>女</option>
+                                </select>
+                            </label>
+                            <label class="year-end-hoken-field">
+                                同居／別居
+                                <select name="kyojyu">
+                                    <option value="" @selected(($row['kyojyu'] ?? '') === '')>選択</option>
+                                    <option value="同居" @selected(($row['kyojyu'] ?? '') === '同居')>同居</option>
+                                    <option value="別居" @selected(($row['kyojyu'] ?? '') === '別居')>別居</option>
+                                </select>
+                            </label>
+                            <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                                年間収入見込み
+                                <input type="number" name="fuyo_shunyu" value="{{ $fuyoIncomeInput }}" step="1">
+                            </label>
+                            <label class="year-end-hoken-field year-end-hoken-field-wide">
+                                住所
+                                <input type="text" name="fuyo_address" value="{{ $row['fuyo_address'] ?? '' }}" maxlength="255">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                障害者手帳の種類
+                                <input type="text" name="failure_notebook" value="{{ $row['failure_notebook'] ?? '' }}" maxlength="50">
+                            </label>
+                            <label class="year-end-hoken-field">
+                                障害の程度
+                                <input type="text" name="failure_judgment" value="{{ $row['failure_judgment'] ?? '' }}" maxlength="50">
+                            </label>
+                            <label class="year-end-hoken-field" style="flex-direction:row;align-items:center;gap:6px;">
+                                <input type="checkbox" name="deduction_target" value="1" @checked(((int) ($row['deduction_target'] ?? 0)) === 1)>
+                                控除の対象にする
+                            </label>
+                            <label class="year-end-hoken-field" style="flex-direction:row;align-items:center;gap:6px;">
+                                <input type="checkbox" name="widow" value="1" @checked(((int) ($row['widow'] ?? 0)) === 1)>
+                                寡婦・ひとり親に該当
+                            </label>
+                        </div>
+
+                        <div class="year-end-insurance-proof">
+                            @if (!empty($row['failure_certificate_original_name']))
+                            <a href="{{ route('admin.work.year_end_adjustments.fuyo.certificate_file', ['applicationId' => $applicationId, 'fuyoNo' => $fuyoNo]) }}" target="_blank" rel="noopener" class="btn btn-outline">障害者手帳を開く（{{ $row['failure_certificate_original_name'] }}）</a>
+                            @else
+                            <span class="year-end-proof-missing">障害者手帳の写し未添付</span>
+                            @endif
+                        </div>
+
+                        <label class="year-end-hoken-field">
+                            障害者手帳の写し添付（差し替える場合のみ選択）
+                            <input type="file" name="certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                        </label>
+
+                        <div class="year-end-hoken-actions">
+                            <button type="submit" class="btn btn-primary">保存</button>
+                        </div>
+                    </form>
+                </article>
+                @empty
+                <div class="empty">扶養情報がありません。</div>
+                @endforelse
             </div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="hoken-section">
             <h2 class="section-title">保険料控除情報</h2>
             <div class="year-end-insurance-list">
                 @forelse ($hokenRows as $row)
@@ -549,7 +769,7 @@
                             <div>
                                 <div class="year-end-insurance-title">{{ $company !== '' ? $company : '保険会社未入力' }}</div>
                                 <div class="year-end-insurance-meta">
-                                    No.{{ $row['hoken_no'] ?? '---' }} / {{ $row['insurance_year'] ?? $targetYear }} / {{ $type !== '' ? $type : '種類未入力' }}
+                                    No.{{ $row['hoken_no'] ?? '---' }} / {{ $row['insurance_year'] ?? $targetYear }} / {{ $type !== '' ? $type : '種類未入力' }} / {{ ((int) ($row['checked_flag'] ?? 0)) === 1 ? '確認済' : '未確認' }}
                                 </div>
                             </div>
                             <div class="year-end-insurance-amount">{{ $amount !== '' ? $amount : '---' }}</div>
@@ -688,6 +908,102 @@
                     </div>
                 </form>
             </div>
+        </section>
+
+        <section class="panel" id="housing-loan-section">
+            <h2 class="section-title">住宅ローン控除</h2>
+            <form method="post" action="{{ route('admin.work.year_end_adjustments.housing_loan.update', ['applicationId' => $applicationId]) }}" enctype="multipart/form-data" class="year-end-hoken-form">
+                @csrf
+                <div class="year-end-hoken-edit-grid">
+                    <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                        控除額
+                        <input type="number" name="housing_loan_declared_amount" value="{{ str_replace(',', '', (string) ($nenTyo['jyu_kari_kou'] ?? '')) }}" step="1">
+                    </label>
+                    <label class="year-end-hoken-field">
+                        住宅控除区分
+                        <input type="text" name="jyu_kojyo_kubun" value="{{ $nenTyo['jyu_kojyo_kubun'] ?? '' }}" maxlength="50">
+                    </label>
+                    <label class="year-end-hoken-field">
+                        特定取得区分
+                        <input type="text" name="toku_kubun" value="{{ $nenTyo['toku_kubun'] ?? '' }}" maxlength="50">
+                    </label>
+                    <label class="year-end-hoken-field">
+                        控除区分番号
+                        <input type="text" name="koujyo_kubun_no" value="{{ $nenTyo['koujyo_kubun_no'] ?? '' }}" maxlength="50">
+                    </label>
+                </div>
+
+                <div class="year-end-insurance-proof">
+                    @if (($nenTyo['housing_loan_certificate_original_name'] ?? '') !== '')
+                    <a href="{{ route('admin.work.year_end_adjustments.housing_loan.certificate_file', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">証明書を開く（{{ $nenTyo['housing_loan_certificate_original_name'] }}）</a>
+                    @else
+                    <span class="year-end-proof-missing">証明書未添付</span>
+                    @endif
+                </div>
+
+                <label class="year-end-hoken-field">
+                    証明書添付（差し替える場合のみ選択）
+                    <input type="file" name="certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                </label>
+
+                <div class="year-end-hoken-actions">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel" id="previous-job-section">
+            <h2 class="section-title">前職情報</h2>
+            <form method="post" action="{{ route('admin.work.year_end_adjustments.previous_job.update', ['applicationId' => $applicationId]) }}" enctype="multipart/form-data" class="year-end-hoken-form">
+                @csrf
+                <div class="year-end-hoken-edit-grid">
+                    <label class="year-end-hoken-field">
+                        前職の会社名
+                        <input type="text" name="zen_syamei" value="{{ $nenTyo['zen_syamei'] ?? '' }}" maxlength="60">
+                    </label>
+                    <label class="year-end-hoken-field year-end-hoken-field-wide">
+                        前職の所在地
+                        <input type="text" name="zen_add" value="{{ $nenTyo['zen_add'] ?? '' }}" maxlength="120">
+                    </label>
+                    <label class="year-end-hoken-field">
+                        退職日
+                        <input type="date" name="zen_tai_date" value="{{ substr((string) ($nenTyo['zen_tai_date'] ?? ''), 0, 10) }}">
+                    </label>
+                    <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                        前職の給与収入額
+                        <input type="number" name="zen_shotoku" value="{{ str_replace(',', '', (string) ($nenTyo['zen_shotoku'] ?? '')) }}" step="1">
+                    </label>
+                    <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                        前職の社会保険料等
+                        <input type="number" name="zen_syaho_kou" value="{{ str_replace(',', '', (string) ($nenTyo['zen_syaho_kou'] ?? '')) }}" step="1">
+                    </label>
+                    <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                        前職の源泉徴収税額
+                        <input type="number" name="zen_kyuyo_tax" value="{{ str_replace(',', '', (string) ($nenTyo['zen_kyuyo_tax'] ?? '')) }}" step="1">
+                    </label>
+                    <label class="year-end-hoken-field year-end-hoken-field-narrow">
+                        前職の賞与分源泉徴収税額
+                        <input type="number" name="zen_bonus_tax" value="{{ str_replace(',', '', (string) ($nenTyo['zen_bonus_tax'] ?? '')) }}" step="1">
+                    </label>
+                </div>
+
+                <div class="year-end-insurance-proof">
+                    @if (($nenTyo['previous_job_certificate_original_name'] ?? '') !== '')
+                    <a href="{{ route('admin.work.year_end_adjustments.previous_job.certificate_file', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">証明書を開く（{{ $nenTyo['previous_job_certificate_original_name'] }}）</a>
+                    @else
+                    <span class="year-end-proof-missing">証明書未添付</span>
+                    @endif
+                </div>
+
+                <label class="year-end-hoken-field">
+                    証明書添付（差し替える場合のみ選択）
+                    <input type="file" name="certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                </label>
+
+                <div class="year-end-hoken-actions">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
         </section>
     </div>
 

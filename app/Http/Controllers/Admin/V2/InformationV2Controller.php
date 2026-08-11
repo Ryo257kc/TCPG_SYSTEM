@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
+use App\Support\ParsedInput;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -28,8 +28,8 @@ class InformationV2Controller extends Controller
             ->get()
             ->map(fn($row): array => [
                 'mesa_no' => (int) ($row->mesa_no ?? 0),
-                'mase_date' => $this->formatInputDate($row->mase_date),
-                'mase_date_label' => $this->formatDisplayDate($row->mase_date),
+                'mase_date' => ParsedInput::date($row->mase_date) ?? '',
+                'mase_date_label' => ParsedInput::dateDisplay($row->mase_date),
                 'destination' => trim((string) ($row->destination ?? '')),
                 'title' => trim((string) ($row->title ?? '')),
                 'contents' => trim((string) ($row->contents ?? '')),
@@ -80,29 +80,4 @@ class InformationV2Controller extends Controller
             ->with('status', '保存しました。');
     }
 
-    private function formatInputDate(mixed $value): string
-    {
-        if ($value === null || $value === '') {
-            return '';
-        }
-
-        try {
-            return Carbon::parse((string) $value)->format('Y-m-d');
-        } catch (\Throwable) {
-            return '';
-        }
-    }
-
-    private function formatDisplayDate(mixed $value): string
-    {
-        if ($value === null || $value === '') {
-            return '';
-        }
-
-        try {
-            return Carbon::parse((string) $value)->format('Y/m/d');
-        } catch (\Throwable) {
-            return '';
-        }
-    }
 }

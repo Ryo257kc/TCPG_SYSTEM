@@ -25,7 +25,17 @@ class MyPageController extends Controller
         return view('staff_portal.mypage.index', [
             'displayName' => $this->resolveDisplayName($staffRow === null ? null : (array) $staffRow, $staffId),
             'selectedRow' => $staffRow === null ? [] : (array) $staffRow,
+            'needsProfileRequestAttention' => $this->hasReturnedProfileRequest($staffId),
         ]);
+    }
+
+    private function hasReturnedProfileRequest(string $staffId): bool
+    {
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_profile_requests')
+            ->where('staff_id', $staffId)
+            ->where('status', 'returned')
+            ->exists();
     }
 
     public function update(Request $request): RedirectResponse

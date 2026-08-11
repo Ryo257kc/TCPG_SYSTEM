@@ -32,10 +32,10 @@
     ],
     [
     'type' => 'link',
-    'route' => 'dashboard',
+    'route' => 'year_end_adjustment',
     'title' => '年末調整',
-    'sub' => '準備中/その年度の対象者の申請',
-    'hidden' => true,
+    'sub' => 'その年度の対象者の申請',
+    'visible' => $isYearEndAdjustmentVisible ?? false,
     ],
     ],
     ],
@@ -337,6 +337,10 @@
 
             <?php if($needsCorrection): ?>
             <div class="warn">修正が必要な勤怠があります。</div>
+            <?php endif; ?>
+
+            <?php if($needsYearEndAttention ?? false): ?>
+            <div class="warn"><a href="<?php echo e(route('year_end_adjustment')); ?>">年末調整の申請が差し戻されました。内容を確認してください。</a></div>
             <?php endif; ?>
         </section>
 

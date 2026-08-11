@@ -2,7 +2,7 @@
 
 namespace App\Services\Admin\V2;
 
-use Illuminate\Support\Carbon;
+use App\Support\ParsedInput;
 use Illuminate\Support\Facades\DB;
 
 class BillingListV2Service
@@ -163,7 +163,7 @@ class BillingListV2Service
     public function createInvoice(array $values): int
     {
         $id = DB::connection('sqlsrv')->table('dbo.mx_invoices')->insertGetId([
-            'invoice_date' => $this->dateOrNull($values['invoice_date'] ?? null),
+            'invoice_date' => ParsedInput::date($values['invoice_date'] ?? null),
             'recipient_name' => $this->nullableText($values['recipient_name'] ?? null),
             'subject' => $this->nullableText($values['subject'] ?? null),
             'billing_source' => $this->nullableText($values['billing_source'] ?? null),
@@ -182,7 +182,7 @@ class BillingListV2Service
             ->table('dbo.mx_invoices')
             ->where('invoice_id', $invoiceId)
             ->update([
-                'invoice_date' => $this->dateOrNull($values['invoice_date'] ?? null),
+                'invoice_date' => ParsedInput::date($values['invoice_date'] ?? null),
                 'recipient_name' => $this->nullableText($values['recipient_name'] ?? null),
                 'subject' => $this->nullableText($values['subject'] ?? null),
                 'billing_source' => $this->nullableText($values['billing_source'] ?? null),
@@ -206,9 +206,9 @@ class BillingListV2Service
             'invoice_id' => $invoiceId,
             'item_name' => $this->nullableText($values['item_name'] ?? null),
             'category' => $this->nullableText($values['category'] ?? null),
-            'quantity' => $this->intOrNull($values['quantity'] ?? null),
+            'quantity' => ParsedInput::intOrNull($values['quantity'] ?? null),
             'unit' => $this->nullableText($values['unit'] ?? null),
-            'unit_price' => $this->intOrNull($values['unit_price'] ?? null),
+            'unit_price' => ParsedInput::intOrNull($values['unit_price'] ?? null),
             'total_amount' => $this->detailTotal($values),
             'tax_category' => $this->nullableText($values['tax_category'] ?? null),
             'store_name' => $this->nullableText($values['store_name'] ?? null),
@@ -227,9 +227,9 @@ class BillingListV2Service
             ->update([
                 'item_name' => $this->nullableText($values['item_name'] ?? null),
                 'category' => $this->nullableText($values['category'] ?? null),
-                'quantity' => $this->intOrNull($values['quantity'] ?? null),
+                'quantity' => ParsedInput::intOrNull($values['quantity'] ?? null),
                 'unit' => $this->nullableText($values['unit'] ?? null),
-                'unit_price' => $this->intOrNull($values['unit_price'] ?? null),
+                'unit_price' => ParsedInput::intOrNull($values['unit_price'] ?? null),
                 'total_amount' => $this->detailTotal($values),
                 'tax_category' => $this->nullableText($values['tax_category'] ?? null),
                 'store_name' => $this->nullableText($values['store_name'] ?? null),
@@ -316,8 +316,8 @@ class BillingListV2Service
 
         return [
             'invoice_id' => (int) ($row->invoice_id ?? 0),
-            'invoice_date' => $this->formatDate($row->invoice_date ?? null, 'Y-m-d'),
-            'invoice_date_label' => $this->formatDate($row->invoice_date ?? null, 'Y/m/d'),
+            'invoice_date' => ParsedInput::dateDisplay($row->invoice_date ?? null, 'Y-m-d'),
+            'invoice_date_label' => ParsedInput::dateDisplay($row->invoice_date ?? null, 'Y/m/d'),
             'recipient_name' => trim((string) ($row->recipient_name ?? '')),
             'subject' => trim((string) ($row->subject ?? '')),
             'billing_source' => $billingSource,
@@ -340,13 +340,13 @@ class BillingListV2Service
 
     private function detailTotal(array $values): float
     {
-        $total = $this->moneyOrNull($values['total_amount'] ?? null);
+        $total = ParsedInput::number($values['total_amount'] ?? null);
         if ($total !== null) {
             return $total;
         }
 
-        $quantity = $this->intOrNull($values['quantity'] ?? null);
-        $unitPrice = $this->intOrNull($values['unit_price'] ?? null);
+        $quantity = ParsedInput::intOrNull($values['quantity'] ?? null);
+        $unitPrice = ParsedInput::intOrNull($values['unit_price'] ?? null);
 
         return (float) (($quantity ?? 0) * ($unitPrice ?? 0));
     }
@@ -387,48 +387,9 @@ class BillingListV2Service
         return $text === '' ? null : $text;
     }
 
-    private function dateOrNull(mixed $value): ?string
-    {
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($text)->format('Y-m-d');
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function intOrNull(mixed $value): ?int
-    {
-        $text = str_replace(',', '', trim((string) $value));
-        return $text === '' ? null : (int) $text;
-    }
-
-    private function moneyOrNull(mixed $value): ?float
-    {
-        $text = str_replace(',', '', trim((string) $value));
-        return $text === '' ? null : (float) $text;
-    }
-
     private function moneyOrZero(mixed $value): float
     {
-        return $this->moneyOrNull($value) ?? 0.0;
-    }
-
-    private function formatDate(mixed $value, string $format): string
-    {
-        if ($value === null || $value === '') {
-            return '';
-        }
-
-        try {
-            return Carbon::parse($value)->format($format);
-        } catch (\Throwable) {
-            return '';
-        }
+        return ParsedInput::number($value) ?? 0.0;
     }
 
     private function formatNumber(mixed $value): string

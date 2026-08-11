@@ -24,11 +24,6 @@ class LoginV2Service
         return $normalized !== '' && mb_strpos($normalized, '退職') !== false;
     }
 
-    public function isAdmin(object $staff): bool
-    {
-        return (int) ($staff->is_admin ?? 0) === 1;
-    }
-
     public function isAdminLogin(object $staff): bool
     {
         return (int) ($staff->is_admin ?? 0) === 1;

@@ -423,8 +423,9 @@ class AccountingV2Controller extends Controller
         $importedCount = 0;
         $updatedCount = 0;
         $skippedCount = 0;
+        $invalidAmountCount = 0;
 
-        DB::connection('sqlsrv')->transaction(function () use ($csvRows, $dateFrom, $dateTo, $companyNameShort, $departmentMap, $journalColumns, &$importedCount, &$updatedCount, &$skippedCount): void {
+        DB::connection('sqlsrv')->transaction(function () use ($csvRows, $dateFrom, $dateTo, $companyNameShort, $departmentMap, $journalColumns, &$importedCount, &$updatedCount, &$skippedCount, &$invalidAmountCount): void {
             foreach ($csvRows as $csvRow) {
                 $occurredAt = $this->parseCsvDate($this->csvValue($csvRow, '取引日'));
                 if ($occurredAt === null || $occurredAt->lt($dateFrom) || $occurredAt->gt($dateTo)) {
@@ -444,19 +445,30 @@ class AccountingV2Controller extends Controller
                     continue;
                 }
 
+                // 手動編集（updateJournalEntry/updateJournalEntryGroup）は金額が数値でないと
+                // エラーで弾くのに対し、CSV取込だけは非数値をnullで黙って取り込んでいた。
+                // 空欄（貸借どちらかしか使わない行）は許容し、非空かつ非数値の場合のみ弾く。
+                $debitAmountRaw = $this->csvValue($csvRow, '借方金額');
+                $creditAmountRaw = $this->csvValue($csvRow, '貸方金額');
+                if (($debitAmountRaw !== '' && $this->parseCsvMoney($debitAmountRaw) === null)
+                    || ($creditAmountRaw !== '' && $this->parseCsvMoney($creditAmountRaw) === null)) {
+                    $invalidAmountCount++;
+                    continue;
+                }
+
                 $payload = [
                     'journal_breakdown' => $journalBreakdown,
                     'month_date' => $occurredAt->copy()->startOfMonth()->format('Y-m-d'),
                     'occurred_at' => $occurredAt->format('Y-m-d'),
                     'deposit_name' => $this->depositNameFromCsv($csvRow),
                     'debit_account_title' => $this->csvValue($csvRow, '借方勘定科目'),
-                    'debit_amount' => $this->parseCsvMoney($this->csvValue($csvRow, '借方金額')),
+                    'debit_amount' => $this->parseCsvMoney($debitAmountRaw),
                     'debit_tax_category' => $this->csvValue($csvRow, '借方税区分'),
                     'debit_item_name' => $this->csvValue($csvRow, '借方品目'),
                     'debit_department_name' => $departmentMap[$this->csvValue($csvRow, '借方部門')] ?? null,
                     'debit_memo_tag' => $this->csvValue($csvRow, '借方メモ', '借方メモタグ'),
                     'credit_account_title' => $creditAccountTitle,
-                    'credit_amount' => $this->parseCsvMoney($this->csvValue($csvRow, '貸方金額')),
+                    'credit_amount' => $this->parseCsvMoney($creditAmountRaw),
                     'credit_tax_category' => $this->csvValue($csvRow, '貸方税区分'),
                     'credit_item_name' => $this->csvValue($csvRow, '貸方品目'),
                     'credit_department_name' => $departmentMap[$this->csvValue($csvRow, '貸方部門')] ?? null,
@@ -514,7 +526,7 @@ class AccountingV2Controller extends Controller
             'date_from' => $data['date_from'],
             'date_to' => $data['date_to'],
             'company_name_short' => $companyNameShort,
-        ])->with('statusMessage', 'CSV取込が完了しました。追加: ' . $importedCount . '件 / 更新: ' . $updatedCount . '件 / 対象外: ' . $skippedCount . '件');
+        ])->with('statusMessage', 'CSV取込が完了しました。追加: ' . $importedCount . '件 / 更新: ' . $updatedCount . '件 / 対象外: ' . $skippedCount . '件' . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : ''));
     }
 
     public function updateJournalEntry(Request $request): RedirectResponse
@@ -701,6 +713,11 @@ class AccountingV2Controller extends Controller
             ->with('statusMessage', '仕訳帳を削除しました。');
     }
 
+    /**
+     * 行単位でstr_getcsv()していた旧実装は、取引内容等のセル内に改行を含む行が来ると
+     * そこで1レコードが分断され、以降の列がすべてズレて取り込まれていた。fgetcsv()は
+     * クォート内の改行をレコードの区切りと見なさないため、この問題が起きない。
+     */
     private function readCsvAssocRows(string $path): array
     {
         $contents = file_get_contents($path);
@@ -710,23 +727,23 @@ class AccountingV2Controller extends Controller
 
         $contents = mb_convert_encoding($contents, 'UTF-8', 'SJIS-win,UTF-8');
         $contents = preg_replace('/^\xEF\xBB\xBF/', '', $contents) ?? $contents;
-        $lines = preg_split("/\r\n|\n|\r/", trim($contents)) ?: [];
-        if ($lines === []) {
-            return [];
-        }
 
-        $headers = array_map(
-            fn(string $header): string => trim($header),
-            str_getcsv((string) array_shift($lines))
-        );
+        $stream = fopen('php://temp', 'r+');
+        fwrite($stream, $contents);
+        rewind($stream);
 
+        $headers = null;
         $rows = [];
-        foreach ($lines as $line) {
-            if (trim((string) $line) === '') {
+        while (($values = fgetcsv($stream)) !== false) {
+            if ($headers === null) {
+                $headers = array_map(fn(?string $header): string => trim((string) $header), $values);
                 continue;
             }
 
-            $values = str_getcsv((string) $line);
+            if ($values === [null] || $values === ['']) {
+                continue;
+            }
+
             $row = [];
             foreach ($headers as $index => $header) {
                 if ($header === '') {
@@ -736,6 +753,7 @@ class AccountingV2Controller extends Controller
             }
             $rows[] = $row;
         }
+        fclose($stream);
 
         return $rows;
     }
@@ -765,6 +783,11 @@ class AccountingV2Controller extends Controller
         }
     }
 
+    // TODO(共通化保留): parseCsvMoney/parseAmountValue/parseEditableMoneyは金額を
+    // 数値へ変換する処理が3箇所に分かれている。ただし呼び出し元ごとに戻り値の意味が
+    // 微妙に違う（parseEditableMoneyだけ「空」nullと「不正値」falseを区別して
+    // \InvalidArgumentExceptionの発火に使っている等）ため、機械的に1つへ統合すると
+    // 挙動が変わる恐れがある。各呼び出し箇所の挙動差を洗い出してから安全に一本化すること。
     private function parseCsvMoney(string $value): ?float
     {
         $value = trim(str_replace([',', '￥', '\\'], '', $value));

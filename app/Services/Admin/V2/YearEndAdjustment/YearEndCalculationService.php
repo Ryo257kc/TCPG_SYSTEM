@@ -556,7 +556,7 @@ class YearEndCalculationService
         return $none;
     }
 
-    private function salaryIncomeAfterDeduction(float $income, int $targetYear): int
+    public function salaryIncomeAfterDeduction(float $income, int $targetYear): int
     {
         if ($income <= 0) {
             return 0;

@@ -751,13 +751,6 @@ class AttendanceController extends Controller
             return '';
         }
 
-        if (
-            preg_match('/\b(1899|1900)\b/', $text) === 1
-            && preg_match('/\b(0?0:00|12:00\s*AM)\b/i', $text) === 1
-        ) {
-            return '';
-        }
-
         if (preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $text) === 1) {
             return substr($text, 0, 5);
         }

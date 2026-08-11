@@ -77,8 +77,19 @@ class AuthController extends Controller
         return view('staff_portal.dashboard.index', $this->commonViewData($request, [
             'staffId' => $staffId,
             'needsCorrection' => $this->hasReturnedAttendance($staffId),
+            'needsYearEndAttention' => $this->hasReturnedYearEndApplication($staffId),
             'informationMessages' => $this->informationMessages(),
         ]));
+    }
+
+    private function hasReturnedYearEndApplication(string $staffId): bool
+    {
+        return DB::connection('sqlsrv_payroll')
+            ->table('dbo.staff_year_end_applications')
+            ->where('staff_id', $staffId)
+            ->where('target_year', (int) date('Y'))
+            ->where('status', 'returned')
+            ->exists();
     }
 
     public function passwordChange(Request $request): RedirectResponse|View
@@ -124,6 +135,14 @@ class AuthController extends Controller
 
         $request->session()->forget(['password_change_staff_id', 'password_change_staff_name']);
         $request->session()->put('staff_id', $staffId);
+
+        // 就業状況「採用予定」＝新入社スタッフのアカウントは、初回パスワード変更後は
+        // ダッシュボードではなく入社手続きフォームへ誘導する。事務所が入社手続きを
+        // 確認・反映する際にemploymentを「在職」へ切り替えるため、以降はこの分岐に来ない。
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (trim((string) ($staffRow['employment'] ?? '')) === '採用予定') {
+            return redirect()->route('onboarding_request');
+        }
 
         return redirect()->route('dashboard');
     }

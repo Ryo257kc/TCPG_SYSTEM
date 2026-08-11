@@ -94,36 +94,49 @@
             font-weight: 800;
         }
 
-        /* ステータスごとに色分け。差戻し(対応必要)を最も目立たせる */
-        .year-end-status-draft {
-            background: #f2f4f7;
-            color: #667085;
+        /* ステータスごとに色分け。差戻し(対応必要)を最も目立たせる。
+           下書きは「未着手（対象者作成直後で何も保存していない）」と
+           「作業中（どこかのセクションを保存済みだが未提出）」を色で区別する。
+           似た薄い色が並ぶと判別しづらいとの指摘を受け、彩度をはっきり分けている。 */
+        .year-end-status-draft-empty {
+            background: #fff;
+            border: 1px dashed #d0d5dd;
+            color: #98a2b3;
+        }
+
+        .year-end-status-draft-started {
+            background: #fef6e6;
+            color: #b54708;
         }
 
         .year-end-status-submitted {
-            background: #eef4ff;
-            color: #1f4f8f;
+            background: #d1e3ff;
+            color: #0b3a82;
         }
 
         .year-end-status-returned {
-            background: #fef3f2;
+            background: #fee4e2;
             color: #b42318;
         }
 
         .year-end-status-confirmed {
-            background: #eefaf5;
-            color: #0f766e;
+            background: #d1fae5;
+            color: #065f46;
         }
 
         .year-end-status-reflected {
-            background: #ecfdf3;
-            color: #05603a;
+            background: #bbf7d0;
+            color: #14532d;
         }
 
-        .year-end-status-excluded,
         .year-end-status-retired {
-            background: #f2f4f7;
-            color: #98a2b3;
+            background: #e4e4e7;
+            color: #52525b;
+        }
+
+        .year-end-status-excluded {
+            background: #ede9fe;
+            color: #5b21b6;
         }
 
         @media (max-width: 1000px) {
@@ -242,7 +255,7 @@
                     <tbody>
                         @forelse ($rows as $row)
                         <tr>
-                            <td><span class="year-end-status year-end-status-{{ $row['status'] }}">{{ $row['status_label'] }}</span></td>
+                            <td><span class="year-end-status year-end-status-{{ $row['status_badge_key'] }}">{{ $row['status_label'] }}</span></td>
                             <td>{{ $row['staff_id'] }}</td>
                             <td>{{ $row['staff_name'] !== '' ? $row['staff_name'] : '---' }}</td>
                             <td>

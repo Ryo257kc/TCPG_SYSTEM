@@ -86,17 +86,29 @@ trait HandlesStaffPortalContext
         return (int) ($staffRow['is_admin'] ?? 0) === 1
             || (int) ($staffRow['is_daily_report_user'] ?? 0) === 1;
     }
+    // 年末調整スタッフ申請の公開判定。公開日が未設定・未到来の間はシステムマスタのみ閲覧可。
+    protected function isYearEndAdjustmentPublished(): bool
+    {
+        $publishDate = DB::connection('sqlsrv_payroll')
+            ->table('dbo.year_end_adjustment_settings')
+            ->where('target_year', (int) date('Y'))
+            ->value('publish_date');
+
+        return $publishDate !== null && Carbon::parse($publishDate)->lessThanOrEqualTo(now());
+    }
+
     // 共通まとめ
     protected function commonViewData(Request $request, array $data = []): array
     {
         $staffId = $this->staffPortalStaffId($request);
         $staffRow = $this->staffPortalStaffRow($staffId);
         $showPayrollLinks = $this->shouldShowPayrollLinks($staffId, $staffRow);
+        $isAdmin = $this->isAdmin($staffRow);
 
         return array_merge($data, [
             'displayName' => $this->resolveDisplayName($staffRow, $staffId),
             'isMaintenanceWindow' => $this->isMaintenanceWindow(),
-            'isAdmin' => $this->isAdmin($staffRow),
+            'isAdmin' => $isAdmin,
             'isStoreManager' => $this->isStoreManager($staffRow),
             'isAccounting' => $this->isAccounting($staffRow),
             'isOushinStaff' => $this->isOushinStaff($staffRow),
@@ -105,6 +117,7 @@ trait HandlesStaffPortalContext
             'isViewOnly' => $this->isViewOnly($staffRow),
             'isDailyReport' => $this->isDailyReport($staffRow),
             'hidePayrollLinks' => !$showPayrollLinks,
+            'isYearEndAdjustmentVisible' => $isAdmin || $this->isYearEndAdjustmentPublished(),
         ]);
     }
 

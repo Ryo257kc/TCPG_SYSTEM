@@ -10,7 +10,9 @@ use App\Http\Controllers\Admin\V2\Master\CalendarV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CompanyV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StaffV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StoreV2Controller;
+use App\Http\Controllers\Admin\V2\OnboardingRequestV2Controller;
 use App\Http\Controllers\Admin\V2\PayrollV2Controller;
+use App\Http\Controllers\Admin\V2\ProfileRequestV2Controller;
 use App\Http\Controllers\Admin\V2\YearEndAdjustmentV2Controller;
 
 
@@ -57,8 +59,11 @@ use App\Http\Controllers\StaffPortal\hv_office\DownloadController;
 use App\Http\Controllers\StaffPortal\hv_office\DistanceController;
 use App\Http\Controllers\StaffPortal\hv_office\PaymentConfirmedController;
 
+use App\Http\Controllers\StaffPortal\OnboardingRequestController;
 use App\Http\Controllers\StaffPortal\PayrollController;
+use App\Http\Controllers\StaffPortal\ProfileRequestController;
 use App\Http\Controllers\StaffPortal\ShiftController;
+use App\Http\Controllers\StaffPortal\YearEnd\YearEndApplicationController;
 use Illuminate\Support\Facades\Route;
 
 // ログインページへリダイレクト
@@ -101,7 +106,15 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/year-end-adjustments/{applicationId}/gensen-bo-preview', [YearEndAdjustmentV2Controller::class, 'gensenBoPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.gensen_bo.preview');
         Route::get('/year-end-adjustments/{applicationId}/gensen-hyou-preview', [YearEndAdjustmentV2Controller::class, 'gensenHyouPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.gensen_hyou.preview');
         Route::get('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/certificate-preview', [YearEndAdjustmentV2Controller::class, 'hokenCertificatePreview'])->whereNumber('applicationId')->whereNumber('hokenNo')->name('admin.work.year_end_adjustments.hoken.certificate_preview');
+        Route::get('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/certificate-file', [YearEndAdjustmentV2Controller::class, 'hokenCertificateFile'])->whereNumber('applicationId')->whereNumber('hokenNo')->name('admin.work.year_end_adjustments.hoken.certificate_file');
+        Route::get('/year-end-adjustments/{applicationId}/fuyo/{fuyoNo}/certificate-file', [YearEndAdjustmentV2Controller::class, 'fuyoCertificateFile'])->whereNumber('applicationId')->whereNumber('fuyoNo')->name('admin.work.year_end_adjustments.fuyo.certificate_file');
+        Route::get('/year-end-adjustments/{applicationId}/previous-job/certificate-file', [YearEndAdjustmentV2Controller::class, 'previousJobCertificateFile'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.previous_job.certificate_file');
+        Route::get('/year-end-adjustments/{applicationId}/personal-info/{type}/certificate-file', [YearEndAdjustmentV2Controller::class, 'personalInfoCertificateFile'])->whereNumber('applicationId')->whereIn('type', ['address', 'name', 'disability'])->name('admin.work.year_end_adjustments.personal_info.certificate_file');
+        Route::get('/year-end-adjustments/{applicationId}/housing-loan/certificate-file', [YearEndAdjustmentV2Controller::class, 'housingLoanCertificateFile'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.housing_loan.certificate_file');
         Route::post('/year-end-adjustments/update-status', [YearEndAdjustmentV2Controller::class, 'updateStatus'])->name('admin.work.year_end_adjustments.update_status');
+        Route::post('/year-end-adjustments/{applicationId}/confirm', [YearEndAdjustmentV2Controller::class, 'confirmApplication'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.confirm');
+        Route::post('/year-end-adjustments/{applicationId}/return', [YearEndAdjustmentV2Controller::class, 'returnApplication'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.return');
+        Route::post('/year-end-adjustments/{applicationId}/reflect', [YearEndAdjustmentV2Controller::class, 'reflectApplication'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.reflect');
         Route::post('/year-end-adjustments/delete-target', [YearEndAdjustmentV2Controller::class, 'deleteTarget'])->name('admin.work.year_end_adjustments.delete_target');
         Route::post('/year-end-adjustments/{applicationId}/calculate', [YearEndAdjustmentV2Controller::class, 'calculateSingle'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.calculate');
         Route::post('/year-end-adjustments/{applicationId}/nen-tyo-update', [YearEndAdjustmentV2Controller::class, 'updateNenTyo'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.nen_tyo.update');
@@ -109,6 +122,36 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/year-end-adjustments/{applicationId}/hoken', [YearEndAdjustmentV2Controller::class, 'createHoken'])->name('admin.work.year_end_adjustments.hoken.create');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}', [YearEndAdjustmentV2Controller::class, 'updateHoken'])->name('admin.work.year_end_adjustments.hoken.update');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/delete', [YearEndAdjustmentV2Controller::class, 'deleteHoken'])->name('admin.work.year_end_adjustments.hoken.delete');
+        Route::post('/year-end-adjustments/{applicationId}/housing-loan', [YearEndAdjustmentV2Controller::class, 'updateHousingLoanNenTyo'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.housing_loan.update');
+        Route::post('/year-end-adjustments/{applicationId}/previous-job', [YearEndAdjustmentV2Controller::class, 'updatePreviousJobNenTyo'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.previous_job.update');
+        Route::post('/year-end-adjustments/{applicationId}/personal-info', [YearEndAdjustmentV2Controller::class, 'updatePersonalInfoStaging'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.personal_info.update');
+        Route::post('/year-end-adjustments/{applicationId}/fuyo/{fuyoNo}', [YearEndAdjustmentV2Controller::class, 'updateFuyoRow'])->whereNumber('applicationId')->whereNumber('fuyoNo')->name('admin.work.year_end_adjustments.fuyo.update');
+
+        // 個人情報変更申請（氏名・住所・世帯主・通勤経路・扶養増減。年中いつでも利用可）
+        Route::get('/profile-requests', [ProfileRequestV2Controller::class, 'index'])->name('admin.work.profile_requests');
+        Route::get('/profile-requests/{requestId}', [ProfileRequestV2Controller::class, 'show'])->whereNumber('requestId')->name('admin.work.profile_requests.show');
+        Route::post('/profile-requests/{requestId}/personal-info', [ProfileRequestV2Controller::class, 'updatePersonalInfoStaging'])->whereNumber('requestId')->name('admin.work.profile_requests.personal_info.update');
+        Route::post('/profile-requests/{requestId}/fuyo/{fuyoNo}', [ProfileRequestV2Controller::class, 'updateFuyoRow'])->whereNumber('requestId')->whereNumber('fuyoNo')->name('admin.work.profile_requests.fuyo.update');
+        Route::get('/profile-requests/{requestId}/fuyo/{fuyoNo}/certificate-file', [ProfileRequestV2Controller::class, 'fuyoCertificateFile'])->whereNumber('requestId')->whereNumber('fuyoNo')->name('admin.work.profile_requests.fuyo.certificate_file');
+        Route::get('/profile-requests/{requestId}/name-certificate-file', [ProfileRequestV2Controller::class, 'nameChangeCertificateFile'])->whereNumber('requestId')->name('admin.work.profile_requests.name.certificate_file');
+        Route::get('/profile-requests/{requestId}/address-certificate-file', [ProfileRequestV2Controller::class, 'addressChangeCertificateFile'])->whereNumber('requestId')->name('admin.work.profile_requests.address.certificate_file');
+        Route::get('/profile-requests/{requestId}/commute-certificate-file', [ProfileRequestV2Controller::class, 'commuteChangeCertificateFile'])->whereNumber('requestId')->name('admin.work.profile_requests.commute.certificate_file');
+        Route::post('/profile-requests/{requestId}/confirm', [ProfileRequestV2Controller::class, 'confirmApplication'])->whereNumber('requestId')->name('admin.work.profile_requests.confirm');
+        Route::post('/profile-requests/{requestId}/return', [ProfileRequestV2Controller::class, 'returnApplication'])->whereNumber('requestId')->name('admin.work.profile_requests.return');
+        Route::post('/profile-requests/{requestId}/reflect', [ProfileRequestV2Controller::class, 'reflectApplication'])->whereNumber('requestId')->name('admin.work.profile_requests.reflect');
+
+        // 入社手続き申請（住所・連絡先・振込口座・通勤経路・扶養・マイナンバー証憑。新入社スタッフ向け）
+        Route::get('/onboarding-requests', [OnboardingRequestV2Controller::class, 'index'])->name('admin.work.onboarding_requests');
+        Route::get('/onboarding-requests/{requestId}', [OnboardingRequestV2Controller::class, 'show'])->whereNumber('requestId')->name('admin.work.onboarding_requests.show');
+        Route::post('/onboarding-requests/{requestId}/basic-info', [OnboardingRequestV2Controller::class, 'updateBasicInfoStaging'])->whereNumber('requestId')->name('admin.work.onboarding_requests.basic_info.update');
+        Route::post('/onboarding-requests/{requestId}/fuyo/{fuyoNo}', [OnboardingRequestV2Controller::class, 'updateFuyoRow'])->whereNumber('requestId')->whereNumber('fuyoNo')->name('admin.work.onboarding_requests.fuyo.update');
+        Route::get('/onboarding-requests/{requestId}/fuyo/{fuyoNo}/certificate-file', [OnboardingRequestV2Controller::class, 'fuyoCertificateFile'])->whereNumber('requestId')->whereNumber('fuyoNo')->name('admin.work.onboarding_requests.fuyo.certificate_file');
+        Route::get('/onboarding-requests/{requestId}/address-certificate-file', [OnboardingRequestV2Controller::class, 'addressCertificateFile'])->whereNumber('requestId')->name('admin.work.onboarding_requests.address.certificate_file');
+        Route::get('/onboarding-requests/{requestId}/mynumber-certificate-file', [OnboardingRequestV2Controller::class, 'mynumberCertificateFile'])->whereNumber('requestId')->name('admin.work.onboarding_requests.mynumber.certificate_file');
+        Route::post('/onboarding-requests/{requestId}/confirm', [OnboardingRequestV2Controller::class, 'confirmApplication'])->whereNumber('requestId')->name('admin.work.onboarding_requests.confirm');
+        Route::post('/onboarding-requests/{requestId}/return', [OnboardingRequestV2Controller::class, 'returnApplication'])->whereNumber('requestId')->name('admin.work.onboarding_requests.return');
+        Route::post('/onboarding-requests/{requestId}/reflect', [OnboardingRequestV2Controller::class, 'reflectApplication'])->whereNumber('requestId')->name('admin.work.onboarding_requests.reflect');
+
         Route::get('/work/billing-list/{invoiceId}/print', [BillingListV2Controller::class, 'print'])->name('admin.work.billing_list.print');
         Route::post('/work/billing-list/store', [BillingListV2Controller::class, 'storeInvoice'])->name('admin.work.billing_list.store');
         Route::post('/work/billing-list/update', [BillingListV2Controller::class, 'updateInvoice'])->name('admin.work.billing_list.update');
@@ -230,6 +273,29 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
 
     // 各種申請
     Route::get('/apply', [ApplyController::class, 'index'])->name('apply');
+
+    // 年末調整（スタッフ申請）
+    Route::get('/year-end-adjustment', [YearEndApplicationController::class, 'index'])->name('year_end_adjustment');
+    Route::post('/year-end-adjustment/personal-info', [YearEndApplicationController::class, 'updatePersonalInfo'])->name('year_end_adjustment.personal_info.update');
+    Route::post('/year-end-adjustment/dependents', [YearEndApplicationController::class, 'updateDependents'])->name('year_end_adjustment.dependents.update');
+    Route::post('/year-end-adjustment/spouse', [YearEndApplicationController::class, 'updateSpouse'])->name('year_end_adjustment.spouse.update');
+    Route::post('/year-end-adjustment/insurance', [YearEndApplicationController::class, 'updateInsurance'])->name('year_end_adjustment.insurance.update');
+    Route::post('/year-end-adjustment/insurance/copy-previous-year', [YearEndApplicationController::class, 'copyPreviousYearInsurance'])->name('year_end_adjustment.insurance.copy_previous_year');
+    Route::post('/year-end-adjustment/previous-job', [YearEndApplicationController::class, 'updatePreviousJob'])->name('year_end_adjustment.previous_job.update');
+    Route::post('/year-end-adjustment/housing-loan', [YearEndApplicationController::class, 'updateHousingLoan'])->name('year_end_adjustment.housing_loan.update');
+    Route::post('/year-end-adjustment/submit', [YearEndApplicationController::class, 'submit'])->name('year_end_adjustment.submit');
+
+    // 個人情報変更申請（氏名・住所・世帯主・通勤経路・扶養増減。年中いつでも利用可）
+    Route::get('/profile-request', [ProfileRequestController::class, 'index'])->name('profile_request');
+    Route::post('/profile-request/personal-info', [ProfileRequestController::class, 'updatePersonalInfo'])->name('profile_request.personal_info.update');
+    Route::post('/profile-request/dependents', [ProfileRequestController::class, 'updateDependents'])->name('profile_request.dependents.update');
+    Route::post('/profile-request/submit', [ProfileRequestController::class, 'submit'])->name('profile_request.submit');
+
+    // 入社手続き申請（住所・連絡先・振込口座・通勤経路・扶養・マイナンバー証憑。新入社スタッフ向け）
+    Route::get('/onboarding-request', [OnboardingRequestController::class, 'index'])->name('onboarding_request');
+    Route::post('/onboarding-request/basic-info', [OnboardingRequestController::class, 'updateBasicInfo'])->name('onboarding_request.basic_info.update');
+    Route::post('/onboarding-request/dependents', [OnboardingRequestController::class, 'updateDependents'])->name('onboarding_request.dependents.update');
+    Route::post('/onboarding-request/submit', [OnboardingRequestController::class, 'submit'])->name('onboarding_request.submit');
 
     // マイページ
     Route::get('/mypage', [MyPageController::class, 'index'])->name('mypage');

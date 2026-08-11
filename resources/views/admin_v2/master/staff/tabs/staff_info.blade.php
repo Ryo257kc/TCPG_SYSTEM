@@ -93,10 +93,6 @@ if (abs($numeric) < 0.0000001) {
   };
 
   $addressValue=trim((string) ($selectedRow['address'] ?? '' ));
-
-  $staffDivisionOptions=[ '役員' , '兼務役員' , '正社員' , 'パート' , 'アルバイト' , '業務委託' ,
-  ];
-
   @endphp
 
   <form method="post" action="{{ route('admin.master.staff.update') }}" class="staff-info-form" id="staff-info-form">
@@ -623,7 +619,7 @@ if (abs($numeric) < 0.0000001) {
               <span>雇用区分</span>
               <select name="staff_division">
                 <option value=""></option>
-                @foreach($staffDivisionOptions as $option)
+                @foreach(($staffDivisionOptions ?? []) as $option)
                 <option value="{{ $option }}" @selected(($selectedRow['staff_division'] ?? '' )===$option)>{{ $option }}</option>
                 @endforeach
               </select>
@@ -632,7 +628,7 @@ if (abs($numeric) < 0.0000001) {
               <span>就業状況</span>
               <select name="employment">
                 <option value=""></option>
-                @foreach(['在職', '退職', '転籍', '育児休業中', '産後休業中', '介護休業中', '傷病休業中', '採用予定'] as $option)
+                @foreach(($employmentOptions ?? []) as $option)
                 <option value="{{ $option }}" @selected(($selectedRow['employment'] ?? '') === $option)>{{ $option }}</option>
                 @endforeach
               </select>

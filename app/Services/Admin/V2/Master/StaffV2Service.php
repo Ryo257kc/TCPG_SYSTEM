@@ -209,6 +209,48 @@ class StaffV2Service
         return $this->residentSubmissionOptions;
     }
 
+    /** @return list<string> */
+    public function employmentOptions(): array
+    {
+        return ['在職', '退職', '転籍', '育児休業中', '産後休業中', '介護休業中', '傷病休業中', '採用予定'];
+    }
+
+    /** @return list<string> */
+    public function staffDivisionOptions(): array
+    {
+        return ['役員', '兼務役員', '正社員', 'パート', 'アルバイト', '業務委託'];
+    }
+
+    /** @return list<string> */
+    public function weekOptions(): array
+    {
+        return ['月', '火', '水', '木', '金', '土', '日'];
+    }
+
+    /** @return list<string> */
+    public function fuyoRelationshipOptions(): array
+    {
+        return ['夫', '妻', '父', '母', '子', '次男', '三男', '四男', '五男', '長女', '次女', '三女', '四女', '五女'];
+    }
+
+    /** @return list<string> */
+    public function fuyoSexOptions(): array
+    {
+        return ['男', '女'];
+    }
+
+    /** @return list<string> */
+    public function kyojyuOptions(): array
+    {
+        return ['同居', '別居'];
+    }
+
+    /** @return list<string> */
+    public function failureJudgmentOptions(): array
+    {
+        return ['1級', '2級', '3級', '4級', '5級', '6級', '7級', 'A1', 'A2', 'B1', 'B2'];
+    }
+
     public function update(array $values): void
     {
         $staffId = trim((string) ($values['staff_id'] ?? ''));

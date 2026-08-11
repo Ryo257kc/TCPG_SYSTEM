@@ -10,6 +10,8 @@
     ['key' => 'bonus-detail', 'label' => '賞与計算', 'url' => '/admin/bonus'],
     ['key' => 'paid-leave-manage', 'label' => '有休管理', 'url' => '/admin/paid-leave'],
     ['key' => 'year-end-adjustments', 'label' => '年末調整管理', 'url' => route('admin.work.year_end_adjustments')],
+    ['key' => 'profile-requests', 'label' => '個人情報変更申請管理', 'url' => route('admin.work.profile_requests')],
+    ['key' => 'onboarding-requests', 'label' => '入社手続き申請管理', 'url' => route('admin.work.onboarding_requests')],
     ],
     '売上' => [
     ['key' => 'sales-preview', 'label' => '店舗売上', 'url' => '/admin/sales'],

@@ -132,8 +132,6 @@ $syahoSeed = $selectedSyahoRow ?? [];
             <th>適用日</th>
             <th>料率</th>
             <th>健保介護</th>
-            <!-- <th>給与合計</th> -->
-            <!-- <th>賞与合計</th> -->
           </tr>
         </thead>
         <tbody>
@@ -141,41 +139,26 @@ $syahoSeed = $selectedSyahoRow ?? [];
             <th>健康保険</th>
             <td>{{ ($selectedSyahoRow['kenpo_apply_date'] ?? '') !== '' ? $selectedSyahoRow['kenpo_apply_date'] : '---' }}</td>
             <td>{{ $rate2($selectedSyahoRow['kenpo_rate'] ?? '') }}</td>
-            <!-- <td>{{ $rate2($selectedSyahoRow['kenpo_shoyo'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kenpo_rate'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kenpo_shoyo'] ?? '') }}</td> -->
           </tr>
           <tr>
             <th>介護保険</th>
             <td>{{ ($selectedSyahoRow['kaigo_apply_date'] ?? '') !== '' ? $selectedSyahoRow['kaigo_apply_date'] : '---' }}</td>
             <td>{{ $rate2($selectedSyahoRow['kaigo_rate'] ?? '') }}</td>
-            <!-- <td>{{ $rate2($selectedSyahoRow['kaigo_shoyo'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kaigo_rate'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kaigo_shoyo'] ?? '') }}</td> -->
           </tr>
           <tr>
             <th>子ども・子育て支援金</th>
             <td>{{ ($selectedSyahoRow['kodomo_shien_date'] ?? '') !== '' ? $selectedSyahoRow['kodomo_shien_date'] : '---' }}</td>
             <td>{{ $rate2($selectedSyahoRow['kodomo_shien'] ?? '') }}</td>
-            <!-- <td>{{ $rate2($selectedSyahoRow['jidou_shoyo'] ?? '') }}</td> -->
-            <!-- <td>---</td>
-            <td>---</td> -->
           </tr>
           <tr>
             <th>厚生年金</th>
             <td>{{ ($selectedSyahoRow['kou_apply_date'] ?? '') !== '' ? $selectedSyahoRow['kou_apply_date'] : '---' }}</td>
             <td>{{ $rate2($selectedSyahoRow['kounen_rate'] ?? '') }}</td>
-            <!-- <td>{{ $rate2($selectedSyahoRow['kou_shoyo'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kounen_rate'] ?? '') }}</td> -->
-            <!-- <td>{{ $doubleRate($selectedSyahoRow['kou_shoyo'] ?? '') }}</td> -->
           </tr>
           <tr>
             <th>児童手当拠出金</th>
             <td>{{ ($selectedSyahoRow['jidou_apply_date'] ?? '') !== '' ? $selectedSyahoRow['jidou_apply_date'] : '---' }}</td>
             <td>{{ $rate2($selectedSyahoRow['jidou_rate'] ?? '') }}</td>
-            <!-- <td>{{ $rate2($selectedSyahoRow['jidou_shoyo'] ?? '') }}</td> -->
-            <!-- <td>---</td>
-            <td>---</td> -->
           </tr>
         </tbody>
       </table>
@@ -207,9 +190,6 @@ $syahoSeed = $selectedSyahoRow ?? [];
           <th>区分</th>
           <th>適用日</th>
           <th>料率</th>
-          <!-- <th>賞与</th> -->
-          <!-- <th>給与合計</th> -->
-          <!-- <th>賞与合計</th> -->
         </tr>
       </thead>
       <tbody>
@@ -217,33 +197,21 @@ $syahoSeed = $selectedSyahoRow ?? [];
           <th>健康保険</th>
           <td><input type="date" name="kenpo_apply_date" value="{{ $selectedSyahoRow['kenpo_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kenpo_rate" value="{{ $rateInput($selectedSyahoRow['kenpo_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kenpo_shoyo" value="{{ $rateInput($selectedSyahoRow['kenpo_shoyo'] ?? '') }}"></td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kenpo_rate'] ?? '') }}</td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kenpo_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>介護保険</th>
           <td><input type="date" name="kaigo_apply_date" value="{{ $selectedSyahoRow['kaigo_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kaigo_rate" value="{{ $rateInput($selectedSyahoRow['kaigo_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kaigo_shoyo" value="{{ $rateInput($selectedSyahoRow['kaigo_shoyo'] ?? '') }}"></td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kaigo_rate'] ?? '') }}</td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kaigo_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>厚生年金</th>
           <td><input type="date" name="kou_apply_date" value="{{ $selectedSyahoRow['kou_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kounen_rate" value="{{ $rateInput($selectedSyahoRow['kounen_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kou_shoyo" value="{{ $rateInput($selectedSyahoRow['kou_shoyo'] ?? '') }}"></td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kounen_rate'] ?? '') }}</td> -->
-          <!-- <td>{{ $doubleRate($selectedSyahoRow['kou_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>児童手当拠出金</th>
           <td><input type="date" name="jidou_apply_date" value="{{ $selectedSyahoRow['jidou_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="jidou_rate" value="{{ $rateInput($selectedSyahoRow['jidou_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="jidou_shoyo" value="{{ $rateInput($selectedSyahoRow['jidou_shoyo'] ?? '') }}"></td> -->
-          <!-- <td>---</td>
-          <td>---</td> -->
         </tr>
       </tbody>
     </table>
@@ -276,9 +244,6 @@ $syahoSeed = $selectedSyahoRow ?? [];
           <th>区分</th>
           <th>適用日</th>
           <th>料率</th>
-          <!-- <th>賞与</th> -->
-          <!-- <th>給与合計</th> -->
-          <!-- <th>賞与合計</th> -->
         </tr>
       </thead>
       <tbody>
@@ -286,31 +251,24 @@ $syahoSeed = $selectedSyahoRow ?? [];
           <th>健康保険</th>
           <td><input type="date" name="kenpo_apply_date" value="{{ $syahoSeed['kenpo_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kenpo_rate" value="{{ $rateInput($syahoSeed['kenpo_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kenpo_shoyo" value="{{ $rateInput($syahoSeed['kenpo_shoyo'] ?? '') }}"></td> -->
           <td>{{ $doubleRate($syahoSeed['kenpo_rate'] ?? '') }}</td>
-          <!-- <td>{{ $doubleRate($syahoSeed['kenpo_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>介護保険</th>
           <td><input type="date" name="kaigo_apply_date" value="{{ $syahoSeed['kaigo_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kaigo_rate" value="{{ $rateInput($syahoSeed['kaigo_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kaigo_shoyo" value="{{ $rateInput($syahoSeed['kaigo_shoyo'] ?? '') }}"></td> -->
           <td>{{ $doubleRate($syahoSeed['kaigo_rate'] ?? '') }}</td>
-          <!-- <td>{{ $doubleRate($syahoSeed['kaigo_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>厚生年金</th>
           <td><input type="date" name="kou_apply_date" value="{{ $syahoSeed['kou_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="kounen_rate" value="{{ $rateInput($syahoSeed['kounen_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="kou_shoyo" value="{{ $rateInput($syahoSeed['kou_shoyo'] ?? '') }}"></td> -->
           <td>{{ $doubleRate($syahoSeed['kounen_rate'] ?? '') }}</td>
-          <!-- <td>{{ $doubleRate($syahoSeed['kou_shoyo'] ?? '') }}</td> -->
         </tr>
         <tr>
           <th>児童手当拠出金</th>
           <td><input type="date" name="jidou_apply_date" value="{{ $syahoSeed['jidou_apply_date'] ?? '' }}"></td>
           <td><input type="number" step="0.01" name="jidou_rate" value="{{ $rateInput($syahoSeed['jidou_rate'] ?? '') }}"></td>
-          <!-- <td><input type="number" step="0.01" name="jidou_shoyo" value="{{ $rateInput($syahoSeed['jidou_shoyo'] ?? '') }}"></td> -->
           <td>---</td>
           <td>---</td>
         </tr>
@@ -343,16 +301,12 @@ $syahoSeed = $selectedSyahoRow ?? [];
         <tr>
           <th>健保適用日</th>
           <th>健保</th>
-          <!-- <th>健保賞与</th> -->
           <th>介護適用日</th>
           <th>介護</th>
-          <!-- <th>介護賞与</th> -->
           <th>厚年適用日</th>
           <th>厚生年金</th>
-          <!-- <th>厚年賞与</th> -->
           <th>児童適用日</th>
           <th>児童給与</th>
-          <!-- <th>児童賞与</th> -->
           <th>支払基礎日数</th>
         </tr>
       </thead>

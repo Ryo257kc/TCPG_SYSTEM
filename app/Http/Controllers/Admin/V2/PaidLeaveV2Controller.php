@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\PaidLeave\PaidLeaveV2SummaryService;
-use Carbon\Carbon;
+use App\Support\ParsedInput;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
@@ -106,11 +106,11 @@ class PaidLeaveV2Controller extends Controller
             ->table('dbo.mx_yukyu')
             ->where('yukyu_no', $yukyuNo)
             ->update([
-                'addition_day' => $this->normalizeDate($request->input('addition_day')),
-                'remaining_day' => $this->normalizeNumber($request->input('remaining_day')),
-                'lost_num' => $this->normalizeNumber($request->input('lost_num')),
-                'date_use' => $this->normalizeDate($request->input('date_use')),
-                'days_used' => $this->normalizeNumber($request->input('days_used')),
+                'addition_day' => ParsedInput::date($request->input('addition_day')),
+                'remaining_day' => ParsedInput::number($request->input('remaining_day')),
+                'lost_num' => ParsedInput::number($request->input('lost_num')),
+                'date_use' => ParsedInput::date($request->input('date_use')),
+                'days_used' => ParsedInput::number($request->input('days_used')),
             ]);
 
         return redirect()->route('admin.paid-leave.index', [
@@ -128,11 +128,11 @@ class PaidLeaveV2Controller extends Controller
                 ->table('dbo.mx_yukyu')
                 ->insert([
                     'staff_id' => $selectedStaffId,
-                    'addition_day' => $this->normalizeDate($request->input('addition_day')),
-                    'remaining_day' => $this->normalizeNumber($request->input('remaining_day')),
-                    'lost_num' => $this->normalizeNumber($request->input('lost_num')),
-                    'date_use' => $this->normalizeDate($request->input('date_use')),
-                    'days_used' => $this->normalizeNumber($request->input('days_used')),
+                    'addition_day' => ParsedInput::date($request->input('addition_day')),
+                    'remaining_day' => ParsedInput::number($request->input('remaining_day')),
+                    'lost_num' => ParsedInput::number($request->input('lost_num')),
+                    'date_use' => ParsedInput::date($request->input('date_use')),
+                    'days_used' => ParsedInput::number($request->input('days_used')),
                 ]);
         }
 
@@ -157,27 +157,4 @@ class PaidLeaveV2Controller extends Controller
         ]);
     }
 
-    private function normalizeDate(mixed $value): ?string
-    {
-        $text = trim((string) $value);
-        if ($text === '') {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($text)->format('Y-m-d');
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function normalizeNumber(mixed $value): ?float
-    {
-        $text = trim(str_replace(',', '', (string) $value));
-        if ($text === '') {
-            return null;
-        }
-
-        return is_numeric($text) ? (float) $text : null;
-    }
 }

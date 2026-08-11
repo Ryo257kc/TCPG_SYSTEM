@@ -156,28 +156,18 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
           <span>続柄</span>
           <select name="fuyo_relationship">
             <option value=""></option>
-            <option value="夫">夫</option>
-            <option value="妻">妻</option>
-            <option value="父">父</option>
-            <option value="母">母</option>
-            <option value="子">子</option>
-            <option value="次男">次男</option>
-            <option value="三男">三男</option>
-            <option value="四男">四男</option>
-            <option value="五男">五男</option>
-            <option value="長女">長女</option>
-            <option value="次女">次女</option>
-            <option value="三女">三女</option>
-            <option value="四女">四女</option>
-            <option value="五女">五女</option>
+            @foreach(($fuyoRelationshipOptions ?? []) as $option)
+            <option value="{{ $option }}">{{ $option }}</option>
+            @endforeach
           </select>
         </label>
         <label class="detail-field detail-field-compact">
           <span>性別</span>
           <select name="fuyo_sex">
             <option value=""></option>
-            <option value="男">男</option>
-            <option value="女">女</option>
+            @foreach(($fuyoSexOptions ?? []) as $option)
+            <option value="{{ $option }}">{{ $option }}</option>
+            @endforeach
           </select>
         </label>
 
@@ -193,8 +183,9 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
           <span>居住</span>
           <select name="kyojyu">
             <option value=""></option>
-            <option value="同居">同居</option>
-            <option value="別居">別居</option>
+            @foreach(($kyojyuOptions ?? []) as $option)
+            <option value="{{ $option }}">{{ $option }}</option>
+            @endforeach
           </select>
         </label>
 
@@ -214,17 +205,9 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
           <span>障害状態</span>
           <select name="failure_judgment">
             <option value=""></option>
-            <option value="1級">1級</option>
-            <option value="2級">2級</option>
-            <option value="3級">3級</option>
-            <option value="4級">4級</option>
-            <option value="5級">5級</option>
-            <option value="6級">6級</option>
-            <option value="7級">7級</option>
-            <option value="A1">A1</option>
-            <option value="A2">A2</option>
-            <option value="B1">B1</option>
-            <option value="B2">B2</option>
+            @foreach(($failureJudgmentOptions ?? []) as $option)
+            <option value="{{ $option }}">{{ $option }}</option>
+            @endforeach
           </select>
         </label>
         <label class="detail-field detail-field-compact">
@@ -283,28 +266,18 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
             <span>続柄</span>
             <select name="fuyo_relationship">
               <option value=""></option>
-              <option value="夫" @selected($fuyoValue($row, 'fuyo_relationship') === '夫')>夫</option>
-              <option value="妻" @selected($fuyoValue($row, 'fuyo_relationship') === '妻')>妻</option>
-              <option value="父" @selected($fuyoValue($row, 'fuyo_relationship') === '父')>父</option>
-              <option value="母" @selected($fuyoValue($row, 'fuyo_relationship') === '母')>母</option>
-              <option value="子" @selected($fuyoValue($row, 'fuyo_relationship') === '子')>子</option>
-              <option value="次男" @selected($fuyoValue($row, 'fuyo_relationship') === '次男')>次男</option>
-              <option value="三男" @selected($fuyoValue($row, 'fuyo_relationship') === '三男')>三男</option>
-              <option value="四男" @selected($fuyoValue($row, 'fuyo_relationship') === '四男')>四男</option>
-              <option value="五男" @selected($fuyoValue($row, 'fuyo_relationship') === '五男')>五男</option>
-              <option value="長女" @selected($fuyoValue($row, 'fuyo_relationship') === '長女')>長女</option>
-              <option value="次女" @selected($fuyoValue($row, 'fuyo_relationship') === '次女')>次女</option>
-              <option value="三女" @selected($fuyoValue($row, 'fuyo_relationship') === '三女')>三女</option>
-              <option value="四女" @selected($fuyoValue($row, 'fuyo_relationship') === '四女')>四女</option>
-              <option value="五女" @selected($fuyoValue($row, 'fuyo_relationship') === '五女')>五女</option>
+              @foreach(($fuyoRelationshipOptions ?? []) as $option)
+              <option value="{{ $option }}" @selected($fuyoValue($row, 'fuyo_relationship') === $option)>{{ $option }}</option>
+              @endforeach
             </select>
           </label>
           <label class="detail-field detail-field-compact">
             <span>性別</span>
             <select name="fuyo_sex">
               <option value=""></option>
-              <option value="男" @selected($fuyoValue($row, 'fuyo_sex') === '男')>男</option>
-              <option value="女" @selected($fuyoValue($row, 'fuyo_sex') === '女')>女</option>
+              @foreach(($fuyoSexOptions ?? []) as $option)
+              <option value="{{ $option }}" @selected($fuyoValue($row, 'fuyo_sex') === $option)>{{ $option }}</option>
+              @endforeach
             </select>
           </label>
 
@@ -320,8 +293,9 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
             <span>居住</span>
             <select name="kyojyu">
               <option value=""></option>
-              <option value="同居" @selected($fuyoValue($row, 'kyojyu') === '同居')>同居</option>
-              <option value="別居" @selected($fuyoValue($row, 'kyojyu') === '別居')>別居</option>
+              @foreach(($kyojyuOptions ?? []) as $option)
+              <option value="{{ $option }}" @selected($fuyoValue($row, 'kyojyu') === $option)>{{ $option }}</option>
+              @endforeach
             </select>
           </label>
 
@@ -342,17 +316,9 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
             <span>障害状態</span>
             <select name="failure_judgment">
               <option value=""></option>
-              <option value="1級" @selected($fuyoValue($row, 'failure_judgment') === '1級')>1級</option>
-              <option value="2級" @selected($fuyoValue($row, 'failure_judgment') === '2級')>2級</option>
-              <option value="3級" @selected($fuyoValue($row, 'failure_judgment') === '3級')>3級</option>
-              <option value="4級" @selected($fuyoValue($row, 'failure_judgment') === '4級')>4級</option>
-              <option value="5級" @selected($fuyoValue($row, 'failure_judgment') === '5級')>5級</option>
-              <option value="6級" @selected($fuyoValue($row, 'failure_judgment') === '6級')>6級</option>
-              <option value="7級" @selected($fuyoValue($row, 'failure_judgment') === '7級')>7級</option>
-              <option value="A1" @selected($fuyoValue($row, 'failure_judgment') === 'A1')>A1</option>
-              <option value="A2" @selected($fuyoValue($row, 'failure_judgment') === 'A2')>A2</option>
-              <option value="B1" @selected($fuyoValue($row, 'failure_judgment') === 'B1')>B1</option>
-              <option value="B2" @selected($fuyoValue($row, 'failure_judgment') === 'B2')>B2</option>
+              @foreach(($failureJudgmentOptions ?? []) as $option)
+              <option value="{{ $option }}" @selected($fuyoValue($row, 'failure_judgment') === $option)>{{ $option }}</option>
+              @endforeach
             </select>
           </label>
           <label class="detail-field detail-field-compact">

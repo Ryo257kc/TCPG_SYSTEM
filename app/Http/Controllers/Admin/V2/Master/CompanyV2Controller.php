@@ -134,16 +134,12 @@ class CompanyV2Controller extends Controller
             'q' => ['nullable', 'string', 'max:200'],
             'kenpo_apply_date' => ['nullable', 'date'],
             'kenpo_rate' => ['nullable', 'string', 'max:50'],
-            // 'kenpo_shoyo' => ['nullable', 'string', 'max:50'],
             'kaigo_apply_date' => ['nullable', 'date'],
             'kaigo_rate' => ['nullable', 'string', 'max:50'],
-            // 'kaigo_shoyo' => ['nullable', 'string', 'max:50'],
             'kou_apply_date' => ['nullable', 'date'],
             'kounen_rate' => ['nullable', 'string', 'max:50'],
-            // 'kou_shoyo' => ['nullable', 'string', 'max:50'],
             'jidou_apply_date' => ['nullable', 'date'],
             'jidou_rate' => ['nullable', 'string', 'max:50'],
-            // 'jidou_shoyo' => ['nullable', 'string', 'max:50'],
             'basic_payment_days' => ['nullable', 'string', 'max:50'],
         ]);
 
@@ -164,16 +160,12 @@ class CompanyV2Controller extends Controller
             'q' => ['nullable', 'string', 'max:200'],
             'kenpo_apply_date' => ['nullable', 'date'],
             'kenpo_rate' => ['nullable', 'string', 'max:50'],
-            // 'kenpo_shoyo' => ['nullable', 'string', 'max:50'],
             'kaigo_apply_date' => ['nullable', 'date'],
             'kaigo_rate' => ['nullable', 'string', 'max:50'],
-            // 'kaigo_shoyo' => ['nullable', 'string', 'max:50'],
             'kou_apply_date' => ['nullable', 'date'],
             'kounen_rate' => ['nullable', 'string', 'max:50'],
-            // 'kou_shoyo' => ['nullable', 'string', 'max:50'],
             'jidou_apply_date' => ['nullable', 'date'],
             'jidou_rate' => ['nullable', 'string', 'max:50'],
-            // 'jidou_shoyo' => ['nullable', 'string', 'max:50'],
             'basic_payment_days' => ['nullable', 'string', 'max:50'],
         ]);
 
