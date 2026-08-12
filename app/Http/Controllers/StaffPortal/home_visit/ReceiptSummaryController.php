@@ -141,4 +141,86 @@ class ReceiptSummaryController extends Controller
             'rows' => $rows,
         ]));
     }
+
+    // 集計確定（hv_nippouの日報からhv_ryoukinへ一括作成）
+    public function confirm(Request $request): RedirectResponse
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        if (!$this->isVisitManagement($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
+        $target_month = trim((string) $request->input('target_month', ''));
+        $summary_type = trim((string) $request->input('summary_type', ''));
+        if (!in_array($summary_type, ['保険', '自費'], true) || $target_month === '') {
+            return redirect()->route('home_visit.receipt_summary')->withErrors([
+                'receipt_summary' => '対象月・区分が不正です。',
+            ]);
+        }
+
+        $targetMonthStart = $target_month . '-01';
+        $targetMonthNext = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
+        $is_private_charge = $summary_type === '自費' ? 1 : 0;
+
+        // 二重確定防止（表示時と確定操作の間に他の操作で作られていないか再確認）
+        $existingCount = DB::connection('sqlsrv')
+            ->table('dbo.hv_ryoukin')
+            ->where('target_month', '>=', $targetMonthStart)
+            ->where('target_month', '<', $targetMonthNext)
+            ->where('is_private_charge', $is_private_charge)
+            ->count();
+
+        if ($existingCount > 0) {
+            return redirect()->route('home_visit.receipt_summary', [
+                'target_month' => $target_month,
+                'summary_type' => $summary_type,
+            ])->withErrors(['receipt_summary' => 'すでに集計済みです。']);
+        }
+
+        // 旧システム(insert-shukei.php)のロジックを踏襲：単価=1回あたりの実額、請求回数=件数
+        // 同一患者・同一月でも実額が異なれば別行として作成される
+        if ($summary_type === '自費') {
+            DB::connection('sqlsrv')->insert("
+                INSERT INTO dbo.hv_ryoukin (
+                    patient_id, target_month, unit_price, billing_count, description,
+                    is_private_charge, payment_staff, payment_store_name, payment_visit_area
+                )
+                SELECT
+                    n.patient_id, n.target_month, n.private_fee, COUNT(n.patient_id), MAX(n.treatment_details),
+                    1, n.daily_report_billing_staff, n.daily_report_store_name, d.store_short_name
+                FROM dbo.hv_nippou n
+                LEFT JOIN dbo.mx_departments d ON d.visit_area = n.daily_report_store_name
+                WHERE n.target_month >= ? AND n.target_month < ?
+                  AND (n.is_no_treatment = 0 OR n.is_no_treatment IS NULL)
+                  AND n.private_fee <> 0
+                GROUP BY n.patient_id, n.target_month, n.private_fee, n.daily_report_billing_staff, n.daily_report_store_name, d.store_short_name
+            ", [$targetMonthStart, $targetMonthNext]);
+        } else {
+            DB::connection('sqlsrv')->insert("
+                INSERT INTO dbo.hv_ryoukin (
+                    patient_id, target_month, unit_price, billing_count, description,
+                    payment_staff, payment_store_name, payment_visit_area
+                )
+                SELECT
+                    n.patient_id, n.target_month, n.copayment_amount, COUNT(n.patient_id), N'鍼灸治療',
+                    n.daily_report_billing_staff, n.daily_report_store_name, d.store_short_name
+                FROM dbo.hv_nippou n
+                LEFT JOIN dbo.mx_departments d ON d.visit_area = n.daily_report_store_name
+                WHERE n.target_month >= ? AND n.target_month < ?
+                  AND (n.is_no_treatment = 0 OR n.is_no_treatment IS NULL)
+                  AND n.copayment_amount <> 0
+                  AND (n.private_fee = 0 OR n.private_fee IS NULL)
+                GROUP BY n.patient_id, n.target_month, n.copayment_amount, n.daily_report_billing_staff, n.daily_report_store_name, d.store_short_name
+            ", [$targetMonthStart, $targetMonthNext]);
+        }
+
+        return redirect()->route('home_visit.receipt_summary', [
+            'target_month' => $target_month,
+            'summary_type' => $summary_type,
+        ])->with('status', '集計を確定しました。');
+    }
 }

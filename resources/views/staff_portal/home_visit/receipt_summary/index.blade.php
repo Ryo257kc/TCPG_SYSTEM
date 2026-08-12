@@ -69,7 +69,9 @@
             <div class="error">{{ $errors->first() }}</div>
             @endif
 
-
+            @if(session('status'))
+            <div class="status">{{ session('status') }}</div>
+            @endif
 
             @if($existingCount > 0)
             <div class="receipt-summary-message">「{{ $target_month }}」は既に集計されています。</div>
@@ -79,7 +81,12 @@
             <div class="receipt-summary-message">
                 下記の内容で集計してよければ、「確定」ボタンを押してください。
                 <div class="receipt-summary-actions">
-                    <button type="button" class="btn">確定</button>
+                    <form method="post" action="{{ route('home_visit.receipt_summary.confirm') }}" onsubmit="return confirm('この内容で確定しますか？');">
+                        @csrf
+                        <input type="hidden" name="target_month" value="{{ $target_month }}">
+                        <input type="hidden" name="summary_type" value="{{ $summary_type }}">
+                        <button type="submit" class="btn">確定</button>
+                    </form>
                 </div>
             </div>
 

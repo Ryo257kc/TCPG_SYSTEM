@@ -19,9 +19,25 @@ class DailyReportController extends Controller
         return $this->isVisitManagement($staffRow) || $this->isAdmin($staffRow);
     }
 
+    // 往診閲覧: 編集権限は無いが全スタッフのデータを閲覧できる
+    private function canViewAnyDailyReportStaff(?array $staffRow): bool
+    {
+        return $this->canSelectDailyReportStaff($staffRow) || $this->isViewOnly($staffRow);
+    }
+
     private function targetDailyReportStaffId(Request $request, string $loginStaffId, ?array $staffRow): string
     {
         if (!$this->canSelectDailyReportStaff($staffRow)) {
+            return $loginStaffId;
+        }
+
+        $targetStaffId = trim((string) $request->input('staff_name', $request->query('staff_name', $loginStaffId)));
+        return $targetStaffId !== '' ? $targetStaffId : $loginStaffId;
+    }
+
+    private function targetDailyReportViewStaffId(Request $request, string $loginStaffId, ?array $staffRow): string
+    {
+        if (!$this->canViewAnyDailyReportStaff($staffRow)) {
             return $loginStaffId;
         }
 
@@ -37,7 +53,7 @@ class DailyReportController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $date = trim((string) $request->query('date', now()->format('Y-m-d')));
-        $targetStaffId = $this->targetDailyReportStaffId($request, $staffId, $staffRow);
+        $targetStaffId = $this->targetDailyReportViewStaffId($request, $staffId, $staffRow);
 
         $items = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou as n')
@@ -93,7 +109,7 @@ class DailyReportController extends Controller
             ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$targetStaffId])
             ->first();
 
-        $canSelectStaff = $this->canSelectDailyReportStaff($staffRow);
+        $canSelectStaff = $this->canViewAnyDailyReportStaff($staffRow);
         $targetMonthStart = date('Y-m-01', strtotime($date));
 
         return view('staff_portal.home_visit.daily_report.index', $this->commonViewData($request, [
@@ -116,7 +132,7 @@ class DailyReportController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $date = trim((string) $request->query('date', now()->format('Y-m-d')));
-        $targetStaffId = $this->targetDailyReportStaffId($request, $staffId, $staffRow);
+        $targetStaffId = $this->targetDailyReportViewStaffId($request, $staffId, $staffRow);
 
         $items = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou as n')
@@ -283,6 +299,7 @@ class DailyReportController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canManage = $this->isVisitManagement($staffRow);
+        $isViewOnlyRole = $this->isViewOnly($staffRow);
 
         $item = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou as n')
@@ -334,11 +351,12 @@ class DailyReportController extends Controller
             ]);
         }
 
-        if (!$canManage && trim((string) $item->staff_name) !== $staffId) {
+        if (!$canManage && !$isViewOnlyRole && trim((string) $item->staff_name) !== $staffId) {
             abort(403);
         }
 
-        $isReadOnly = (int) $item->is_management_fixed === 1
+        $isReadOnly = $isViewOnlyRole
+            || (int) $item->is_management_fixed === 1
             || (!$canManage && (int) $item->is_confirmed === 1);
 
         $itemMonthStart = date('Y-m-01', strtotime($item->treatment_date));
@@ -401,6 +419,10 @@ class DailyReportController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canManage = $this->isVisitManagement($staffRow);
+
+        if ($this->isViewOnly($staffRow) && !$canManage) {
+            abort(403);
+        }
 
         $existing = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
@@ -513,6 +535,10 @@ class DailyReportController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canManage = $this->isVisitManagement($staffRow);
+
+        if ($this->isViewOnly($staffRow) && !$canManage) {
+            abort(403);
+        }
 
         $existing = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')

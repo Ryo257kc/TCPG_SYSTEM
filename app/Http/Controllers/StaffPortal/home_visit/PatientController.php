@@ -16,7 +16,7 @@ class PatientController extends Controller
 
     private function canEditPatients(?array $staffRow): bool
     {
-        return $this->isVisitManagement($staffRow) || $this->isAccounting($staffRow);
+        return $this->isVisitManagement($staffRow) || $this->isAccounting($staffRow) || $this->isViewOnly($staffRow);
     }
 
     private function patientValidationRules(): array

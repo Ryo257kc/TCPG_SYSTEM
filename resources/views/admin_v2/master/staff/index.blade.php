@@ -674,6 +674,7 @@
                 <button type="submit">検索</button>
 
                 <a href="{{ route('admin.master.staff', ['q' => $keyword, 'employment_filter' => $employmentFilter, 'company_filter' => $companyFilter, 'new' => 1]) }}" class="btn btn-primary">新規登録</a>
+                <a href="{{ route('admin.master.staff.permissions') }}" class="btn btn-secondary">権限一覧</a>
             </form>
             <p class="meta-count">件数: {{ number_format($rowCount) }}</p>
 

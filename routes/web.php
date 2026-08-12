@@ -181,6 +181,8 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/company/mayor/update', [CompanyV2Controller::class, 'updateMayor'])->name('admin.master.company.mayor.update');
         Route::post('/master/company/mayor/delete', [CompanyV2Controller::class, 'deleteMayor'])->name('admin.master.company.mayor.delete');
         Route::get('/master/staff', [StaffV2Controller::class, 'index'])->name('admin.master.staff');
+        Route::get('/master/staff/permissions', [StaffV2Controller::class, 'permissions'])->name('admin.master.staff.permissions');
+        Route::post('/master/staff/permissions', [StaffV2Controller::class, 'updatePermissions'])->name('admin.master.staff.permissions.update');
         Route::post('/master/staff', [StaffV2Controller::class, 'store'])->name('admin.master.staff.store');
         Route::post('/master/staff/update', [StaffV2Controller::class, 'update'])->name('admin.master.staff.update');
         Route::post('/master/staff/submission', [StaffV2Controller::class, 'updateSubmission'])->name('admin.master.staff.submission.update');
@@ -338,6 +340,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     // 往診入金管理
     Route::get('/home_visit/receipts', [ReceiptController::class, 'index'])->name('home_visit.receipts');
     Route::get('/home_visit/receipt-summary', [ReceiptSummaryController::class, 'index'])->name('home_visit.receipt_summary');
+    Route::post('/home_visit/receipt-summary/confirm', [ReceiptSummaryController::class, 'confirm'])->name('home_visit.receipt_summary.confirm');
     Route::get('/home_visit/sales', [SalesController::class, 'index'])->name('home_visit.sales');
 
 
@@ -345,11 +348,15 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
 
     // 往診事務
     Route::get('/hv_office/deposit_management', [DepositManagementController::class, 'index'])->name('hv_office.deposit_management');
+    Route::get('/hv_office/deposit_management/print', [DepositManagementController::class, 'print'])->name('hv_office.deposit_management.print');
     Route::get('/hv_office/download', [DownloadController::class, 'index'])->name('hv_office.download');
     Route::get('/hv_office/download/csv', [DownloadController::class, 'csv'])->name('hv_office.download.csv');
     Route::get('/hv_office/distance', [DistanceController::class, 'index'])->name('hv_office.distance');
     Route::get('/hv_office/distance/print', [DistanceController::class, 'print'])->name('hv_office.distance.print');
     Route::get('/hv_office/payment_confirmed', [PaymentConfirmedController::class, 'index'])->name('hv_office.payment_confirmed');
+    Route::get('/hv_office/payment_confirmed/management', [PaymentConfirmedController::class, 'management'])->name('hv_office.payment_confirmed.management');
+    Route::post('/hv_office/payment_confirmed/confirm', [PaymentConfirmedController::class, 'confirm'])->name('hv_office.payment_confirmed.confirm');
+    Route::post('/hv_office/payment_confirmed/unconfirm', [PaymentConfirmedController::class, 'unconfirm'])->name('hv_office.payment_confirmed.unconfirm');
 
     // 事務所MENU
     Route::get('/office/office_menu', [OfficeController::class, 'officeMenu'])->name('office.office_menu');

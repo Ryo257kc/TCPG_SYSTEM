@@ -2,7 +2,7 @@
 <html lang="ja">
 
 <head>
-    <?php
+    @php
     $dashboardSections = [
     [
     'visible' => !$hidePayrollLinks || $isAdmin,
@@ -40,7 +40,7 @@
     ],
     ],
     [
-    'visible' => $isOushinStaff || $isAdmin,
+    'visible' => $isOushinStaff || $isAdmin || $isViewOnly,
     'badge' => 'STAFF',
     'title' => '往診',
     'cards' => [
@@ -71,10 +71,22 @@
     ],
     [
     'type' => 'link',
-    'route' => 'dashboard',
+    'route' => 'hv_office.payment_confirmed',
     'title' => '入金確定履歴',
-    'sub' => '準備中/入力済入金管理の確定履歴',
-    'hidden' => true,
+    'sub' => '入力済入金管理の確定履歴（自分の分）',
+    ],
+    [
+    'type' => 'link',
+    'route' => 'hv_office.payment_confirmed.management',
+    'title' => '入金確定履歴（管理）',
+    'sub' => '全スタッフ分の入金確定状況',
+    'visible' => $isVisitManagement || $isViewOnly || $isAdmin,
+    ],
+    [
+    'type' => 'link',
+    'route' => 'hv_office.deposit_management',
+    'title' => '入金管理表',
+    'sub' => '入金管理表の表示・印刷',
     ],
     ],
     ],
@@ -162,7 +174,7 @@
 
 
     [
-    'visible' => $isAccounting || $isAdmin,
+    'visible' => $isAccounting || $isAdmin || $isViewOnly,
     'badge' => 'OFFICE',
     'title' => '往診事務',
     'cards' => [
@@ -209,7 +221,7 @@
     'route' => 'home_visit.sales',
     'title' => '往診売上',
     'sub' => '往診売上の登録',
-    'visible' => $isViewOnly,
+    'visible' => $isAccounting,
     ],
     ],
     ],
@@ -300,17 +312,17 @@
     ],
 
     ];
-    ?>
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM</title>
-    <link rel="stylesheet" href="<?php echo e(asset('css/staff_portal/app-shell.css')); ?>">
-    <link rel="stylesheet" href="<?php echo e(asset('css/staff_portal/dashboard-index.css')); ?>">
+    <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/staff_portal/dashboard-index.css') }}">
 </head>
 
 <body class="dashboard-page">
     <main class="container">
-        <?php echo $__env->make('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
         <section class="panel dashboard-info-panel">
             <div class="dashboard-section-head">
@@ -318,75 +330,74 @@
                 <h2 class="dashboard-section-title">Information</h2>
             </div>
 
-            <?php if(!empty($informationMessages)): ?>
+            @if(!empty($informationMessages))
             <div class="dashboard-info-list">
-                <?php $__currentLoopData = $informationMessages; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $message): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                <?php if(empty($message['me_check'])): ?>
+                @foreach($informationMessages as $message)
+                @if(empty($message['me_check']))
                 <article class="dashboard-info-item">
                     <div class="dashboard-info-meta">
-                        <span class="dashboard-info-date"><?php echo e($message['mase_date']); ?></span>
-                        <strong class="dashboard-info-title"><?php echo e($message['title']); ?></strong>
+                        <span class="dashboard-info-date">{{ $message['mase_date'] }}</span>
+                        <strong class="dashboard-info-title">{{ $message['title'] }}</strong>
                     </div>
-                    <p class="dashboard-info-text"><?php echo e($message['contents']); ?></p>
+                    <p class="dashboard-info-text">{{ $message['contents'] }}</p>
                 </article>
-                <?php endif; ?>
-                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                @endif
+                @endforeach
             </div>
-            <?php else: ?>
+            @else
             <p class="dashboard-info-text">お知らせはありません。</p>
-            <?php endif; ?>
+            @endif
 
-            <?php if($needsCorrection): ?>
+            @if($needsCorrection)
             <div class="warn">修正が必要な勤怠があります。</div>
-            <?php endif; ?>
+            @endif
 
-            <?php if($needsYearEndAttention ?? false): ?>
-            <div class="warn"><a href="<?php echo e(route('year_end_adjustment')); ?>">年末調整の申請が差し戻されました。内容を確認してください。</a></div>
-            <?php endif; ?>
+            @if($needsYearEndAttention ?? false)
+            <div class="warn"><a href="{{ route('year_end_adjustment') }}">年末調整の申請が差し戻されました。内容を確認してください。</a></div>
+            @endif
         </section>
 
-        <?php $__currentLoopData = $dashboardSections; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $section): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-        <?php if($section['visible']): ?>
+        @foreach($dashboardSections as $section)
+        @if($section['visible'])
         <section class="panel dashboard-office-panel">
             <div class="dashboard-section-head">
-                <span class="dashboard-section-badge"><?php echo e($section['badge']); ?></span>
-                <h2 class="dashboard-section-title"><?php echo e($section['title']); ?></h2>
+                <span class="dashboard-section-badge">{{ $section['badge'] }}</span>
+                <h2 class="dashboard-section-title">{{ $section['title'] }}</h2>
             </div>
 
             <div class="office-menu-grid">
-                <?php $__currentLoopData = $section['cards']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $card): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                <?php if(!empty($card['hidden'])) continue; ?>
-                <?php if(array_key_exists('visible', $card) && !$card['visible']) continue; ?>
-                <?php if($card['type'] === 'link'): ?>
+                @foreach($section['cards'] as $card)
+                @continue(!empty($card['hidden']))
+                @continue(array_key_exists('visible', $card) && !$card['visible'])
+                @if($card['type'] === 'link')
 
-                <a class="office-menu-card" href="<?php echo e(route($card['route'])); ?>">
-                    <span class="office-menu-card-title"><?php echo e($card['title']); ?></span>
-                    <span class="office-menu-card-sub"><?php echo e($card['sub']); ?></span>
+                <a class="office-menu-card" href="{{ route($card['route']) }}">
+                    <span class="office-menu-card-title">{{ $card['title'] }}</span>
+                    <span class="office-menu-card-sub">{{ $card['sub'] }}</span>
                 </a>
-                <?php elseif($card['type'] === 'static'): ?>
+                @elseif($card['type'] === 'static')
                 <div class="office-menu-card office-menu-card-static">
-                    <span class="office-menu-card-title"><?php echo e($card['title']); ?></span>
-                    <?php if(!empty($card['sub'])): ?>
-                    <span class="office-menu-card-sub"><?php echo e($card['sub']); ?></span>
-                    <?php endif; ?>
+                    <span class="office-menu-card-title">{{ $card['title'] }}</span>
+                    @if(!empty($card['sub']))
+                    <span class="office-menu-card-sub">{{ $card['sub'] }}</span>
+                    @endif
                     <span class="office-menu-card-links">
-                        <?php $__currentLoopData = $card['links']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $chip): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                        <?php if($chip['type'] === 'link'): ?>
-                        <a class="office-menu-chip office-menu-chip-link" href="<?php echo e(route($chip['route'])); ?>"><?php echo e($chip['label']); ?></a>
-                        <?php else: ?>
-                        <span class="office-menu-chip"><?php echo e($chip['label']); ?></span>
-                        <?php endif; ?>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        @foreach($card['links'] as $chip)
+                        @if($chip['type'] === 'link')
+                        <a class="office-menu-chip office-menu-chip-link" href="{{ route($chip['route']) }}">{{ $chip['label'] }}</a>
+                        @else
+                        <span class="office-menu-chip">{{ $chip['label'] }}</span>
+                        @endif
+                        @endforeach
                     </span>
                 </div>
-                <?php endif; ?>
-                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                @endif
+                @endforeach
             </div>
         </section>
-        <?php endif; ?>
-        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+        @endif
+        @endforeach
     </main>
 </body>
 
 </html>
-<?php /**PATH C:\dev\tcpg_system_laravel\resources\views\staff_portal\dashboard\index.blade.php ENDPATH**/ ?>

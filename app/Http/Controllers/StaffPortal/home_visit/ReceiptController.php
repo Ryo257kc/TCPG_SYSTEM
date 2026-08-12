@@ -32,7 +32,8 @@ class ReceiptController extends Controller
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canFilterPaymentStaff = $this->isVisitManagement($staffRow)
             || $this->isAccounting($staffRow)
-            || $this->isAdmin($staffRow);
+            || $this->isAdmin($staffRow)
+            || $this->isViewOnly($staffRow);
 
         if (!$canFilterPaymentStaff) {
             $payment_staff = $staffId;
@@ -270,6 +271,10 @@ class ReceiptController extends Controller
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canManage = $this->isVisitManagement($staffRow);
 
+        if ($this->isViewOnly($staffRow) && !$canManage) {
+            abort(403);
+        }
+
         $existing = DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->where('charge_id', $id)
@@ -312,7 +317,12 @@ class ReceiptController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
-        $canManage = $this->isVisitManagement($this->staffPortalStaffRow($staffId));
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
+        if ($this->isViewOnly($staffRow) && !$canManage) {
+            abort(403);
+        }
 
         $patientId = trim((string) $request->input('patient_id', ''));
 
@@ -352,6 +362,10 @@ class ReceiptController extends Controller
 
         $staffRow = $this->staffPortalStaffRow($staffId);
         $canManage = $this->isVisitManagement($staffRow);
+
+        if ($this->isViewOnly($staffRow) && !$canManage) {
+            abort(403);
+        }
 
         $existing = DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')

@@ -85,7 +85,7 @@
                         <tr>
                             <td>{{ $treatmentDate ? $treatmentDate->format('Y-m-d') . '(' . $week[(int) $treatmentDate->format('w')] . ')' : '' }}</td>
                             <td>
-                                @if($isViewOnly)
+                                @if($isAccounting)
                                 @if($row->is_confirmed)
                                 <a class="btn_small" href="{{ route('home_visit.daily_report.print', ['date' => $treatmentDate ? $treatmentDate->format('Y-m-d') : '', 'staff_name' => $row->staff_name]) }}" target="_blank" rel="noopener">プレビュー</a>
                                 @else
@@ -94,7 +94,7 @@
                                 @endif
                             </td>
                             <td>
-                                @if($isViewOnly)
+                                @if($isAccounting)
                                 @if($row->is_confirmed)
                                 <a class="btn_small" href="{{ route('home_visit.daily_report', ['date' => $treatmentDate ? $treatmentDate->format('Y-m-d') : '', 'staff_name' => $row->staff_name]) }}">売上入力</a>
                                 @else

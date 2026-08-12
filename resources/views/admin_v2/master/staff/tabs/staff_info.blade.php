@@ -16,8 +16,8 @@ $bankPairs = [
 $rightsPairs = [
     [['is_admin', '全権管理者'], ['__none', '']],
     [['oushin_staff', '往診スタッフ'], ['front_staff', '店舗システム']],
-    [['is_accounting_user', '往診事務'], ['is_payment_check_user', '事務所']],
-    [['is_visit_management_user', '往診管理'], ['is_view_only_user', '往診売上']],
+    [['is_accounting_user', '往診売上'], ['is_payment_check_user', '事務所']],
+    [['is_visit_management_user', '往診管理'], ['is_view_only_user', '往診閲覧']],
     [['is_store_management_user', '店舗管理'], ['is_daily_report_user', '店舗日報']],
 ];
 
@@ -825,7 +825,7 @@ if (abs($numeric) < 0.0000001) {
           </div>
           <div class="detail-pair">
             <label class="detail-field detail-field-compact">
-              <span>往診事務</span>
+              <span>往診売上</span>
               <div class="checkbox-line"><input type="checkbox" name="is_accounting_user" value="1" @checked((string)($selectedRow['is_accounting_user'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['is_accounting_user'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
             <label class="detail-field detail-field-compact">
@@ -839,7 +839,7 @@ if (abs($numeric) < 0.0000001) {
               <div class="checkbox-line"><input type="checkbox" name="is_visit_management_user" value="1" @checked((string)($selectedRow['is_visit_management_user'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['is_visit_management_user'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
             <label class="detail-field detail-field-compact">
-              <span>往診売上</span>
+              <span>往診閲覧</span>
               <div class="checkbox-line"><input type="checkbox" name="is_view_only_user" value="1" @checked((string)($selectedRow['is_view_only_user'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['is_view_only_user'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
           </div>

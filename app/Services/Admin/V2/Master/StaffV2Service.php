@@ -353,6 +353,82 @@ class StaffV2Service
         $this->updateStaffColumns($values, ['submission', 'addressee_no']);
     }
 
+    public function updatePermissions(array $values): void
+    {
+        $this->updateStaffColumns($values, $this->permissionColumns());
+    }
+
+    /** @return list<string> */
+    public function permissionColumns(): array
+    {
+        return [
+            'is_admin',
+            'oushin_staff',
+            'is_accounting_user',
+            'is_payment_check_user',
+            'is_visit_management_user',
+            'is_view_only_user',
+            'is_store_management_user',
+            'is_daily_report_user',
+            'front_staff',
+        ];
+    }
+
+    public function permissionsList(string $keyword, string $employmentFilter = 'active', string $companyFilter = ''): array
+    {
+        $companyFilter = trim($companyFilter);
+        $query = DB::connection('sqlsrv')->table('dbo.mx_staffs as ms')
+            ->leftJoin('dbo.mx_stores as st', 'ms.section', '=', 'st.store_code')
+            ->leftJoin('dbo.mx_companies as co', 'st.company_id', '=', 'co.company_id')
+            ->select(array_merge([
+                DB::raw('ms.staff_id as staff_id'),
+                'ms.staff_name',
+                DB::raw('st.store_name as store_name'),
+                DB::raw('ms.employment as employment_status'),
+            ], array_map(fn (string $c) => "ms.$c", $this->permissionColumns())))
+            ->orderBy('ms.staff_id');
+
+        if ($employmentFilter === 'active') {
+            $query->where(function ($q): void {
+                $q->whereNull('ms.tai_date')
+                    ->orWhere(DB::raw("LTRIM(RTRIM(CAST(ms.tai_date AS nvarchar(50))))"), '=', '')
+                    ->orWhere(function ($dateQ): void {
+                        $dateQ->whereNotNull('ms.tai_date')
+                            ->whereDate('ms.tai_date', '>=', now()->toDateString());
+                    });
+            });
+        } elseif ($employmentFilter === 'retired') {
+            $query->whereNotNull('ms.tai_date')
+                ->where(DB::raw("LTRIM(RTRIM(CAST(ms.tai_date AS nvarchar(50))))"), '<>', '')
+                ->whereDate('ms.tai_date', '<', now()->toDateString());
+        }
+
+        if ($companyFilter !== '') {
+            $query->whereRaw('LTRIM(RTRIM(CAST(st.company_id AS nvarchar(50)))) = ?', [$companyFilter]);
+        }
+
+        if ($keyword !== '') {
+            $query->where(function ($q) use ($keyword): void {
+                $q->where('ms.staff_id', 'like', '%' . $keyword . '%')
+                    ->orWhere('ms.staff_name', 'like', '%' . $keyword . '%')
+                    ->orWhere('st.store_name', 'like', '%' . $keyword . '%');
+            });
+        }
+
+        return $query->get()->map(function ($r) {
+            $row = [
+                'staff_id' => (string) ($r->staff_id ?? ''),
+                'staff_name' => (string) ($r->staff_name ?? ''),
+                'store_name' => (string) ($r->store_name ?? ''),
+                'employment_status' => (string) ($r->employment_status ?? ''),
+            ];
+            foreach ($this->permissionColumns() as $column) {
+                $row[$column] = (int) ($r->{$column} ?? 0) === 1;
+            }
+            return $row;
+        })->all();
+    }
+
     public function updateInsurance(array $values): void
     {
         $this->updateStaffColumns($values, $this->staffInsuranceColumns());

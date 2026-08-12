@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM - 入金確定履歴</title>
+    <title>TCPG SYSTEM - 入金確定履歴（管理）</title>
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
 </head>
@@ -15,7 +15,7 @@
 
         <section class="panel content-panel sales-panel staff-viewport-panel">
             <div class="content-head">
-                <h2 class="content-title">入金確定履歴</h2>
+                <h2 class="content-title">入金確定履歴一覧（管理）</h2>
             </div>
 
             @if(session('status'))
@@ -26,52 +26,38 @@
             <div class="error">{{ $errors->first() }}</div>
             @endif
 
-            <form method="get" action="{{ route('hv_office.payment_confirmed') }}" class="filter-row">
-                <select name="year">
-                    @for($y = 2020; $y <= (int) now()->format('Y'); $y++)
-                    <option value="{{ $y }}" @selected((string) $year === (string) $y)>{{ $y }}年</option>
-                    @endfor
-                </select>
-                <button type="submit" class="btn">表示</button>
+            <form method="get" action="{{ route('hv_office.payment_confirmed.management') }}" class="filter-row">
+                <label>日付:
+                    <input type="month" name="target_month" value="{{ $target_month }}">
+                </label>
+                <button type="submit" class="btn">月毎</button>
             </form>
 
             <div class="table-wrap staff-viewport-list-wrap">
                 @if($rows->count() === 0)
-                <div class="empty">「{{ $year }}」のデータがありません。</div>
+                <div class="empty">「{{ $target_month }}」のデータがありません。</div>
                 @else
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>月度</th>
+                            <th>ID</th>
+                            <th>担当</th>
                             <th>入金管理　確定日</th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($rows as $row)
                         @php
                         $isConfirmed = (int) ($row->is_payment_confirmed ?? 0) === 1;
-                        $monthLabel = \Carbon\Carbon::parse($row->target_month)->format('Y-m');
+                        $displayName = $row->display_name_ja ?: $row->staff_name;
                         @endphp
                         <tr>
-                            <td>{{ $monthLabel }}</td>
+                            <td>{{ $target_month }}</td>
+                            <td>{{ $row->payment_staff }}</td>
+                            <td>{{ $displayName }}</td>
                             <td style="{{ $isConfirmed ? '' : 'background:#fff3cd;' }}">
                                 {{ $isConfirmed && $row->payment_confirmed_at ? \Carbon\Carbon::parse($row->payment_confirmed_at)->format('Y-m-d H:i:s') : '' }}
-                            </td>
-                            <td>
-                                @if($isConfirmed)
-                                <form method="post" action="{{ route('hv_office.payment_confirmed.unconfirm') }}" style="display:inline;">
-                                    @csrf
-                                    <input type="hidden" name="target_month" value="{{ $monthLabel }}">
-                                    <button type="submit" class="btn_small">解除</button>
-                                </form>
-                                @else
-                                <form method="post" action="{{ route('hv_office.payment_confirmed.confirm') }}" style="display:inline;">
-                                    @csrf
-                                    <input type="hidden" name="target_month" value="{{ $monthLabel }}">
-                                    <button type="submit" class="btn_small">確定</button>
-                                </form>
-                                @endif
                             </td>
                         </tr>
                         @endforeach

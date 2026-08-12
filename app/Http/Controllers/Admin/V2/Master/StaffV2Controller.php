@@ -72,6 +72,46 @@ class StaffV2Controller extends Controller
         ]);
     }
 
+    public function permissions(Request $request): View
+    {
+        $keyword = trim((string) $request->query('q', ''));
+        $employmentFilter = trim((string) $request->query('employment_filter', 'active'));
+        if (!in_array($employmentFilter, ['active', 'all', 'retired'], true)) {
+            $employmentFilter = 'active';
+        }
+        $companyFilter = trim((string) $request->query('company_filter', ''));
+
+        $rows = $this->service->permissionsList($keyword, $employmentFilter, $companyFilter);
+
+        return view('admin_v2.master.staff.permissions', [
+            'keyword' => $keyword,
+            'employmentFilter' => $employmentFilter,
+            'companyFilter' => $companyFilter,
+            'companyOptions' => $this->companyService->list('')['rows'],
+            'rows' => $rows,
+            'permissionColumns' => $this->service->permissionColumns(),
+        ]);
+    }
+
+    public function updatePermissions(Request $request): RedirectResponse
+    {
+        $permissions = $request->input('permissions', []);
+        if (is_array($permissions)) {
+            foreach ($permissions as $staffId => $flags) {
+                if (!is_array($flags)) {
+                    continue;
+                }
+                $this->service->updatePermissions(array_merge(['staff_id' => (string) $staffId], $flags));
+            }
+        }
+
+        return redirect()->route('admin.master.staff.permissions', [
+            'q' => trim((string) $request->input('q', '')),
+            'employment_filter' => trim((string) $request->input('employment_filter', 'active')),
+            'company_filter' => trim((string) $request->input('company_filter', '')),
+        ])->with('status', '権限を保存しました。');
+    }
+
     public function update(Request $request): RedirectResponse
     {
         $v = $request->validate($this->staffInfoRules());
