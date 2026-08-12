@@ -85,17 +85,21 @@
                         <tr>
                             <td>{{ $treatmentDate ? $treatmentDate->format('Y-m-d') . '(' . $week[(int) $treatmentDate->format('w')] . ')' : '' }}</td>
                             <td>
-                                @if($is_management_fixed)
+                                @if($isViewOnly)
+                                @if($row->is_confirmed)
                                 <a class="btn_small" href="{{ route('home_visit.daily_report.print', ['date' => $treatmentDate ? $treatmentDate->format('Y-m-d') : '', 'staff_name' => $row->staff_name]) }}" target="_blank" rel="noopener">プレビュー</a>
                                 @else
                                 未確認
                                 @endif
+                                @endif
                             </td>
                             <td>
-                                @if($is_management_fixed)
+                                @if($isViewOnly)
+                                @if($row->is_confirmed)
                                 <a class="btn_small" href="{{ route('home_visit.daily_report', ['date' => $treatmentDate ? $treatmentDate->format('Y-m-d') : '', 'staff_name' => $row->staff_name]) }}">売上入力</a>
                                 @else
                                 未確認
+                                @endif
                                 @endif
                             </td>
                             <td>{{ $sales_amount_total === null ? '' : number_format((float) $sales_amount_total) }}</td>

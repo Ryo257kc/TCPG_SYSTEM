@@ -493,9 +493,11 @@
                                     <input class="monthly-visit-edit-input" form="{{ $monthlyVisitDetailFormId }}" type="text" name="start_point_address" value="{{ $detail->start_point_address }}">
                                 </td>
                                 <td rowspan="2" class="monthly-visit-detail-action-cell">
+                                    @if($isVisitManagement)
                                     <button type="button" class="btn_small monthly-visit-edit-button" data-monthly-visit-edit>編集</button>
                                     <button type="submit" form="{{ $monthlyVisitDetailFormId }}" class="btn_small monthly-visit-save-button">保存</button>
                                     <button type="button" class="btn_small monthly-visit-cancel-button" data-monthly-visit-cancel>取消</button>
+                                    @endif
                                 </td>
                             </tr>
                             <tr class="monthly-visit-detail-row monthly-visit-detail-sub-row">

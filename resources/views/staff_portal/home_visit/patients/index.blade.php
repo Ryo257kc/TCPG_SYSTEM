@@ -61,7 +61,7 @@
                         @foreach($staffOptions as $option)
                         <option value="{{ $option['staff_id'] }}"
                             {{ $staff === $option['staff_id'] ? 'selected' : '' }}>
-                            {{ $option['staff_name'] !== '' ? $option['staff_name'] : $option['staff_name'] }}
+                            {{ $option['display_name_ja'] !== '' ? $option['display_name_ja'] : $option['staff_name'] }}
                         </option>
                         @endforeach
                     </select>

@@ -124,7 +124,7 @@
                         <option value="">-入金担当-</option>
                         @foreach($payment_staff_options as $option)
                         <option value="{{ $option['staff_id'] }}" {{ (string) $payment_staff === (string) $option['staff_id'] ? 'selected' : '' }}>
-                            {{ $option['staff_name'] !== '' ? $option['staff_name'] : $option['staff_name'] }}
+                            {{ ($option['display_name_ja'] ?? '') !== '' ? $option['display_name_ja'] : $option['staff_name'] }}
                         </option>
                         @endforeach
                     </select>
@@ -160,7 +160,7 @@
 
                             @if($payment_staff !== '' && $paymentStaffName)
                             <div>
-                                担当：{{ $paymentStaffName['staff_name'] !== '' ? $paymentStaffName['staff_name'] : $paymentStaffName['staff_name'] }}
+                                担当：{{ ($paymentStaffName['display_name_ja'] ?? '') !== '' ? $paymentStaffName['display_name_ja'] : $paymentStaffName['staff_name'] }}
                             </div>
                             @endif
 

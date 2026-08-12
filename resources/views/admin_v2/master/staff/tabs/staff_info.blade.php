@@ -646,8 +646,13 @@ if (abs($numeric) < 0.0000001) {
           </div>
           <div class="detail-pair">
             <label class="detail-field detail-field-compact">
-              <span>税額</span>
-              <input type="text" name="tax_amount" value="{{ $selectedRow['tax_amount'] ?? '' }}">
+              <span>税額表（甲欄・乙欄）</span>
+              <select name="tax_amount">
+                <option value=""></option>
+                @foreach(($taxAmountOptions ?? []) as $option)
+                <option value="{{ $option }}" @selected(($selectedRow['tax_amount'] ?? '') === $option)>{{ $option }}</option>
+                @endforeach
+              </select>
             </label>
           </div>
         </div>

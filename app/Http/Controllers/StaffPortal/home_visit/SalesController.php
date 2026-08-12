@@ -44,6 +44,7 @@ class SalesController extends Controller
             ->select([
                 'n.treatment_date',
                 'n.staff_name',
+                'n.is_confirmed',
                 'n.is_management_fixed',
                 'n.confirmed_at',
                 'staff.display_name_ja as staff_display_name_ja',
@@ -59,6 +60,7 @@ class SalesController extends Controller
             ->groupBy([
                 'n.treatment_date',
                 'n.staff_name',
+                'n.is_confirmed',
                 'n.is_management_fixed',
                 'n.confirmed_at',
                 'staff.display_name_ja',

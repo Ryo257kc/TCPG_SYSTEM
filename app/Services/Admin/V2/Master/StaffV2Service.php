@@ -216,6 +216,12 @@ class StaffV2Service
     }
 
     /** @return list<string> */
+    public function taxAmountOptions(): array
+    {
+        return ['甲欄', '乙欄'];
+    }
+
+    /** @return list<string> */
     public function staffDivisionOptions(): array
     {
         return ['役員', '兼務役員', '正社員', 'パート', 'アルバイト', '業務委託'];
@@ -258,21 +264,22 @@ class StaffV2Service
             return;
         }
 
+        // チェックボックス（booleanColumns）以外は、フォームに含まれていない列をpayloadに
+        // 入れない（部分送信で他の列を勝手にNULL上書きしない）。チェックボックスだけは
+        // 「未チェック＝送信されない」がHTMLフォームの通常挙動なので、staff-info-form
+        // （全boolean列を毎回送信する想定）からの呼び出しでは従来通り0に倒す。
         $payload = [];
         foreach ($this->editableColumns() as $column) {
             if (!$this->hasColumn($column)) {
                 continue;
             }
 
-            if ($column === 'submission' && !array_key_exists('submission', $values)) {
-                continue;
-            }
-            if (in_array($column, $this->staffInsuranceColumns(), true) && !array_key_exists($column, $values)) {
+            if (in_array($column, $this->booleanColumns(), true)) {
+                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
                 continue;
             }
 
-            if (in_array($column, $this->booleanColumns(), true)) {
-                $payload[$column] = (($values[$column] ?? null) === '1') ? 1 : 0;
+            if (!array_key_exists($column, $values)) {
                 continue;
             }
 

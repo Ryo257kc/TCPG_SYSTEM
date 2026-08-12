@@ -19,8 +19,6 @@ class StoreDailyReportController extends Controller
 
     public function index(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         return view('staff_portal.office.store_daily_report.index', $this->commonViewData($request, []));
     }
 
@@ -130,8 +128,6 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryMonthlyPrint(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('日報集計店舗', ''));
@@ -172,14 +168,13 @@ class StoreDailyReportController extends Controller
     // 修正依頼
     public function requestHistory(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $selectedStatus = $request->has('status_filter')
             ? trim((string) $request->query('status_filter', ''))
             : trim((string) $request->query('状況', '依頼中'));
         $requestHistoryQuery = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_依頼履歴')
             ->select([
+                '依頼No',
                 '状況',
                 '対象日',
                 '内容',
@@ -187,7 +182,6 @@ class StoreDailyReportController extends Controller
                 '依頼者',
                 '店舗',
                 '事務所コメント',
-                // '店舗非表示・事務所備忘用',
             ]);
 
         if ($selectedStatus !== '') {
@@ -198,16 +192,14 @@ class StoreDailyReportController extends Controller
             ->orderByDesc('依頼日')
             ->get()
             ->map(fn($row): array => [
+                '依頼No' => trim((string) ($row->{'依頼No'} ?? '')),
                 '状況' => trim((string) ($row->{'状況'} ?? '')),
                 '対象日' => $this->formatDateValue($row->{'対象日'} ?? null, 'Y/m/d'),
-                'original_対象日' => $this->formatDateValue($row->{'対象日'} ?? null, 'Y-m-d'),
                 '内容' => trim((string) ($row->{'内容'} ?? '')),
                 '依頼日' => $this->formatDateValue($row->{'依頼日'} ?? null, 'Y/m/d H:i'),
-                'original_依頼日' => $this->formatDateValue($row->{'依頼日'} ?? null, 'Y-m-d H:i:s'),
                 '依頼者' => trim((string) ($row->{'依頼者'} ?? '')),
                 '店舗' => trim((string) ($row->{'店舗'} ?? '')),
                 '事務所コメント' => trim((string) ($row->{'事務所コメント'} ?? '')),
-                // '店舗非表示・事務所備忘用' => trim((string) ($row->{'店舗非表示・事務所備忘用'} ?? '')),
             ])
             ->all();
 
@@ -220,8 +212,6 @@ class StoreDailyReportController extends Controller
     // 返戻ノート
     public function returnNote(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $targetYear = (int) $request->query('target_year', now()->format('Y'));
         if ($targetYear < 2000 || $targetYear > 2100) {
             $targetYear = (int) now()->format('Y');
@@ -299,8 +289,6 @@ class StoreDailyReportController extends Controller
 
     public function saveReturnNote(Request $request): RedirectResponse
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $henrei_no = trim((string) $request->input('henrei_no', ''));
         $入金日 = $this->normalizeDateValue($request->input('入金日'));
         $事務所備考 = trim((string) $request->input('事務所備考', ''));
@@ -333,8 +321,6 @@ class StoreDailyReportController extends Controller
     // その他一覧
     public function otherList(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('レジ店舗', ''));
@@ -399,8 +385,6 @@ class StoreDailyReportController extends Controller
 
     public function otherListPrint(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('レジ店舗', ''));
@@ -456,8 +440,6 @@ class StoreDailyReportController extends Controller
     // 項目別集計
     public function itemSummary(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('店舗', ''));
@@ -529,17 +511,11 @@ class StoreDailyReportController extends Controller
 
     public function saveRequestHistory(Request $request): RedirectResponse
     {
-        $staffId = $this->staffPortalStaffId($request);
-
-        $対象日 = trim((string) $request->input('original_対象日', ''));
-        $内容 = trim((string) $request->input('original_内容', ''));
-        $依頼日 = trim((string) $request->input('original_依頼日', ''));
-        $依頼者 = trim((string) $request->input('original_依頼者', ''));
-        $店舗 = trim((string) $request->input('original_店舗', ''));
+        $依頼No = trim((string) $request->input('依頼No', ''));
         $状況 = trim((string) $request->input('状況', ''));
         $事務所コメント = trim((string) $request->input('事務所コメント', ''));
 
-        if ($対象日 === '' || $内容 === '' || $依頼日 === '' || $依頼者 === '' || $店舗 === '') {
+        if ($依頼No === '') {
             return redirect()
                 ->route('office.store_daily_report.request_history')
                 ->with('errorMessage', '保存対象が確認できません。');
@@ -547,11 +523,7 @@ class StoreDailyReportController extends Controller
 
         DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_依頼履歴')
-            ->whereDate('対象日', $対象日)
-            ->where('内容', $内容)
-            ->where('依頼者', $依頼者)
-            ->where('店舗', $店舗)
-            ->whereBetween('依頼日', [$依頼日, date('Y-m-d H:i:s', strtotime($依頼日) + 59)])
+            ->where('依頼No', $依頼No)
             ->update([
                 '状況' => $状況 === '' ? null : $状況,
                 '事務所コメント' => $事務所コメント === '' ? null : $事務所コメント,
@@ -564,8 +536,6 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryDetail(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
             return redirect()->route('office.store_daily_report.daily_summary');
@@ -813,8 +783,6 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryPrint(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
             return redirect()->route('office.store_daily_report.daily_summary');
@@ -1298,8 +1266,6 @@ class StoreDailyReportController extends Controller
 
     public function saveMonthlyWindowInput(Request $request): RedirectResponse
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
             'sakura_receipt_burden_amount' => ['nullable', 'string'],
@@ -1339,8 +1305,6 @@ class StoreDailyReportController extends Controller
     // 日報の月次処理を登録する
     public function closeDailySummaryMonthly(Request $request): RedirectResponse
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $data = $request->validate([
             'daily_summary_id' => ['required', 'string'],
             'target_month' => ['required', 'date_format:Y-m'],
@@ -1460,8 +1424,6 @@ class StoreDailyReportController extends Controller
 
     public function addDailySummaryPatient(Request $request): RedirectResponse
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         $targetDate = $this->normalizeDateValue($request->input('日付'));
         $targetStore = trim((string) $request->input('店舗', ''));
@@ -2456,55 +2418,6 @@ class StoreDailyReportController extends Controller
 
         return $totals;
     }
-    private function dailySummaryMonthlyJournalTotals(Carbon $targetMonthStart, Carbon $targetMonthNext): array
-    {
-        $normalRows = DB::connection('sqlsrv_dailyreport')
-            ->table('dbo.T_患者名日報 as patient')
-            ->leftJoin('dbo.T_先生別日報 as teacher', 'patient.患者No', '=', 'teacher.患者No_t')
-            ->select([
-                'patient.店舗',
-                DB::raw('SUM(CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0 THEN COALESCE(patient.レセ負担金, 0) + COALESCE(patient.差額, 0) ELSE 0 END) as amount'),
-            ])
-            ->where('patient.日付', '>=', $targetMonthStart->format('Y-m-d'))
-            ->where('patient.日付', '<', $targetMonthNext->format('Y-m-d'))
-            ->groupBy('patient.店舗')
-            ->get();
-
-        $collectionRows = DB::connection('sqlsrv_dailyreport')
-            ->table('dbo.T_患者名日報 as patient')
-            ->leftJoin('dbo.T_先生別日報 as teacher', 'patient.患者No', '=', 'teacher.患者No_t')
-            ->select([
-                'patient.店舗',
-                DB::raw('SUM(CASE WHEN teacher.計算外 <> 0 OR patient.保険証 = 2 THEN COALESCE(patient.レセ負担金, 0) + COALESCE(patient.差額, 0) ELSE 0 END) as amount'),
-            ])
-            ->where('patient.回収日', '>=', $targetMonthStart->format('Y-m-d'))
-            ->where('patient.回収日', '<', $targetMonthNext->format('Y-m-d'))
-            ->where('patient.保険証', 2)
-            ->groupBy('patient.店舗')
-            ->get();
-
-        $totals = [];
-
-        foreach ($normalRows as $row) {
-            $storeName = trim((string) ($row->{'店舗'} ?? ''));
-            if ($storeName === '') {
-                continue;
-            }
-
-            $totals[$storeName] = (float) ($totals[$storeName] ?? 0) + (float) ($row->amount ?? 0);
-        }
-
-        foreach ($collectionRows as $row) {
-            $storeName = trim((string) ($row->{'店舗'} ?? ''));
-            if ($storeName === '') {
-                continue;
-            }
-
-            $totals[$storeName] = (float) ($totals[$storeName] ?? 0) + (float) ($row->amount ?? 0);
-        }
-
-        return $totals;
-    }
 
     private function dailySummaryMonthlySelfPayTotals(Carbon $targetMonthStart, Carbon $targetMonthNext): array
     {
@@ -2704,16 +2617,7 @@ class StoreDailyReportController extends Controller
 
     private function moneyToDatabaseValue(mixed $value): ?float
     {
-        $value = str_replace(',', '', trim((string) ($value ?? '')));
-
-        return $value === '' ? null : (float) $value;
-    }
-
-    private function integerToDatabaseValue(mixed $value): ?int
-    {
-        $value = str_replace(',', '', trim((string) ($value ?? '')));
-
-        return $value === '' ? null : (int) $value;
+        return \App\Support\ParsedInput::number($value);
     }
 
     private function checkboxToDatabaseValue(mixed $value): int

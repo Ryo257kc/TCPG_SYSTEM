@@ -294,6 +294,7 @@
     'route' => 'office.documents',
     'title' => '書類',
     'sub' => '入社関連書類一覧',
+    'hidden' => true,
     ],
     ],
     ],

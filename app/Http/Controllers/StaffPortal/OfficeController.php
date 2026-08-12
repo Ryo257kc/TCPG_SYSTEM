@@ -22,42 +22,20 @@ class OfficeController extends Controller
 
     public function salesMenu(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
-        $companyRows = $this->companyService->list('')['rows'] ?? [];
-        $companyOptions = array_values(array_filter(array_map(
-            static fn(array $row): array => [
-                'company_id' => trim((string) ($row['company_id'] ?? '')),
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-            ],
-            $companyRows
-        ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
-
         return view('staff_portal.office.sales.index', $this->commonViewData($request, [
-            'companyOptions' => $companyOptions,
+            'companyOptions' => $this->companyOptions(),
         ]));
     }
 
     // 売上一覧
     public function sales(Request $request): RedirectResponse|View
     {
-        $staffId = (string) $request->session()->get('staff_id', '');
-
-        $companyRows = $this->companyService->list('')['rows'] ?? [];
-        $companyOptions = array_values(array_filter(array_map(
-            static fn(array $row): array => [
-                'company_id' => trim((string) ($row['company_id'] ?? '')),
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-            ],
-            $companyRows
-        ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
-
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         $companyId = trim((string) $request->query('company_id', ''));
         $summary = $this->salesService->summary($targetMonth, $companyId);
 
         return view('staff_portal.office.sales.index', $this->commonViewData($request, [
-            'companyOptions' => $companyOptions,
+            'companyOptions' => $this->companyOptions(),
             'salesRows' => $summary['rows'],
             'targetMonth' => $summary['target_month'],
             'selectedCompanyId' => $summary['company_id'],
@@ -67,16 +45,7 @@ class OfficeController extends Controller
 
     public function salesPrint(Request $request): RedirectResponse|View
     {
-        $staffId = (string) $request->session()->get('staff_id', '');
-
-        $companyRows = $this->companyService->list('')['rows'] ?? [];
-        $companyOptions = array_values(array_filter(array_map(
-            static fn(array $row): array => [
-                'company_id' => trim((string) ($row['company_id'] ?? '')),
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-            ],
-            $companyRows
-        ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
+        $companyOptions = $this->companyOptions();
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         $companyId = trim((string) $request->query('company_id', ''));
@@ -102,20 +71,11 @@ class OfficeController extends Controller
     // 未収入金一覧
     public function uncollectedReceivables(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
 
-        $companyRows = $this->companyService->list('')['rows'] ?? [];
-        $companyOptions = array_values(array_filter(array_map(
-            static fn(array $row): array => [
-                'company_id' => trim((string) ($row['company_id'] ?? '')),
-                'company_name' => trim((string) ($row['company_name'] ?? '')),
-            ],
-            $companyRows
-        ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
+        $companyOptions = $this->companyOptions();
 
         $remainingAmountSql = $this->remainingAmountSql();
 
@@ -197,8 +157,6 @@ class OfficeController extends Controller
     // 未収入金一覧　月別印刷
     public function uncollectedReceivablesPrint(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -286,8 +244,6 @@ class OfficeController extends Controller
     // 未収入金一覧　個別印刷
     public function uncollectedReceivablesDetailPrint(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -383,17 +339,11 @@ class OfficeController extends Controller
 
     public function receipt(Request $request): RedirectResponse|View
     {
-        $staffId = $this->staffPortalStaffId($request);
-
         return view('staff_portal.office.receipt.index', $this->commonViewData($request, []));
     }
 
-
-
     public function officeMenu(Request $request): RedirectResponse|View
     {
-        $staffId = (string) session('staff_id', '');
-
         return view('staff_portal.office.office_menu.index', $this->commonViewData($request, []));
     }
 
@@ -405,5 +355,24 @@ class OfficeController extends Controller
     private function remainingAmountSql(): string
     {
         return '(COALESCE(detail.claim_amount, 0) + COALESCE(detail.returned_amount, 0) + COALESCE(detail.adjustment_amount, 0) - COALESCE(detail.payment_amount, 0))';
+    }
+
+    /**
+     * 会社選択肢（正本）。salesMenu/sales/salesPrint/uncollectedReceivablesの4箇所に
+     * 同じ組み立て処理がそのままコピーされていたのをここ1箇所にまとめた。
+     *
+     * @return list<array{company_id: string, company_name: string}>
+     */
+    private function companyOptions(): array
+    {
+        $companyRows = $this->companyService->list('')['rows'] ?? [];
+
+        return array_values(array_filter(array_map(
+            static fn(array $row): array => [
+                'company_id' => trim((string) ($row['company_id'] ?? '')),
+                'company_name' => trim((string) ($row['company_name'] ?? '')),
+            ],
+            $companyRows
+        ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
     }
 }

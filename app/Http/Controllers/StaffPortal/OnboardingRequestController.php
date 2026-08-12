@@ -60,9 +60,20 @@ class OnboardingRequestController extends Controller
             ->map(fn($row): array => (array) $row)
             ->all();
 
+        $checklist = [
+            ['label' => '住所・連絡先・振込口座・通勤経路', 'done' => trim((string) ($requestRow['new_address'] ?? '')) !== '', 'anchor' => '#basic-info'],
+            ['label' => 'マイナンバー確認書類', 'done' => !empty($requestRow['mynumber_certificate_file_path']), 'anchor' => '#documents'],
+            ['label' => '運転免許証（通勤・往診で車を使う場合）', 'done' => !empty($requestRow['license_certificate_file_path']), 'anchor' => '#documents', 'optional' => true],
+            ['label' => '住民票（免許証がない、または免許証の住所が違う場合）', 'done' => !empty($requestRow['residence_certificate_file_path']), 'anchor' => '#documents', 'optional' => true],
+            ['label' => '雇用保険被保険者証（前職がある場合）', 'done' => !empty($requestRow['employment_insurance_certificate_file_path']), 'anchor' => '#documents', 'optional' => true],
+            ['label' => '前職の源泉徴収票（前職がある場合）', 'done' => !empty($requestRow['previous_job_certificate_file_path']), 'anchor' => '#documents', 'optional' => true],
+            ['label' => '扶養親族の登録（いる場合）', 'done' => $dependentRows !== [], 'anchor' => '#dependents', 'optional' => true],
+        ];
+
         return view('staff_portal.onboarding_request.index', $this->commonViewData($request, [
             'staffId' => $staffId,
             'requestRow' => $requestRow,
+            'checklist' => $checklist,
             'editable' => in_array($requestRow['status'], self::EDITABLE_STATUSES, true),
             'statusLabel' => self::STATUS_LABELS[$requestRow['status']] ?? $requestRow['status'],
             'currentStaffName' => trim((string) ($staffRow['staff_name'] ?? '')),
@@ -111,22 +122,24 @@ class OnboardingRequestController extends Controller
 
         $values = $validated;
 
-        $addressFile = $request->file('address_certificate_file');
-        if ($addressFile !== null && $addressFile->isValid()) {
-            $this->deleteCertificateIfPresent($requestRow['address_certificate_file_path'] ?? null);
-            $stored = $this->certificateFileService->store($addressFile, "onboarding/{$staffId}", 'jusho_' . date('YmdHis'));
-            $values['address_certificate_file_path'] = $stored['path'];
-            $values['address_certificate_original_name'] = $stored['original_name'];
-            $values['address_certificate_uploaded_at'] = $stored['uploaded_at'];
-        }
+        foreach ([
+            'address_certificate_file' => ['address_certificate', 'jusho'],
+            'mynumber_certificate_file' => ['mynumber_certificate', 'mynumber'],
+            'license_certificate_file' => ['license_certificate', 'license'],
+            'residence_certificate_file' => ['residence_certificate', 'juminhyo'],
+            'employment_insurance_certificate_file' => ['employment_insurance_certificate', 'koyouhoken'],
+            'previous_job_certificate_file' => ['previous_job_certificate', 'zensyoku'],
+        ] as $fieldName => [$columnPrefix, $baseName]) {
+            $file = $request->file($fieldName);
+            if ($file === null || !$file->isValid()) {
+                continue;
+            }
 
-        $mynumberFile = $request->file('mynumber_certificate_file');
-        if ($mynumberFile !== null && $mynumberFile->isValid()) {
-            $this->deleteCertificateIfPresent($requestRow['mynumber_certificate_file_path'] ?? null);
-            $stored = $this->certificateFileService->store($mynumberFile, "onboarding/{$staffId}", 'mynumber_' . date('YmdHis'));
-            $values['mynumber_certificate_file_path'] = $stored['path'];
-            $values['mynumber_certificate_original_name'] = $stored['original_name'];
-            $values['mynumber_certificate_uploaded_at'] = $stored['uploaded_at'];
+            $this->deleteCertificateIfPresent($requestRow[$columnPrefix . '_file_path'] ?? null);
+            $stored = $this->certificateFileService->store($file, "onboarding/{$staffId}", $baseName . '_' . date('YmdHis'));
+            $values[$columnPrefix . '_file_path'] = $stored['path'];
+            $values[$columnPrefix . '_original_name'] = $stored['original_name'];
+            $values[$columnPrefix . '_uploaded_at'] = $stored['uploaded_at'];
         }
 
         DB::connection('sqlsrv_payroll')

@@ -76,7 +76,7 @@
                             <th>依頼日</th>
                             <th>依頼者</th>
                             <th>店舗</th>
-                            <th>店舗非表示・事務所備忘用</th>
+                            <th>事務所コメント</th>
                             <th>保存</th>
                         </tr>
                     </thead>
@@ -89,11 +89,7 @@
                             <td>
                                 <form id="{{ $formId }}" method="post" action="{{ route('office.store_daily_report.request_history.save') }}">
                                     @csrf
-                                    <input type="hidden" name="original_対象日" value="{{ $row['original_対象日'] }}">
-                                    <input type="hidden" name="original_内容" value="{{ $row['内容'] }}">
-                                    <input type="hidden" name="original_依頼日" value="{{ $row['original_依頼日'] }}">
-                                    <input type="hidden" name="original_依頼者" value="{{ $row['依頼者'] }}">
-                                    <input type="hidden" name="original_店舗" value="{{ $row['店舗'] }}">
+                                    <input type="hidden" name="依頼No" value="{{ $row['依頼No'] }}">
                                     <select name="状況">
                                         @foreach (['依頼中', '処理済', '取下げ'] as $状況)
                                         <option value="{{ $状況 }}" @selected(($row['状況'] ?? '' )===$状況)>{{ $状況 }}</option>

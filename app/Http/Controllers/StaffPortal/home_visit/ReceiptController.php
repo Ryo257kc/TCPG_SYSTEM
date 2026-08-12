@@ -38,10 +38,10 @@ class ReceiptController extends Controller
             $payment_staff = $staffId;
         }
 
-        $payment_staff_options = $this->allStaffOptions();
+        $allStaffOptions = $this->allStaffOptions();
 
         $payment_staff_display_name = '';
-        foreach ($payment_staff_options as $option) {
+        foreach ($allStaffOptions as $option) {
             if ((string) $option['staff_id'] === (string) $payment_staff) {
                 $payment_staff_display_name =
                     trim((string) ($option['display_name_ja'] ?? '')) !== ''
@@ -149,32 +149,6 @@ class ReceiptController extends Controller
         $payment_store_name_options = $this->receiptVisitAreaOptions();
         $facility_name_options = $this->patientFacilityOptions();
         $payment_staff_options = $this->homeVisitStaffOptions($targetMonthStart);
-        // $payment_store_name_options = DB::connection('sqlsrv')
-        //     ->table('dbo.hv_ryoukin')
-        //     ->whereNotNull('payment_store_name')
-        //     ->where('payment_store_name', '<>', '')
-        //     ->when(!$canFilterPaymentStaff, function ($query) use ($staffId): void {
-        //         $query->where('payment_staff', $staffId);
-        //     })
-        //     ->orderBy('payment_store_name')
-        //     ->pluck('payment_store_name')
-        //     ->map(fn ($value): string => trim((string) $value))
-        //     ->filter(fn (string $value): bool => $value !== '')
-        //     ->unique()
-        //     ->values()
-        //     ->all();
-
-        // $facility_name_options = DB::connection('sqlsrv')
-        //     ->table('dbo.hv_kanjya_info')
-        //     ->whereNotNull('facility_name')
-        //     ->where('facility_name', '<>', '')
-        //     ->orderBy('facility_name')
-        //     ->pluck('facility_name')
-        //     ->map(fn ($value): string => trim((string) $value))
-        //     ->filter(fn (string $value): bool => $value !== '')
-        //     ->unique()
-        //     ->values()
-        //     ->all();
 
         $payment_confirmed_at = $items->first()?->payment_confirmed_at;
         $is_payment_confirmed = (int) ($items->first()?->is_payment_confirmed ?? 0);
@@ -217,7 +191,6 @@ class ReceiptController extends Controller
                     'is_payment_confirmed',
                     'payment_confirmed_at',
                     'payment_staff',
-                    // 'payment_store_name',
                     'payment_visit_area',
                 ])
                 ->where('payment_staff', $detail_payment_staff)
@@ -270,7 +243,7 @@ class ReceiptController extends Controller
             'facility_name' => $facility_name,
             'payment_staff' => $payment_staff,
             'payment_staff_display_name' => $payment_staff_display_name,
-            'allStaffOptions' => $this->allStaffOptions(),
+            'allStaffOptions' => $allStaffOptions,
             'canFilterPaymentStaff' => $canFilterPaymentStaff,
             'payment_staff_options' => $payment_staff_options,
             'selected_patient_id' => $selected_patient_id,
@@ -289,6 +262,32 @@ class ReceiptController extends Controller
     // 入金管理詳細更新
     public function update(Request $request, string $id): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_ryoukin')
+            ->where('charge_id', $id)
+            ->first(['payment_staff', 'is_payment_confirmed']);
+
+        if (!$existing) {
+            return back()->withErrors(['receipt' => '対象の入金データが見つかりません。']);
+        }
+
+        if (!$canManage) {
+            if (trim((string) $existing->payment_staff) !== $staffId) {
+                abort(403);
+            }
+            if ((int) $existing->is_payment_confirmed === 1) {
+                abort(403);
+            }
+        }
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->where('charge_id', $id)
@@ -299,7 +298,6 @@ class ReceiptController extends Controller
                 'billing_count' => str_replace(',', '', (string) $request->input('billing_count')),
                 'collected_amount' => str_replace(',', '', (string) $request->input('collected_amount')),
                 'adjustment_amount' => str_replace(',', '', (string) $request->input('adjustment_amount')),
-                // 'payment_store_name' => $request->input('payment_store_name'),
                 'payment_visit_area' => $request->input('payment_visit_area'),
             ]);
 
@@ -309,18 +307,29 @@ class ReceiptController extends Controller
     // 入金管理詳細新規追加
     public function store(Request $request): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $canManage = $this->isVisitManagement($this->staffPortalStaffRow($staffId));
+
         $patientId = trim((string) $request->input('patient_id', ''));
 
         if ($patientId === '') {
             return back()->withErrors(['receipt' => '患者を選択してから追加してください。']);
         }
 
+        $paymentStaff = $canManage
+            ? trim((string) $request->input('payment_staff', ''))
+            : $staffId;
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->insert([
                 'patient_id' => $patientId,
                 'target_month' => $request->input('target_month'),
-                'payment_staff' => $request->input('payment_staff'),
+                'payment_staff' => $paymentStaff,
                 'payment_visit_area' => $request->input('payment_visit_area'),
                 'unit_price' => 0,
                 'billing_count' => 1,
@@ -334,8 +343,34 @@ class ReceiptController extends Controller
     }
 
     // 入金管理行削除
-    public function destroy(string $id): RedirectResponse
+    public function destroy(Request $request, string $id): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_ryoukin')
+            ->where('charge_id', $id)
+            ->first(['payment_staff', 'is_payment_confirmed']);
+
+        if (!$existing) {
+            return back()->withErrors(['receipt' => '対象の入金データが見つかりません。']);
+        }
+
+        if (!$canManage) {
+            if (trim((string) $existing->payment_staff) !== $staffId) {
+                abort(403);
+            }
+            if ((int) $existing->is_payment_confirmed === 1) {
+                abort(403);
+            }
+        }
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->where('charge_id', $id)

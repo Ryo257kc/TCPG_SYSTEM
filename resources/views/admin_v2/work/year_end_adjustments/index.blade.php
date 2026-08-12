@@ -247,7 +247,6 @@
                             <th>スタッフID</th>
                             <th>氏名</th>
                             <th>入社/退社</th>
-                            <th>年調</th>
                             <th>提出日時</th>
                             <th>操作</th>
                         </tr>
@@ -262,7 +261,6 @@
                                 <div>入 {{ $row['nyu_date'] !== '' ? $row['nyu_date'] : '---' }}</div>
                                 <div>退 {{ $row['tai_date'] !== '' ? $row['tai_date'] : '---' }}</div>
                             </td>
-                            <td>{{ $row['year_end_adjustment'] }}</td>
                             <td>{{ $row['submitted_at'] }}</td>
                             <td>
                                 <div class="year-end-actions">

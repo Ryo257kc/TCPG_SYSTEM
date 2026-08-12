@@ -165,6 +165,83 @@
         template {
             display: none;
         }
+
+        .pr-checklist {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 14px 0 20px;
+        }
+
+        .pr-checklist-title {
+            margin: 0 0 8px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .pr-checklist-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 6px;
+        }
+
+        .pr-checklist-item {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .pr-checklist-item a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .pr-checklist-item a:hover {
+            text-decoration: underline;
+        }
+
+        .pr-checklist-mark {
+            flex-shrink: 0;
+            font-weight: 700;
+        }
+
+        .pr-checklist-mark.is-done {
+            color: #2f7d3c;
+        }
+
+        .pr-checklist-mark.is-pending {
+            color: #b3691a;
+        }
+
+        .pr-checklist-optional-note {
+            color: var(--sub);
+            font-size: 11px;
+        }
+
+        .pr-office-note {
+            border: 1px dashed var(--line);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 20px 0;
+            font-size: 13px;
+        }
+
+        .pr-office-note h3 {
+            margin: 0 0 8px;
+            font-size: 14px;
+        }
+
+        .pr-office-note ul {
+            margin: 6px 0 0;
+            padding-left: 18px;
+        }
+
+        .pr-office-note li {
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 
@@ -194,7 +271,7 @@
             </div>
             @endif
 
-            <p class="pr-note">ご入社にあたり、住所・連絡先・振込口座・通勤経路・扶養の情報と、マイナンバーの確認書類（マイナンバーカード等の写し）をご登録ください。</p>
+            <p class="pr-note">ご入社にあたり、住所・連絡先・振込口座・通勤経路・扶養の情報と、マイナンバー等の確認書類をご登録ください。該当する場合は運転免許証・住民票・前職関連の書類もあわせて添付してください。</p>
 
             <p class="pr-status">申請状況：{{ $statusLabel }}</p>
 
@@ -205,7 +282,22 @@
             </div>
             @endif
 
-            <div class="pr-step">
+            <div class="pr-checklist">
+                <p class="pr-checklist-title">入力・添付の状況</p>
+                <ul class="pr-checklist-list">
+                    @foreach ($checklist as $item)
+                    <li class="pr-checklist-item">
+                        <span class="pr-checklist-mark {{ $item['done'] ? 'is-done' : 'is-pending' }}">{{ $item['done'] ? '✓' : '未' }}</span>
+                        <a href="{{ $item['anchor'] }}">{{ $item['label'] }}</a>
+                        @if (!empty($item['optional']) && !$item['done'])
+                        <span class="pr-checklist-optional-note">（該当する場合のみ）</span>
+                        @endif
+                    </li>
+                    @endforeach
+                </ul>
+            </div>
+
+            <div class="pr-step" id="basic-info">
                 <span class="pr-step-number">1</span>
                 <h3 class="pr-step-title">住所・連絡先・振込口座・通勤経路</h3>
             </div>
@@ -248,9 +340,9 @@
                 'editable' => $editable,
                 ])
 
-                <div class="pr-step">
+                <div class="pr-step" id="documents">
                     <span class="pr-step-number">2</span>
-                    <h3 class="pr-step-title">マイナンバー確認書類</h3>
+                    <h3 class="pr-step-title">添付書類</h3>
                 </div>
                 <div class="pr-section">
                     <p class="pr-note">マイナンバーカード（両面）または通知カード＋本人確認書類の写しを添付してください。マイナンバーの数字をこのフォームに入力する必要はありません。添付いただいた画像は事務所側でのみ確認します。</p>
@@ -265,6 +357,58 @@
                     @endif
                 </div>
 
+                <div class="pr-section">
+                    <p class="pr-note">運転免許証の写し（通勤や往診で車を利用する場合は必須。それ以外は任意）。</p>
+                    @if (!empty($requestRow['license_certificate_original_name']))
+                    <p class="pr-current-value">現在のファイル：{{ $requestRow['license_certificate_original_name'] }}</p>
+                    @endif
+                    @if ($editable)
+                    <div class="pr-field">
+                        <label class="pr-field-label" for="license_certificate_file">運転免許証</label>
+                        <input type="file" id="license_certificate_file" name="license_certificate_file" accept="image/*,.pdf">
+                    </div>
+                    @endif
+                </div>
+
+                <div class="pr-section">
+                    <p class="pr-note">住民票の写し（運転免許証をお持ちでない場合、または免許証記載の住所が現住所と違う場合のみ）。</p>
+                    @if (!empty($requestRow['residence_certificate_original_name']))
+                    <p class="pr-current-value">現在のファイル：{{ $requestRow['residence_certificate_original_name'] }}</p>
+                    @endif
+                    @if ($editable)
+                    <div class="pr-field">
+                        <label class="pr-field-label" for="residence_certificate_file">住民票</label>
+                        <input type="file" id="residence_certificate_file" name="residence_certificate_file" accept="image/*,.pdf">
+                    </div>
+                    @endif
+                </div>
+
+                <div class="pr-section">
+                    <p class="pr-note">前職の雇用保険被保険者証の写し（前職がある場合のみ。前職場から受け取り次第、速やかに添付してください）。</p>
+                    @if (!empty($requestRow['employment_insurance_certificate_original_name']))
+                    <p class="pr-current-value">現在のファイル：{{ $requestRow['employment_insurance_certificate_original_name'] }}</p>
+                    @endif
+                    @if ($editable)
+                    <div class="pr-field">
+                        <label class="pr-field-label" for="employment_insurance_certificate_file">雇用保険被保険者証</label>
+                        <input type="file" id="employment_insurance_certificate_file" name="employment_insurance_certificate_file" accept="image/*,.pdf">
+                    </div>
+                    @endif
+                </div>
+
+                <div class="pr-section">
+                    <p class="pr-note">前職の源泉徴収票の写し（前職がある場合のみ。前職場から受け取り次第、速やかに添付してください）。</p>
+                    @if (!empty($requestRow['previous_job_certificate_original_name']))
+                    <p class="pr-current-value">現在のファイル：{{ $requestRow['previous_job_certificate_original_name'] }}</p>
+                    @endif
+                    @if ($editable)
+                    <div class="pr-field">
+                        <label class="pr-field-label" for="previous_job_certificate_file">前職の源泉徴収票</label>
+                        <input type="file" id="previous_job_certificate_file" name="previous_job_certificate_file" accept="image/*,.pdf">
+                    </div>
+                    @endif
+                </div>
+
                 @if ($editable)
                 <div class="pr-section-actions">
                     <button type="submit" class="btn pr-btn-save">保存</button>
@@ -272,7 +416,7 @@
                 @endif
             </form>
 
-            <div class="pr-step">
+            <div class="pr-step" id="dependents">
                 <span class="pr-step-number">3</span>
                 <h3 class="pr-step-title">扶養親族</h3>
             </div>
@@ -367,6 +511,17 @@
                 </div>
                 @endif
             </form>
+
+            <div class="pr-office-note">
+                <h3>この画面では扱わず、事務所へ直接ご提出いただくもの</h3>
+                <ul>
+                    <li>施術者免許（原本）</li>
+                    <li>
+                        誓約書・身元保証引受書
+                        （<a href="{{ url('/document/PG-誓約書.pdf') }}" target="_blank">プレッジ誓約書</a>／<a href="{{ url('/document/TC-誓約書.pdf') }}" target="_blank">トータルケア誓約書</a>／<a href="{{ url('/document/PG-身元保証引受書.pdf') }}" target="_blank">プレッジ身元保証引受書</a>／<a href="{{ url('/document/TC-身元保証引受書.pdf') }}" target="_blank">トータルケア身元保証引受書</a>）
+                    </li>
+                </ul>
+            </div>
 
             @if ($editable)
             <div class="pr-submit-area">

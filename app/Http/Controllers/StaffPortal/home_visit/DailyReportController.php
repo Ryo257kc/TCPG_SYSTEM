@@ -281,6 +281,9 @@ class DailyReportController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
         $item = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou as n')
             ->leftJoin('dbo.hv_kanjya_info as k', 'n.patient_id', '=', 'k.patient_id')
@@ -308,6 +311,7 @@ class DailyReportController extends Controller
                 'n.daily_report_address',
                 'n.is_confirmed',
                 'n.confirmed_at',
+                'n.is_management_fixed',
                 'n.receipt_home_visit_distance',
                 'n.receipt_home_visit_distance_ma',
                 'n.is_receipt_home_visit',
@@ -324,6 +328,19 @@ class DailyReportController extends Controller
             ->where('n.daily_report_id', $nippouNo)
             ->first();
 
+        if (!$item) {
+            return redirect()->route('home_visit.daily_report')->withErrors([
+                'visits' => '往診データが見つかりませんでした。',
+            ]);
+        }
+
+        if (!$canManage && trim((string) $item->staff_name) !== $staffId) {
+            abort(403);
+        }
+
+        $isReadOnly = (int) $item->is_management_fixed === 1
+            || (!$canManage && (int) $item->is_confirmed === 1);
+
         $itemMonthStart = date('Y-m-01', strtotime($item->treatment_date));
         $itemMonthNext = date('Y-m-d', strtotime($itemMonthStart . ' +1 month'));
 
@@ -335,12 +352,6 @@ class DailyReportController extends Controller
             ->where('k.patient_id', $item->patient_id)
             ->where('n.treatment_date', '<', $item->treatment_date)
             ->count('n.patient_id');
-
-        if (!$item) {
-            return redirect()->route('home_visit.daily_report')->withErrors([
-                'visits' => '往診データが見つかりませんでした。',
-            ]);
-        }
 
         $patients = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
@@ -376,6 +387,7 @@ class DailyReportController extends Controller
             'monthlyCount' => $monthlyCount,
             'staffName' => $staffName,
             'kaisu' => $kaisu,
+            'isReadOnly' => $isReadOnly,
         ]));
     }
 
@@ -385,6 +397,33 @@ class DailyReportController extends Controller
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->first(['staff_name', 'is_confirmed', 'is_management_fixed']);
+
+        if (!$existing) {
+            return back()->withInput()->withErrors([
+                'visits' => '対象の往診データが見つかりません。',
+            ]);
+        }
+
+        if ((int) $existing->is_management_fixed === 1) {
+            abort(403);
+        }
+
+        if (!$canManage) {
+            if (trim((string) $existing->staff_name) !== $staffId) {
+                abort(403);
+            }
+            if ((int) $existing->is_confirmed === 1) {
+                abort(403);
+            }
         }
 
         $validated = $request->validate([
@@ -454,17 +493,6 @@ class DailyReportController extends Controller
             $updateData['daily_report_address'] = $kitenPatient->full_address;
         }
 
-        $exists = DB::connection('sqlsrv')
-            ->table('dbo.hv_nippou')
-            ->where('daily_report_id', $nippouNo)
-            ->exists();
-
-        if (!$exists) {
-            return back()->withInput()->withErrors([
-                'visits' => '対象の往診データが見つかりません。',
-            ]);
-        }
-
         DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->where('daily_report_id', $nippouNo)
@@ -478,6 +506,38 @@ class DailyReportController extends Controller
     // 往診1件削除
     public function destroy(Request $request, string $nippouNo): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canManage = $this->isVisitManagement($staffRow);
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->first(['staff_name', 'is_confirmed', 'is_management_fixed']);
+
+        if (!$existing) {
+            return redirect()->back()->withErrors([
+                'visits' => '往診データの削除に失敗しました。',
+            ]);
+        }
+
+        if ((int) $existing->is_management_fixed === 1) {
+            abort(403);
+        }
+
+        if (!$canManage) {
+            if (trim((string) $existing->staff_name) !== $staffId) {
+                abort(403);
+            }
+            if ((int) $existing->is_confirmed === 1) {
+                abort(403);
+            }
+        }
+
         $date = trim((string) $request->input('date', now()->format('Y-m-d')));
 
         $deleted = DB::connection('sqlsrv')
@@ -655,146 +715,5 @@ class DailyReportController extends Controller
             'month' => date('Y-m', strtotime($date)),
         ])->with('status', '管理確定しました。');
     }
-
-    // public function create(Request $request): View
-    // {
-    //     return view('staff_portal.home_visit.daily_report.create', [
-    //         ...$this->headerData($request),
-    //         'displayName' => $this->resolveDisplayName(
-    //           $this->staffPortalStaffId($request)
-    // ),
-    //         'patients' => DB::connection('sqlsrv')
-    //     ->table('dbo.hv_kanjya_info')
-    //     ->get(),
-    //         'sejyutsuDate' => $request->query('date', now()->format('Y-m-d')),
-    //     ]);
-    // }
-
-
-
-
-
-
-
-    public function placeholder(Request $request): RedirectResponse|View
-    {
-        return $this->index($request);
-    }
-
-    public function show(Request $request, string $nippouNo): View|RedirectResponse
-    {
-        $detail = $this->visitDetailService->find($nippouNo);
-
-        if ($detail === null) {
-            return redirect()->route('visits.index')->withErrors([
-                'visits' => '往診データが見つかりませんでした。',
-            ]);
-        }
-
-        return view('visits.show', [
-            ...$this->headerData($request),
-            'detail' => $detail,
-        ]);
-    }
-
-
-
-    public function store(VisitStoreRequest $request): RedirectResponse
-    {
-        $validated = $request->validated();
-        $staffId = (string) $request->session()->get('staff_id', '');
-        $newId = $this->visitCreateService->createFromPatient(
-            $staffId,
-            $validated['patient_no'],
-            $validated['sejyutsu_date'],
-            ($validated['oushin_check'] ?? '0') === '1'
-        );
-
-        if ($newId === null) {
-            return back()->withInput()->withErrors([
-                'visits' => '往診データの新規作成に失敗しました。',
-            ]);
-        }
-
-        return redirect()->route('visits.show', ['nippouNo' => $newId])->with('status', '往診データを新規作成しました。');
-    }
-
-    // public function edit(Request $request, string $nippouNo): View|RedirectResponse
-    // {
-    //     $detail = $this->visitDetailService->find($nippouNo);
-
-    //     if ($detail === null) {
-    //         return redirect()->route('visits.index')->withErrors([
-    //             'visits' => '往診データが見つかりませんでした。',
-    //         ]);
-    //     }
-
-    //     $patients = $this->patientListService->search(null);
-    //     $fieldMap = [];
-    //     foreach ($detail->fields as $field) {
-    //         $fieldMap[$field['label']] = $field['value'];
-    //     }
-
-    //     return view('visits.edit', [
-    //         ...$this->headerData($request),
-    //         'detail' => $detail,
-    //         'patients' => $patients,
-    //         'patientNo' => $detail->patientNo,
-    //         'sejyutsuDate' => substr((string) ($fieldMap['施術日'] ?? ''), 0, 10),
-    //         'distance' => (string) ($fieldMap['距離'] ?? ''),
-    //         'startTime' => substr((string) ($fieldMap['開始'] ?? ''), 0, 5),
-    //         'endTime' => substr((string) ($fieldMap['終了'] ?? ''), 0, 5),
-    //         'shop' => (string) ($fieldMap['日報店舗'] ?? ''),
-    //     ]);
-    // }
-
-    // public function update(VisitUpdateRequest $request, string $nippouNo): RedirectResponse
-    // {
-    //     $validated = $request->validated();
-    //     $ok = $this->visitUpdateService->update(
-    //         $nippouNo,
-    //         $validated['patient_no'],
-    //         $validated['sejyutsu_date'],
-    //         $validated['distance'] ?? null,
-    //         $validated['start_time'] ?? null,
-    //         $validated['end_time'] ?? null,
-    //         $validated['shop'] ?? null
-    //     );
-
-    //     if (!$ok) {
-    //         return back()->withInput()->withErrors([
-    //             'visits' => '往診データの更新に失敗しました。',
-    //         ]);
-    //     }
-
-    //     return redirect()->route('visits.show', ['nippouNo' => $nippouNo])->with('status', '往診データを更新しました。');
-    // }
-
-    // public function destroy(string $nippouNo): RedirectResponse
-    // {
-    //     $ok = $this->visitDeleteService->delete($nippouNo);
-
-    //     if (!$ok) {
-    //         return redirect()->route('visits.show', ['nippouNo' => $nippouNo])->withErrors([
-    //             'visits' => '往診データの削除に失敗しました。',
-    //         ]);
-    //     }
-
-    //     return redirect()->route('visits.index')->with('status', '往診データを削除しました。');
-    // }
-
-    // /**
-    //  * @return array{staffId: string, staffName: string}
-    //  */
-    // private function headerData(Request $request): array
-    // {
-    //     $staffId = (string) $request->session()->get('staff_id', '');
-    //     $staffName = (string) $request->session()->get('staff_name', $staffId);
-
-    //     return [
-    //         'staffId' => $staffId,
-    //         'staffName' => $staffName,
-    //     ];
-    // }
 
 }

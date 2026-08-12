@@ -180,6 +180,8 @@
                 <col style="width: 64px;">
                 <col style="width: 48px;">
                 <col style="width: 36px;">
+                <col style="width: 36px;">
+                <col style="width: 36px;">
                 <col>
             </colgroup>
             <thead>

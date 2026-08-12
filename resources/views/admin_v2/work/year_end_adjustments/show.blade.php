@@ -379,8 +379,6 @@
                         <dd><span class="year-end-status">{{ $application['status_label'] }}</span></dd>
                         <dt>計算処理</dt>
                         <dd>{{ isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true) ? '処理済' : '未処理' }}</dd>
-                        <dt>年末調整</dt>
-                        <dd>{{ $application['year_end_adjustment'] !== '' ? $application['year_end_adjustment'] : '未回答' }}</dd>
                         <dt>特徴希望</dt>
                         <dd>{{ $application['special_collection_requested'] !== '' ? $application['special_collection_requested'] : '未回答' }}</dd>
                         <dt>普通徴収</dt>

@@ -14,6 +14,34 @@ class PatientController extends Controller
 {
     use HandlesStaffPortalContext;
 
+    private function canEditPatients(?array $staffRow): bool
+    {
+        return $this->isVisitManagement($staffRow) || $this->isAccounting($staffRow);
+    }
+
+    private function patientValidationRules(): array
+    {
+        return [
+            'common_id' => ['nullable', 'string', 'max:50'],
+            'massage_id' => ['nullable', 'string', 'max:50'],
+            'patient_name' => ['required', 'string', 'max:100'],
+            'collection_staff' => ['nullable', 'string', 'max:10'],
+            'billing_staff' => ['nullable', 'string', 'max:10'],
+            'visit_town_name' => ['nullable', 'string', 'max:100'],
+            'full_address' => ['nullable', 'string', 'max:200'],
+            'facility_name' => ['nullable', 'string', 'max:100'],
+            'visit_store_name' => ['nullable', 'string', 'max:100'],
+            'standard_distance' => ['nullable', 'numeric'],
+            'burden_ratio' => ['nullable', 'integer'],
+            'standard_burden_amount' => ['nullable', 'numeric'],
+            'treatment_fee' => ['nullable', 'numeric'],
+            'window_distance' => ['nullable', 'integer'],
+            'subsidy_limit_count' => ['nullable', 'integer'],
+            'consent_category' => ['nullable', 'string', 'max:20'],
+            'consent_date' => ['nullable', 'date'],
+        ];
+    }
+
     // 患者一覧
     public function index(Request $request): RedirectResponse|View
     {
@@ -93,6 +121,10 @@ class PatientController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
         $item = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info as k')
             ->leftJoin('dbo.mx_staffs as s1', 's1.staff_id', '=', 'k.billing_staff')
@@ -140,29 +172,40 @@ class PatientController extends Controller
     // 更新
     public function update(Request $request, string $patient_id): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
+        $validated = $request->validate($this->patientValidationRules());
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
             ->where('patient_id', $patient_id)
             ->update([
-                'common_id' => $request->input('common_id'),
-                'massage_id' => $request->input('massage_id'),
-                'patient_name' => $request->input('patient_name'),
-                'collection_staff' => $request->input('collection_staff'),
-                'billing_staff' => $request->input('billing_staff'),
-                'visit_town_name' => $request->input('visit_town_name'),
-                'full_address' => $request->input('full_address'),
-                'facility_name' => $request->input('facility_name'),
-                'visit_store_name' => $request->input('visit_store_name'),
-                'is_massage_target' => $request->input('is_massage_target'),
-                'standard_distance' => $request->input('standard_distance'),
-                'burden_ratio' => $request->input('burden_ratio'),
-                'standard_burden_amount' => $request->input('standard_burden_amount'),
-                'is_excluded_from_count' => $request->input('is_excluded_from_count'),
-                'treatment_fee' => $request->input('treatment_fee'),
-                'window_distance' => $request->input('window_distance'),
-                'subsidy_limit_count' => $request->input('subsidy_limit_count'),
-                'consent_category' => $request->input('consent_category'),
-                'consent_date' => $request->input('consent_date'),
+                'common_id' => $validated['common_id'] ?? null,
+                'massage_id' => $validated['massage_id'] ?? null,
+                'patient_name' => $validated['patient_name'],
+                'collection_staff' => $validated['collection_staff'] ?? null,
+                'billing_staff' => $validated['billing_staff'] ?? null,
+                'visit_town_name' => $validated['visit_town_name'] ?? null,
+                'full_address' => $validated['full_address'] ?? null,
+                'facility_name' => $validated['facility_name'] ?? null,
+                'visit_store_name' => $validated['visit_store_name'] ?? null,
+                'is_massage_target' => $request->boolean('is_massage_target') ? 1 : 0,
+                'standard_distance' => $validated['standard_distance'] ?? null,
+                'burden_ratio' => $validated['burden_ratio'] ?? null,
+                'standard_burden_amount' => $validated['standard_burden_amount'] ?? null,
+                'is_excluded_from_count' => $request->boolean('is_excluded_from_count') ? 1 : 0,
+                'treatment_fee' => $validated['treatment_fee'] ?? null,
+                'window_distance' => $validated['window_distance'] ?? null,
+                'subsidy_limit_count' => $validated['subsidy_limit_count'] ?? null,
+                'consent_category' => $validated['consent_category'] ?? null,
+                'consent_date' => $validated['consent_date'] ?? null,
             ]);
 
         return redirect()
@@ -173,6 +216,15 @@ class PatientController extends Controller
     // 削除
     public function delete(Request $request, string $patientNo): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
             ->where('patient_id', $patientNo)
@@ -191,7 +243,12 @@ class PatientController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
         $staffOptions = $this->patientStaffOptions($request);
+        $storeOptions = $this->receiptVisitAreaOptions();
 
         $facilityOptions = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
@@ -206,6 +263,7 @@ class PatientController extends Controller
             'item' => null,
             'mode' => 'create',
             'staffOptions' => $staffOptions,
+            'storeOptions' => $storeOptions,
             'facilityOptions' => $facilityOptions,
             'consentTypeOptions' => [
                 '同意',
@@ -217,28 +275,39 @@ class PatientController extends Controller
     // 保存
     public function store(Request $request): RedirectResponse
     {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
+        $validated = $request->validate($this->patientValidationRules());
+
         DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
             ->insert([
-                'common_id' => $request->input('common_id'),
-                'massage_id' => $request->input('massage_id'),
-                'patient_name' => $request->input('patient_name'),
-                'collection_staff' => $request->input('collection_staff'),
-                'billing_staff' => $request->input('billing_staff'),
-                'visit_town_name' => $request->input('visit_town_name'),
-                'full_address' => $request->input('full_address'),
-                'facility_name' => $request->input('facility_name'),
-                'visit_store_name' => $request->input('visit_store_name'),
-                'is_massage_target' => $request->input('is_massage_target', 0),
-                'standard_distance' => $request->input('standard_distance'),
-                'burden_ratio' => $request->input('burden_ratio'),
-                'standard_burden_amount' => $request->input('standard_burden_amount'),
-                'is_excluded_from_count' => $request->input('is_excluded_from_count', 0),
-                'treatment_fee' => $request->input('treatment_fee'),
-                'window_distance' => $request->input('window_distance'),
-                'subsidy_limit_count' => $request->input('subsidy_limit_count'),
-                'consent_category' => $request->input('consent_category'),
-                'consent_date' => $request->input('consent_date'),
+                'common_id' => $validated['common_id'] ?? null,
+                'massage_id' => $validated['massage_id'] ?? null,
+                'patient_name' => $validated['patient_name'],
+                'collection_staff' => $validated['collection_staff'] ?? null,
+                'billing_staff' => $validated['billing_staff'] ?? null,
+                'visit_town_name' => $validated['visit_town_name'] ?? null,
+                'full_address' => $validated['full_address'] ?? null,
+                'facility_name' => $validated['facility_name'] ?? null,
+                'visit_store_name' => $validated['visit_store_name'] ?? null,
+                'is_massage_target' => $request->boolean('is_massage_target') ? 1 : 0,
+                'standard_distance' => $validated['standard_distance'] ?? null,
+                'burden_ratio' => $validated['burden_ratio'] ?? null,
+                'standard_burden_amount' => $validated['standard_burden_amount'] ?? null,
+                'is_excluded_from_count' => $request->boolean('is_excluded_from_count') ? 1 : 0,
+                'treatment_fee' => $validated['treatment_fee'] ?? null,
+                'window_distance' => $validated['window_distance'] ?? null,
+                'subsidy_limit_count' => $validated['subsidy_limit_count'] ?? null,
+                'consent_category' => $validated['consent_category'] ?? null,
+                'consent_date' => $validated['consent_date'] ?? null,
             ]);
 
         return redirect()
@@ -246,54 +315,11 @@ class PatientController extends Controller
             ->with('status', '患者データを登録しました。');
     }
 
-    // public function show(Request $request, string $patientNo): View|RedirectResponse
-    // {
-    //     $detail = $this->patientDetailService->find($patientNo);
-    //     $options = $this->patientDetailService->editOptions();
+    private function patientStaffOptions(Request $request): array
+    {
+        $targetMonth = $this->targetMonth($request, 'target_month');
+        $targetMonthStart = $this->targetMonthStartDate($targetMonth);
 
-    //     if ($detail === null) {
-    //         return redirect()->route('patients.index')->withErrors([
-    //             'patients' => '患者データが見つかりませんでした。',
-    //         ]);
-    //     }
-
-    //     return view('patients.show', [
-    //         ...$this->headerData($request),
-    //         'detail' => $detail,
-    //         'facilityOptions' => $options['facilities'],
-    //         'consentTypeOptions' => $options['consentTypes'],
-    //         'staffOptions' => $options['staffOptions'],
-    //     ]);
-    // }
-
-    // private function patientStaffOptions(Request $request): array
-    // {
-    //     $targetMonth = $this->targetMonth($request, 'target_month');
-    //     $targetMonthStart = $this->targetMonthStartDate($targetMonth);
-
-    //     return collect($this->homeVisitStaffOptions($targetMonthStart))
-    //         ->map(fn(array $row): array => [
-    //             'id' => $row['staff_id'],
-    //             'label' => $row['display_name_ja'] !== '' ? $row['display_name_ja'] : $row['staff_name'],
-    //         ])
-    //         ->all();
-    // }
-
-
-
-
-
-    /**
-     * @return array{staffId: string, staffName: string}
-     */
-    // private function headerData(Request $request): array
-    // {
-    //     $staffId = (string) $request->session()->get('staff_id', '');
-    //     $staffName = (string) $request->session()->get('staff_name', $staffId);
-
-    //     return [
-    //         'staffId' => $staffId,
-    //         'staffName' => $staffName,
-    //     ];
-    // }
+        return $this->homeVisitStaffOptions($targetMonthStart);
+    }
 }

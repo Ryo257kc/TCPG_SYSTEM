@@ -151,8 +151,6 @@
                                         name="patient_name"
                                         value="{{ old('patient_name', $item->patient_name ?? '') }}"
                                         required>
-
-                                    <div id="patient_suggestions" class="autocomplete-list"></div>
                                 </td>
                             </tr>
                             <tr>
@@ -390,10 +388,6 @@
     </main>
 
     <script>
-        function hidePatientSuggestions() {
-            box.innerHTML = '';
-            box.style.display = 'none';
-        }
         // 編集ボタン
         (() => {
             const toggle = document.getElementById('toggle-edit');
@@ -422,11 +416,6 @@
             toggle.addEventListener('click', () => {
                 form.classList.toggle('editing');
                 actions.classList.toggle('hidden', !form.classList.contains('editing'));
-
-                // 追加：編集を閉じたら候補を消す
-                if (!form.classList.contains('editing') && typeof hidePatientSuggestions === 'function') {
-                    hidePatientSuggestions();
-                }
 
                 syncButton();
                 syncConsentDate();

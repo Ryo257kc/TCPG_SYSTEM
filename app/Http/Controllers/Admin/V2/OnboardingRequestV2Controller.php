@@ -108,9 +108,17 @@ class OnboardingRequestV2Controller extends Controller
             'new_traffic_day_tuika' => ['nullable', 'string', 'max:100'],
             'address_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'mynumber_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'license_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'residence_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'employment_insurance_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'previous_job_certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ], [
             'address_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
             'mynumber_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'license_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'residence_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'employment_insurance_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'previous_job_certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
         ]);
 
         $payload = [
@@ -130,6 +138,10 @@ class OnboardingRequestV2Controller extends Controller
         foreach ([
             'address_certificate_file' => ['address_certificate', 'jusho'],
             'mynumber_certificate_file' => ['mynumber_certificate', 'mynumber'],
+            'license_certificate_file' => ['license_certificate', 'license'],
+            'residence_certificate_file' => ['residence_certificate', 'juminhyo'],
+            'employment_insurance_certificate_file' => ['employment_insurance_certificate', 'koyouhoken'],
+            'previous_job_certificate_file' => ['previous_job_certificate', 'zensyoku'],
         ] as $fieldName => [$columnPrefix, $baseName]) {
             $file = $request->file($fieldName);
             if ($file === null || !$file->isValid()) {
@@ -413,6 +425,26 @@ class OnboardingRequestV2Controller extends Controller
         return $this->streamCertificate($requestId, 'mynumber_certificate');
     }
 
+    public function licenseCertificateFile(int $requestId)
+    {
+        return $this->streamCertificate($requestId, 'license_certificate');
+    }
+
+    public function residenceCertificateFile(int $requestId)
+    {
+        return $this->streamCertificate($requestId, 'residence_certificate');
+    }
+
+    public function employmentInsuranceCertificateFile(int $requestId)
+    {
+        return $this->streamCertificate($requestId, 'employment_insurance_certificate');
+    }
+
+    public function previousJobCertificateFile(int $requestId)
+    {
+        return $this->streamCertificate($requestId, 'previous_job_certificate');
+    }
+
     /** @return array<string, mixed> */
     private function formatRequest(object $requestRow): array
     {
@@ -436,6 +468,10 @@ class OnboardingRequestV2Controller extends Controller
             'new_traffic_day_tuika' => trim((string) ($requestRow->new_traffic_day_tuika ?? '')),
             'address_certificate_original_name' => trim((string) ($requestRow->address_certificate_original_name ?? '')),
             'mynumber_certificate_original_name' => trim((string) ($requestRow->mynumber_certificate_original_name ?? '')),
+            'license_certificate_original_name' => trim((string) ($requestRow->license_certificate_original_name ?? '')),
+            'residence_certificate_original_name' => trim((string) ($requestRow->residence_certificate_original_name ?? '')),
+            'employment_insurance_certificate_original_name' => trim((string) ($requestRow->employment_insurance_certificate_original_name ?? '')),
+            'previous_job_certificate_original_name' => trim((string) ($requestRow->previous_job_certificate_original_name ?? '')),
             'submitted_at' => $this->dateLabel($requestRow->submitted_at ?? null),
             'confirmed_at' => $this->dateLabel($requestRow->confirmed_at ?? null),
             'reflected_at' => $this->dateLabel($requestRow->reflected_at ?? null),

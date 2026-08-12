@@ -450,6 +450,10 @@ class MonthlyVisitController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        if (!$this->isVisitManagement($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'treatment_date' => ['nullable', 'date'],
             'added_at' => ['nullable', 'date'],

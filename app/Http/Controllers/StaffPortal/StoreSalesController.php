@@ -54,12 +54,6 @@ class StoreSalesController extends Controller
         return view('staff_portal.admin.sales.monthly', $this->commonViewData($request, $this->monthlySalesViewData($request)));
     }
 
-    private function emptyMonthlySalesViewData(Request $request): array
-    {
-        $selectedMonth = trim((string) $request->query('month', now()->format('Y-m')));
-        return $this->emptyMonthlySalesViewDataForMonth($selectedMonth);
-    }
-
     private function emptyMonthlySalesViewDataForMonth(string $selectedMonth): array
     {
         return [
@@ -328,7 +322,10 @@ class StoreSalesController extends Controller
             ->whereIn(DB::raw('LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20))))'), $staffIds)
             ->whereNotNull('teacher.メニュー')
             ->whereNotNull('menu.歩合割合')
-            ->where('teacher.先生別外', 0)
+            ->where(function ($query): void {
+                $query->whereNull('teacher.先生別外')
+                    ->orWhere('teacher.先生別外', 0);
+            })
             ->groupByRaw('CONVERT(date, patient.[日付]), teacher.[メニュー], menu.[歩合割合], teacher.[先生別外]')
             ->orderByRaw('CONVERT(date, patient.[日付])')
             ->orderBy('teacher.メニュー')

@@ -126,9 +126,13 @@
             @if($errors->any())
             <div class="error">{{ $errors->first() }}</div>
             @endif
+            @if($isReadOnly ?? false)
+            <div class="error">確定済みのため閲覧のみです。編集するには管理者に確定解除を依頼してください。</div>
+            @endif
             <div class="table-wrap width_edit">
                 <form method="post" action="{{ route('home_visit.daily_report.update', ['nippouNo' => $item->daily_report_id]) }}">
                     @csrf
+                    <fieldset {{ ($isReadOnly ?? false) ? 'disabled' : '' }} style="border:0; margin:0; padding:0;">
 
                     <div class="row">
                         <label for="treatment_date">施術日</label>
@@ -476,8 +480,11 @@
 
                     <div class="actions">
                         <button type="submit" class="btn">保存</button>
+                    </div>
+                    </fieldset>
                 </form>
 
+                @unless($isReadOnly ?? false)
                 <form method="post"
                     action="{{ route('home_visit.daily_report.destroy', ['nippouNo' => $item->daily_report_id]) }}"
                     onsubmit="return confirm('削除しますか？');">
@@ -488,6 +495,7 @@
 
                     <button type="submit" class="btn">削除</button>
                 </form>
+                @endunless
             </div>
             </div>
             <div class="back-row">

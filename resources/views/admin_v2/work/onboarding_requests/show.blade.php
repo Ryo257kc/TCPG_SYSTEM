@@ -286,6 +286,50 @@
                                     <input type="file" name="mynumber_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
                                 </td>
                             </tr>
+                            <tr>
+                                <td>運転免許証</td>
+                                <td>---</td>
+                                <td>---</td>
+                                <td>
+                                    @if ($request['license_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.onboarding_requests.license.certificate_file', ['requestId' => $requestId]) }}" target="_blank" rel="noopener">{{ $request['license_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="license_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>住民票</td>
+                                <td>---</td>
+                                <td>---</td>
+                                <td>
+                                    @if ($request['residence_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.onboarding_requests.residence.certificate_file', ['requestId' => $requestId]) }}" target="_blank" rel="noopener">{{ $request['residence_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="residence_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>雇用保険被保険者証</td>
+                                <td>---</td>
+                                <td>---</td>
+                                <td>
+                                    @if ($request['employment_insurance_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.onboarding_requests.employment_insurance.certificate_file', ['requestId' => $requestId]) }}" target="_blank" rel="noopener">{{ $request['employment_insurance_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="employment_insurance_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>前職の源泉徴収票</td>
+                                <td>---</td>
+                                <td>---</td>
+                                <td>
+                                    @if ($request['previous_job_certificate_original_name'] !== '')
+                                    <a href="{{ route('admin.work.onboarding_requests.previous_job.certificate_file', ['requestId' => $requestId]) }}" target="_blank" rel="noopener">{{ $request['previous_job_certificate_original_name'] }}</a><br>
+                                    @endif
+                                    <input type="file" name="previous_job_certificate_file" accept=".pdf,.jpg,.jpeg,.png">
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>

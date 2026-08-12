@@ -19,11 +19,7 @@
             }
         </style>
 
-        <section
-            class="panel"
-            data-insurer-save-url="{{ route('office.receipt.insurers.save') }}"
-            data-insurer-delete-url="{{ route('office.receipt.insurers.delete') }}"
-            data-insurer-csrf="{{ csrf_token() }}">
+        <section class="panel">
             <div class="content-head">
                 <h2 class="content-title">往診月報</h2>
             </div>
@@ -116,13 +112,11 @@
                     </table>
                     @endif
                 </div>
+            </div>
 
-
-
-                <div>
-                    <a href="{{ route('dashboard') }}" class="btn btn_back">戻る</a>
-
-                </div>
+            <div>
+                <a href="{{ route('dashboard') }}" class="btn btn_back">戻る</a>
+            </div>
         </section>
     </main>
 
