@@ -136,7 +136,7 @@
                 </div>
             </form>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <div class="error" data-receipt-inline-error hidden></div>
                 <table class="data-table">
                     <colgroup>

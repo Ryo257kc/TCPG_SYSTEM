@@ -69,7 +69,7 @@
             @if (($vault_name ?? '') === '')
             <div class="empty">会社を選んでください。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size14">
                     <thead>
                         <tr>

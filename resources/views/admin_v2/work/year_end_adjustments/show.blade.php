@@ -376,7 +376,12 @@
                     <h2>申請状況</h2>
                     <dl class="year-end-fields">
                         <dt>状態</dt>
-                        <dd><span class="year-end-status">{{ $application['status_label'] }}</span></dd>
+                        <dd>
+                            <span class="year-end-status">{{ $application['status_label'] }}</span>
+                            @if ($application['needs_reflect'] ?? false)
+                            <span class="year-end-status year-end-status-draft-started">反映待ち</span>
+                            @endif
+                        </dd>
                         <dt>計算処理</dt>
                         <dd>{{ isset($nenTyo['edit_lock']) && in_array((string) $nenTyo['edit_lock'], ['1', 'true', 'True'], true) ? '処理済' : '未処理' }}</dd>
                         <dt>特徴希望</dt>
@@ -411,7 +416,7 @@
             </div>
         </section>
 
-        @if ($application['personal_info_changed'] === 'あり' || $application['dependents_changed'] === 'あり' || $application['spouse_changed'] === 'あり' || $application['insurance_deduction_changed'] === 'あり' || $application['previous_job_withholding_changed'] === 'あり' || $application['housing_loan_changed'] === 'あり' || in_array($application['status'], ['submitted', 'confirmed', 'returned', 'reflected'], true))
+        @if ($application['personal_info_changed'] === 'あり' || $application['dependents_changed'] === 'あり' || $application['spouse_changed'] === 'あり' || $application['insurance_deduction_changed'] === 'あり' || $application['previous_job_withholding_changed'] === 'あり' || $application['housing_loan_changed'] === 'あり' || in_array($application['status'], ['submitted', 'confirmed', 'returned'], true))
         <section class="panel" id="personal-info-section">
             <h2 class="section-title">スタッフ申告内容の確認</h2>
             <p class="year-end-note">氏名・住所・生年月日・世帯主情報はスタッフマスタにしか無く上書きされたら戻せないため、下の表で現在の登録内容と申告内容を見比べ、証憑を確認したうえで「実データへ反映」してください。それ以外（扶養・配偶者・保険料控除・住宅ローン・前職・本人状況）はスタッフの保存と同時に実データへ反映済みです。詳細確認・修正は各項目のリンク先で行えます。</p>
@@ -536,17 +541,17 @@
             </form>
             @endif
 
-            @if ($application['status'] === 'confirmed')
-            <div class="actions">
-                <form method="post" action="{{ route('admin.work.year_end_adjustments.reflect', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('スタッフマスタ（氏名・生年月日・住所）へ反映します。扶養・配偶者・保険料控除・住宅ローン・前職・本人状況は既に実データへ反映済みです。よろしいですか？');">
-                    @csrf
-                    <button class="btn btn-primary" type="submit">実データへ反映</button>
-                </form>
-            </div>
-            @endif
-
-            @if ($application['status'] === 'reflected')
-            <p>反映済み（{{ $application['reflected_at'] }}）</p>
+            @if ($application['status'] === 'confirmed' && $application['personal_info_changed'] === 'あり')
+                @if ($application['needs_reflect'] ?? false)
+                <div class="actions">
+                    <form method="post" action="{{ route('admin.work.year_end_adjustments.reflect', ['applicationId' => $applicationId]) }}" onsubmit="return confirm('スタッフマスタ（氏名・生年月日・住所）へ反映します。扶養・配偶者・保険料控除・住宅ローン・前職・本人状況は既に実データへ反映済みです。よろしいですか？');">
+                        @csrf
+                        <button class="btn btn-primary" type="submit">実データへ反映</button>
+                    </form>
+                </div>
+                @else
+                <p>反映済み（{{ $application['reflected_at'] }}）</p>
+                @endif
             @endif
         </section>
         @endif

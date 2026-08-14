@@ -51,7 +51,6 @@ class YearEndAdjustmentV2Controller extends Controller
             'submitted' => 0,
             'returned' => 0,
             'confirmed' => 0,
-            'reflected' => 0,
             'excluded' => 0,
             'retired' => 0,
             'other' => 0,
@@ -60,19 +59,22 @@ class YearEndAdjustmentV2Controller extends Controller
         $tableExists = true;
 
         if ($tableExists) {
-            $applications = DB::connection('sqlsrv_payroll')
-                ->table('dbo.staff_year_end_applications')
-                ->where('target_year', $targetYear)
+            // mx_nen_tyo（年調専用・旧システムから続く既存テーブル）だけを基準に一覧を作る。
+            // 申請ワークフロー状態(application_status等)も同じ行に同居しているので、
+            // 2025年分以降・2024年以前どちらも同じクエリで一覧に出る。
+            $nenTyoRows = DB::connection('sqlsrv_payroll')
+                ->table('dbo.mx_nen_tyo')
+                ->whereYear('year_end', $targetYear)
                 ->orderBy('staff_id')
                 ->get();
 
-            $staffDetails = $this->staffListDetails($applications->pluck('staff_id')->all());
+            $staffDetails = $this->staffListDetails($nenTyoRows->pluck('staff_id')->all());
 
-            foreach ($applications as $application) {
-                $status = trim((string) ($application->status ?? ''));
-                if ($status === '') {
-                    $status = 'draft';
-                }
+            foreach ($nenTyoRows as $nenTyo) {
+                $staffId = trim((string) ($nenTyo->staff_id ?? ''));
+                $staffDetail = $staffDetails[$staffId] ?? ['staff_name' => '', 'nyu_date' => '', 'tai_date' => ''];
+
+                $status = $this->resolveApplicationStatus($nenTyo);
 
                 if (array_key_exists($status, $statusCounts)) {
                     $statusCounts[$status]++;
@@ -80,27 +82,25 @@ class YearEndAdjustmentV2Controller extends Controller
                     $statusCounts['other']++;
                 }
 
-                $staffId = trim((string) ($application->staff_id ?? ''));
-                $staffDetail = $staffDetails[$staffId] ?? ['staff_name' => '', 'nyu_date' => '', 'tai_date' => ''];
-
                 // 下書きは「対象者作成直後で未着手」と「入力途中でまだ提出前」の両方を含み
                 // 一覧上で見分けがつかなかったため、いずれかのセクションを一度でも保存済み
-                // （＝changed系カラムのどれかがNULLでない）かどうかで下書きの内訳を分ける。
-                $hasStartedAnySection = $application->personal_info_changed !== null
-                    || $application->dependents_changed !== null
-                    || $application->spouse_changed !== null
-                    || $application->insurance_deduction_changed !== null
-                    || $application->housing_loan_changed !== null
-                    || $application->previous_job_withholding_changed !== null;
+                // （＝changed系カラムのどれかがNULLでない）かどうかで「未提出」「入力中」を分ける。
+                // 他のステータスと同じく、括弧書きではなく単体のラベルにする。
+                $hasStartedAnySection = $nenTyo->personal_info_changed !== null
+                    || $nenTyo->dependents_changed !== null
+                    || $nenTyo->spouse_changed !== null
+                    || $nenTyo->insurance_deduction_changed !== null
+                    || $nenTyo->housing_loan_changed !== null
+                    || $nenTyo->previous_job_withholding_changed !== null;
                 $statusLabel = $this->statusLabel($status);
                 $statusBadgeKey = $status;
-                if ($status === 'draft') {
-                    $statusLabel .= $hasStartedAnySection ? '（作業中）' : '（未着手）';
-                    $statusBadgeKey = $hasStartedAnySection ? 'draft-started' : 'draft-empty';
+                if ($status === 'draft' && $hasStartedAnySection) {
+                    $statusLabel = '入力中';
+                    $statusBadgeKey = 'draft-started';
                 }
 
                 $rows[] = [
-                    'application_id' => (string) ($application->application_id ?? ''),
+                    'application_id' => (string) ($nenTyo->nen_tyo_no ?? ''),
                     'staff_id' => $staffId,
                     'staff_name' => $staffDetail['staff_name'],
                     'nyu_date' => $staffDetail['nyu_date'],
@@ -109,15 +109,15 @@ class YearEndAdjustmentV2Controller extends Controller
                     'status_label' => $statusLabel,
                     'status_badge_key' => $statusBadgeKey,
                     'can_delete' => $status === 'draft',
-                    'personal_info_changed' => $this->bitLabel($application->personal_info_changed ?? null),
-                    'dependents_changed' => $this->bitLabel($application->dependents_changed ?? null),
-                    'insurance_deduction_changed' => $this->bitLabel($application->insurance_deduction_changed ?? null),
-                    'housing_loan_changed' => $this->bitLabel($application->housing_loan_changed ?? null),
-                    'previous_job_withholding_changed' => $this->bitLabel($application->previous_job_withholding_changed ?? null),
-                    'special_collection_requested' => $this->bitLabel($application->special_collection_requested ?? null),
-                    'submitted_at' => $this->dateLabel($application->submitted_at ?? null),
-                    'confirmed_at' => $this->dateLabel($application->confirmed_at ?? null),
-                    'reflected_at' => $this->dateLabel($application->reflected_at ?? null),
+                    'personal_info_changed' => $this->bitLabel($nenTyo->personal_info_changed ?? null),
+                    'dependents_changed' => $this->bitLabel($nenTyo->dependents_changed ?? null),
+                    'insurance_deduction_changed' => $this->bitLabel($nenTyo->insurance_deduction_changed ?? null),
+                    'housing_loan_changed' => $this->bitLabel($nenTyo->housing_loan_changed ?? null),
+                    'previous_job_withholding_changed' => $this->bitLabel($nenTyo->previous_job_withholding_changed ?? null),
+                    'special_collection_requested' => $this->bitLabel($nenTyo->special_collection_requested ?? null),
+                    'submitted_at' => $this->dateLabel($nenTyo->submitted_at ?? null),
+                    'confirmed_at' => $this->dateLabel($nenTyo->confirmed_at ?? null),
+                    'reflected_at' => $this->dateLabel($nenTyo->reflected_at ?? null),
                 ];
             }
         }
@@ -131,16 +131,68 @@ class YearEndAdjustmentV2Controller extends Controller
             $companyRows
         ), static fn(array $row): bool => $row['company_id'] !== '' && $row['company_name'] !== ''));
 
+        $publishDate = DB::connection('sqlsrv_payroll')
+            ->table('dbo.year_end_adjustment_settings')
+            ->where('target_year', $targetYear)
+            ->value('publish_date');
+
+        $earliestYear = (int) (DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->selectRaw('MIN(YEAR(year_end)) as min_year')
+            ->value('min_year') ?? date('Y'));
+        $earliestYear = min($earliestYear, $targetYear, (int) date('Y') - 1);
+
         return view('admin_v2.work.year_end_adjustments.index', [
             'targetYear' => $targetYear,
-            'yearOptions' => range((int) date('Y') - 1, (int) date('Y') + 1),
+            'yearOptions' => range($earliestYear, (int) date('Y') + 1),
             'tableExists' => $tableExists,
             'rows' => $rows,
             'statusCounts' => $statusCounts,
             'statusOptions' => $this->statusOptions(),
             'companyOptions' => $companyOptions,
             'bulkReportOptions' => $this->bulkReportOptions(),
+            'publishDate' => $publishDate ? \Carbon\Carbon::parse($publishDate)->format('Y-m-d\TH:i') : '',
         ]);
+    }
+
+    // 年末調整のスタッフ公開日を設定
+    public function savePublishDate(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'target_year' => ['required', 'integer'],
+            'publish_date' => ['nullable', 'date'],
+        ]);
+
+        $targetYear = (int) $validated['target_year'];
+        $publishDate = trim((string) ($validated['publish_date'] ?? ''));
+
+        $exists = DB::connection('sqlsrv_payroll')
+            ->table('dbo.year_end_adjustment_settings')
+            ->where('target_year', $targetYear)
+            ->exists();
+
+        if ($exists) {
+            DB::connection('sqlsrv_payroll')
+                ->table('dbo.year_end_adjustment_settings')
+                ->where('target_year', $targetYear)
+                ->update([
+                    'publish_date' => $publishDate !== '' ? $publishDate : null,
+                    'updated_at' => now(),
+                ]);
+        } else {
+            DB::connection('sqlsrv_payroll')
+                ->table('dbo.year_end_adjustment_settings')
+                ->insert([
+                    'target_year' => $targetYear,
+                    'publish_date' => $publishDate !== '' ? $publishDate : null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return redirect()
+            ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
+            ->with('status', '公開日を保存しました。');
     }
 
     /** @return array<string, string> テンプレートキー => 帳票名。まとめて出力ドロップダウンの選択肢（正本）。 */
@@ -158,12 +210,12 @@ class YearEndAdjustmentV2Controller extends Controller
     public function show(int $applicationId): View
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
-        $targetYear = (int) ($application->target_year ?? date('Y'));
+        $targetYear = (int) \Carbon\Carbon::parse($application->year_end)->format('Y');
         $staffId = trim((string) ($application->staff_id ?? ''));
 
         return view('admin_v2.work.year_end_adjustments.show', [
@@ -231,17 +283,7 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     public function updateNenTyo(Request $request, int $applicationId)
     {
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-        abort_unless($application, 404);
-
-        $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
-        if ($nenTyoNo <= 0) {
-            return response()->json(['ok' => false, 'message' => '年調レコードがまだ作成されていません。'], 422);
-        }
-
+        $nenTyoNo = $applicationId;
         $nenTyoRow = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo')->where('nen_tyo_no', $nenTyoNo)->first();
         abort_unless($nenTyoRow, 404);
 
@@ -282,17 +324,7 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     public function toggleNenTyoLock(int $applicationId)
     {
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-        abort_unless($application, 404);
-
-        $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
-        if ($nenTyoNo <= 0) {
-            return response()->json(['ok' => false, 'message' => '年調レコードがまだ作成されていません。'], 422);
-        }
-
+        $nenTyoNo = $applicationId;
         $nenTyoRow = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo')->where('nen_tyo_no', $nenTyoNo)->first(['edit_lock']);
         abort_unless($nenTyoRow, 404);
 
@@ -800,8 +832,8 @@ class YearEndAdjustmentV2Controller extends Controller
         abort_unless(array_key_exists($templateKey, $this->bulkReportOptions()), 404);
 
         $applications = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('target_year', $targetYear)
+            ->table('dbo.mx_nen_tyo')
+            ->whereYear('year_end', $targetYear)
             ->get();
 
         $targets = [];
@@ -1967,58 +1999,38 @@ class YearEndAdjustmentV2Controller extends Controller
     }
 
     /**
-     * 氏名変更・住所変更の証憑はstaff_year_end_applications（引き続きステージング）から、
-     * 障害者手帳の証憑はmx_nen_tyo（直書き化）から配信する。
+     * 氏名変更・住所変更・障害者手帳の証憑はすべてmx_nen_tyoから配信する
+     * （申請ワークフローとステージング列もmx_nen_tyoへ統合済み）。
      */
     public function personalInfoCertificateFile(int $applicationId, string $type)
     {
-        if ($type === 'disability') {
-            $application = DB::connection('sqlsrv_payroll')
-                ->table('dbo.staff_year_end_applications')
-                ->where('application_id', $applicationId)
-                ->first();
-            abort_unless($application, 404);
-
-            $nenTyo = $this->nenTyoRowForApplication($application);
-            abort_unless($nenTyo, 404);
-
-            $path = trim((string) ($nenTyo->disability_certificate_file_path ?? ''));
-            abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
-
-            $downloadName = trim((string) ($nenTyo->disability_certificate_original_name ?? '')) ?: basename($path);
-
-            return $this->certificateFileService->response($path, $downloadName);
-        }
+        $nenTyo = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
+            ->first();
+        abort_unless($nenTyo, 404);
 
         $columnPrefix = match ($type) {
+            'disability' => 'disability_certificate',
             'address' => 'address_change_certificate',
             'name' => 'name_change_certificate',
             default => abort(404),
         };
 
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-        abort_unless($application, 404);
-
-        $path = trim((string) ($application->{$columnPrefix . '_file_path'} ?? ''));
+        $path = trim((string) ($nenTyo->{$columnPrefix . '_file_path'} ?? ''));
         abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
 
-        $downloadName = trim((string) ($application->{$columnPrefix . '_original_name'} ?? '')) ?: basename($path);
+        $downloadName = trim((string) ($nenTyo->{$columnPrefix . '_original_name'} ?? '')) ?: basename($path);
 
         return $this->certificateFileService->response($path, $downloadName);
     }
 
     public function previousJobCertificateFile(int $applicationId)
     {
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+        $nenTyo = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
-        abort_unless($application, 404);
-
-        $nenTyo = $this->nenTyoRowForApplication($application);
         abort_unless($nenTyo, 404);
 
         $path = trim((string) ($nenTyo->previous_job_certificate_file_path ?? ''));
@@ -2031,13 +2043,10 @@ class YearEndAdjustmentV2Controller extends Controller
 
     public function housingLoanCertificateFile(int $applicationId)
     {
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+        $nenTyo = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
-        abort_unless($application, 404);
-
-        $nenTyo = $this->nenTyoRowForApplication($application);
         abort_unless($nenTyo, 404);
 
         $path = trim((string) ($nenTyo->housing_loan_certificate_file_path ?? ''));
@@ -2048,43 +2057,21 @@ class YearEndAdjustmentV2Controller extends Controller
         return $this->certificateFileService->response($path, $downloadName);
     }
 
-    /** 作成はしない（GETの証憑配信で副作用を起こさないため）。無ければnull。 */
-    private function nenTyoRowForApplication(object $application): ?object
-    {
-        $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
-        if ($nenTyoNo > 0) {
-            $row = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo')->where('nen_tyo_no', $nenTyoNo)->first();
-            if ($row !== null) {
-                return $row;
-            }
-        }
-
-        $staffId = trim((string) ($application->staff_id ?? ''));
-        $targetYear = (int) ($application->target_year ?? date('Y'));
-
-        return DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->where('staff_id', $staffId)
-            ->whereYear('year_end', $targetYear)
-            ->orderBy('nen_tyo_no')
-            ->first();
-    }
-
     /**
-     * mx_fuyoの障害者手帳証憑を直接配信する（ステージング廃止に伴う置き換え）。
-     * applicationIdから対象スタッフ・年を特定し、そのfuyo_noが同一スタッフ・年の
-     * ものであることを確認してから配信する（他スタッフの証憑を覗けないように）。
+     * mx_fuyoの障害者手帳証憑を直接配信する。applicationId(nen_tyo_no)から対象スタッフ・年を
+     * 特定し、そのfuyo_noが同一スタッフ・年のものであることを確認してから配信する
+     * （他スタッフの証憑を覗けないように）。
      */
     public function fuyoCertificateFile(int $applicationId, int $fuyoNo)
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
         $staffId = trim((string) ($application->staff_id ?? ''));
-        $targetYear = (int) ($application->target_year ?? date('Y'));
+        $targetYear = (int) \Carbon\Carbon::parse($application->year_end)->format('Y');
 
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
@@ -2113,17 +2100,8 @@ class YearEndAdjustmentV2Controller extends Controller
         $staffRows = $this->activeStaffRows();
         $nenTyoNoMap = $this->nenTyoNoMap($targetYear);
 
-        // スタッフ1人ずつ存在確認クエリを投げると人数分のラウンドトリップが発生するため、
-        // その年の既存対象者をまとめて1回で取得してメモリ上で突き合わせる。
-        $existingRows = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('target_year', $targetYear)
-            ->get(['application_id', 'staff_id', 'nen_tyo_no'])
-            ->keyBy(fn($row) => trim((string) $row->staff_id));
-
         $created = 0;
         $skipped = 0;
-        $linked = 0;
         $insertRows = [];
 
         foreach ($staffRows as $row) {
@@ -2132,60 +2110,51 @@ class YearEndAdjustmentV2Controller extends Controller
                 continue;
             }
 
-            $nenTyoNo = $nenTyoNoMap[$staffId] ?? null;
-            $existing = $existingRows->get($staffId);
-
-            if ($existing) {
-                if ($nenTyoNo !== null && empty($existing->nen_tyo_no)) {
-                    DB::connection('sqlsrv_payroll')
-                        ->table('dbo.staff_year_end_applications')
-                        ->where('application_id', $existing->application_id)
-                        ->update(['nen_tyo_no' => $nenTyoNo]);
-                    $linked++;
-                }
-
+            if (array_key_exists($staffId, $nenTyoNoMap)) {
                 $skipped++;
                 continue;
             }
 
             $insertRows[] = [
                 'staff_id' => $staffId,
-                'target_year' => $targetYear,
-                'nen_tyo_no' => $nenTyoNo,
-                'status' => 'draft',
+                'year_end' => sprintf('%04d-12-31', $targetYear),
+                'fuyo_deduction_report' => 1,
+                'nen_tyo_false' => 0,
+                'edit_lock' => 0,
+                'application_status' => 'draft',
             ];
             $created++;
         }
 
-        // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう、4列×500行=2000個で分割する。
+        // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう分割して挿入する。
         // 全社対象者数に比例して行数が増えるため、将来的に上限を超える可能性がある。
-        foreach (array_chunk($insertRows, 500) as $chunk) {
+        foreach (array_chunk($insertRows, 300) as $chunk) {
             DB::connection('sqlsrv_payroll')
-                ->table('dbo.staff_year_end_applications')
+                ->table('dbo.mx_nen_tyo')
                 ->insert($chunk);
         }
 
         return redirect()
             ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
-            ->with('status', "{$targetYear}年の対象者を作成しました。追加 {$created}件 / 作成済 {$skipped}件 / 年調リンク補完 {$linked}件");
+            ->with('status', "{$targetYear}年の対象者を作成しました。追加 {$created}件 / 作成済 {$skipped}件");
     }
 
     public function confirmApplication(int $applicationId): RedirectResponse
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
-        if (trim((string) $application->status) !== 'submitted') {
+        if ($this->resolveApplicationStatus($application) !== 'submitted') {
             return redirect()
                 ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
                 ->with('status', '提出済みの申請のみ確認済みにできます。');
         }
 
         $staffId = trim((string) $application->staff_id);
-        $targetYear = (int) ($application->target_year ?? date('Y'));
+        $targetYear = (int) \Carbon\Carbon::parse($application->year_end)->format('Y');
 
         // 保険料控除はステージングを介さずmx_hokenへ直書きされているため、確認済みボタンで
         // 対象スタッフ・年のmx_hoken行を一括でchecked_flag=1にする（既存の未使用カラムを再利用）。
@@ -2195,10 +2164,11 @@ class YearEndAdjustmentV2Controller extends Controller
             ->whereYear('insurance_year', $targetYear)
             ->update(['checked_flag' => 1]);
 
+        // 申請の確認済み＝年調計算そのものの確定でもある。同じ行なので1回のUPDATEで連動する。
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
+            ->update(['application_status' => 'confirmed', 'confirmed_at' => now(), 'edit_lock' => 1]);
 
         return redirect()
             ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
@@ -2212,24 +2182,32 @@ class YearEndAdjustmentV2Controller extends Controller
         ]);
 
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
-        if (trim((string) $application->status) !== 'submitted') {
+        $currentStatus = $this->resolveApplicationStatus($application);
+        if (!in_array($currentStatus, ['submitted', 'confirmed'], true)) {
             return redirect()
                 ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
-                ->with('status', '提出済みの申請のみ差し戻せます。');
+                ->with('status', '提出済み・確認済みの申請のみ差し戻せます。');
+        }
+
+        $updateValues = [
+            'application_status' => 'returned',
+            'return_note' => $values['return_note'],
+        ];
+
+        // 確認済み・反映済みからの差し戻し（是正等）は、年調計算のロックも解除する
+        if ($currentStatus !== 'submitted') {
+            $updateValues['edit_lock'] = 0;
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->update([
-                'status' => 'returned',
-                'return_note' => $values['return_note'],
-            ]);
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
+            ->update($updateValues);
 
         return redirect()
             ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
@@ -2241,16 +2219,20 @@ class YearEndAdjustmentV2Controller extends Controller
      * 住宅ローン控除/前職/本人状況フラグ(mx_nen_tyo)は、スタッフの申告時点で既に実データへ
      * 直接書き込まれているため、ここでの反映対象はmx_staffs（氏名・住所・生年月日、
      * 履歴を持たない単一マスタのため唯一ステージングを経由する）のみ。
+     *
+     * ステータスは「反映済」を独立した状態として持たず、確認済のまま据え置く
+     * （反映は機械的な処理で、確認と区別する意味がないため）。反映が必要かどうかは
+     * reflected_at と confirmed_at の前後関係から都度判定し、詳細画面にだけ表示する。
      */
     public function reflectApplication(int $applicationId): RedirectResponse
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
-        if (trim((string) $application->status) !== 'confirmed') {
+        if ($this->resolveApplicationStatus($application) !== 'confirmed') {
             return redirect()
                 ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
                 ->with('status', '確認済みの申請のみ反映できます。');
@@ -2284,10 +2266,9 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->update([
-                'status' => 'reflected',
                 'reflected_at' => now(),
             ]);
 
@@ -2313,10 +2294,10 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', (int) $values['application_id'])
-            ->where('target_year', $targetYear)
-            ->update(['status' => $status]);
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', (int) $values['application_id'])
+            ->whereYear('year_end', $targetYear)
+            ->update(['application_status' => $status]);
 
         return redirect()
             ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
@@ -2332,10 +2313,10 @@ class YearEndAdjustmentV2Controller extends Controller
         $targetYear = (int) $values['target_year'];
 
         $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', (int) $values['application_id'])
-            ->where('target_year', $targetYear)
-            ->first(['application_id', 'staff_id', 'status']);
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', (int) $values['application_id'])
+            ->whereYear('year_end', $targetYear)
+            ->first(['nen_tyo_no', 'staff_id', 'application_status']);
 
         if (!$row) {
             return redirect()
@@ -2343,7 +2324,7 @@ class YearEndAdjustmentV2Controller extends Controller
                 ->with('status', '削除対象が見つかりません。');
         }
 
-        $status = trim((string) ($row->status ?? 'draft'));
+        $status = trim((string) ($row->application_status ?? 'draft'));
         if ($status !== '' && $status !== 'draft') {
             return redirect()
                 ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
@@ -2351,8 +2332,8 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', (int) $row->application_id)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', (int) $row->nen_tyo_no)
             ->delete();
 
         return redirect()
@@ -2362,9 +2343,16 @@ class YearEndAdjustmentV2Controller extends Controller
 
     public function calculateSingle(Request $request, int $applicationId): RedirectResponse
     {
-        [$application, $staffId, $targetYear] = $this->yearEndApplicationContext($applicationId);
+        $nenTyo = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
+            ->first();
+        abort_unless($nenTyo, 404);
 
-        $nenTyo = $this->findOrCreateNenTyoRow($application, $staffId, $targetYear);
+        $staffId = trim((string) ($nenTyo->staff_id ?? ''));
+        $targetYear = (int) \Carbon\Carbon::parse($nenTyo->year_end)->format('Y');
+        abort_if($staffId === '' || $targetYear < 2000 || $targetYear > 2100, 404);
+
         if ((int) ($nenTyo->edit_lock ?? 0) === 1) {
             return redirect()
                 ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
@@ -2375,13 +2363,8 @@ class YearEndAdjustmentV2Controller extends Controller
 
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
-            ->where('nen_tyo_no', (int) $nenTyo->nen_tyo_no)
+            ->where('nen_tyo_no', $applicationId)
             ->update($payload);
-
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->update(['nen_tyo_no' => (int) $nenTyo->nen_tyo_no]);
 
         return redirect()
             ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
@@ -2389,61 +2372,29 @@ class YearEndAdjustmentV2Controller extends Controller
     }
 
     /**
+     * applicationId(nen_tyo_no)からmx_nen_tyoの行・staff_id・対象年を取得する共通処理。
      * @return array{0:object,1:string,2:int}
      */
     private function yearEndApplicationContext(int $applicationId): array
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
 
         abort_unless($application, 404);
 
         $staffId = trim((string) ($application->staff_id ?? ''));
-        $targetYear = (int) ($application->target_year ?? date('Y'));
+        $targetYear = (int) \Carbon\Carbon::parse($application->year_end)->format('Y');
         abort_if($staffId === '' || $targetYear < 2000 || $targetYear > 2100, 404);
 
         return [$application, $staffId, $targetYear];
     }
 
+    /** applicationIdが常にnen_tyo_noと一致するようになったので、行は既に存在している前提。 */
     private function findOrCreateNenTyoRow(object $application, string $staffId, int $targetYear): object
     {
-        $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
-        $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo');
-
-        if ($nenTyoNo > 0) {
-            $row = $query->where('nen_tyo_no', $nenTyoNo)->first();
-            if ($row) {
-                return $row;
-            }
-        }
-
-        $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->where('staff_id', $staffId)
-            ->whereYear('year_end', $targetYear)
-            ->orderBy('nen_tyo_no')
-            ->first();
-
-        if ($row) {
-            return $row;
-        }
-
-        $newNo = (int) DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->insertGetId([
-                'staff_id' => $staffId,
-                'fuyo_deduction_report' => 1,
-                'year_end' => sprintf('%04d-12-31', $targetYear),
-                'nen_tyo_false' => 0,
-                'edit_lock' => 0,
-            ], 'nen_tyo_no');
-
-        return DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->where('nen_tyo_no', $newNo)
-            ->first();
+        return $application;
     }
 
     private function money(mixed $value): float
@@ -2642,18 +2593,18 @@ class YearEndAdjustmentV2Controller extends Controller
     /**
      * 本人情報（氏名・住所・生年月日・世帯主）のスタッフ申告内容を、事務所側でその場で
      * 訂正できるようにする。mx_staffsへは反映しない（それは既存のreflectApplication()の
-     * 役目）。ここはstaff_year_end_applicationsのステージング値を直すだけ。
+     * 役目）。ここはmx_nen_tyoのステージング値（new_系・setai_系の列）を直すだけ。
      */
     public function updatePersonalInfoStaging(Request $request, int $applicationId): RedirectResponse
     {
         $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->first();
         abort_unless($application, 404);
 
         $staffId = trim((string) ($application->staff_id ?? ''));
-        $targetYear = (int) ($application->target_year ?? date('Y'));
+        $targetYear = (int) \Carbon\Carbon::parse($application->year_end)->format('Y');
 
         $values = $request->validate([
             'new_staff_name' => ['nullable', 'string', 'max:50'],
@@ -2705,8 +2656,8 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $applicationId)
             ->update($payload);
 
         return redirect()
@@ -2793,18 +2744,7 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     private function hokenApplicationContext(int $applicationId): array
     {
-        $application = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->first();
-
-        abort_unless($application, 404);
-
-        $staffId = trim((string) ($application->staff_id ?? ''));
-        $targetYear = (int) ($application->target_year ?? date('Y'));
-        abort_if($staffId === '' || $targetYear < 2000 || $targetYear > 2100, 404);
-
-        return [$application, $staffId, $targetYear];
+        return $this->yearEndApplicationContext($applicationId);
     }
 
     private function hokenRowOrFail(int $hokenNo, string $staffId, int $targetYear): object
@@ -3081,18 +3021,25 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return array<string, string> */
     private function formatApplication(object $application): array
     {
-        $status = trim((string) ($application->status ?? ''));
-        if ($status === '') {
-            $status = 'draft';
-        }
+        $status = $this->resolveApplicationStatus($application);
+
+        // 「反映」は氏名・住所等がmx_staffsへ実際に書き込み済みかどうかの目印。
+        // 独立ステータスにはせず、confirmed_atより後にreflected_atが無ければ
+        // 「確認済だがまだ反映していない」として詳細画面で警告表示する。
+        $personalInfoChanged = (int) ($application->personal_info_changed ?? 0) === 1;
+        $confirmedAt = $application->confirmed_at ?? null;
+        $reflectedAt = $application->reflected_at ?? null;
+        $needsReflect = $personalInfoChanged
+            && ($reflectedAt === null || ($confirmedAt !== null && strtotime((string) $confirmedAt) > strtotime((string) $reflectedAt)));
 
         return [
-            'application_id' => (string) ($application->application_id ?? ''),
+            'application_id' => (string) ($application->nen_tyo_no ?? ''),
             'staff_id' => trim((string) ($application->staff_id ?? '')),
-            'target_year' => (string) ($application->target_year ?? ''),
+            'target_year' => (string) (!empty($application->year_end) ? \Carbon\Carbon::parse($application->year_end)->format('Y') : ''),
             'nen_tyo_no' => (string) ($application->nen_tyo_no ?? ''),
             'status' => $status,
             'status_label' => $this->statusLabel($status),
+            'needs_reflect' => $needsReflect,
             'personal_info_changed' => $this->bitLabel($application->personal_info_changed ?? null),
             'dependents_changed' => $this->bitLabel($application->dependents_changed ?? null),
             'insurance_deduction_changed' => $this->bitLabel($application->insurance_deduction_changed ?? null),
@@ -3430,15 +3377,29 @@ class YearEndAdjustmentV2Controller extends Controller
             || in_array($key, ['registration_date', 'nyu_date', 'tai_date'], true);
     }
 
+    /**
+     * application_statusが未設定（新規追加した列のため、既存の年調行では空）の場合、
+     * edit_lockから状態を補う。edit_lock=1（計算確定済み）を「未提出」扱いにしてしまうと
+     * 実際は確定済みのレコードが未提出に見えてしまうため、必ずこちらを経由して判定する。
+     */
+    private function resolveApplicationStatus(object $nenTyo): string
+    {
+        $status = trim((string) ($nenTyo->application_status ?? ''));
+        if ($status !== '') {
+            return $status;
+        }
+
+        return (int) ($nenTyo->edit_lock ?? 0) === 1 ? 'confirmed' : 'draft';
+    }
+
     /** @return array<string, string> */
     private function statusOptions(): array
     {
         return [
-            'draft' => '下書き',
+            'draft' => '未提出',
             'submitted' => '提出済',
             'returned' => '差戻し',
             'confirmed' => '確認済',
-            'reflected' => '反映済',
             'excluded' => '対象外',
             'retired' => '退職済',
         ];

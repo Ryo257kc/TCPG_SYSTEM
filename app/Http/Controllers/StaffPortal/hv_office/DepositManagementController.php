@@ -77,39 +77,6 @@ class DepositManagementController extends Controller
         ];
     }
 
-    public function index(Request $request): RedirectResponse|View
-    {
-        $staffId = $this->staffPortalStaffId($request);
-        if ($staffId === '') {
-            return $this->redirectToStaffPortalLogin();
-        }
-
-        $staffRow = $this->staffPortalStaffRow($staffId);
-        $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
-        $targetStaffId = $this->targetPaymentStaffId($request, $staffId, $staffRow);
-        $canSelectStaff = $this->canSelectPaymentStaff($staffRow);
-
-        try {
-            $targetMonthStart = \Carbon\Carbon::createFromFormat('Y-m-d', $targetMonth . '-01')->startOfMonth();
-        } catch (\Throwable $e) {
-            $targetMonth = now()->format('Y-m');
-            $targetMonthStart = \Carbon\Carbon::createFromFormat('Y-m-d', $targetMonth . '-01')->startOfMonth();
-        }
-
-        $depositData = $this->depositData($targetMonth, $targetStaffId);
-
-        return view('staff_portal.hv_office.deposit_management.index', $this->commonViewData($request, [
-            'target_month' => $targetMonth,
-            'target_staff_id' => $targetStaffId,
-            'canSelectStaff' => $canSelectStaff,
-            'staffOptions' => $canSelectStaff ? $this->homeVisitStaffOptions($targetMonthStart) : [],
-            'rows' => $depositData['rows'],
-            'totals' => $depositData['totals'],
-            'isAllConfirmed' => $depositData['isAllConfirmed'],
-            'confirmedAt' => $depositData['confirmedAt'],
-        ]));
-    }
-
     public function print(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);

@@ -40,7 +40,7 @@
                 <h3>店舗売上一覧</h3>
                 <div class="name-meta">名前：{{ $selectedStaffName }}</div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -84,7 +84,7 @@
             <p class="note">※往診売上はリアルタイムではありません。</p>
 
             <h3>メニュー別一覧</h3>
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>

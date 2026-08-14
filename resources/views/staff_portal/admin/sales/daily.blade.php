@@ -43,7 +43,7 @@
             @if ($hasSearched && $selectedStaffId !== '' && $rowCount === 0)
             <div class="empty">「{{ $selectedDate }}」の売上はありません。</div>
             @elseif ($selectedStaffId !== '')
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>

@@ -41,6 +41,18 @@
             font-weight: 700;
         }
 
+        .attendance-management-page .return-badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #9f1f1f;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            vertical-align: middle;
+        }
+
         @media (max-width: 900px) {
             .attendance-management-summary {
                 display: block;
@@ -80,7 +92,7 @@
             @if ($rowCount === 0)
             <div class="empty">{{ $selectedMonth }} の勤怠申請はありません。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <colgroup>
                         <col style="width: 30px;">
@@ -102,7 +114,12 @@
                             <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $loop->iteration }}</td>
                             <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $row['year_month'] }}</td>
                             <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $row['staff_id'] }}</td>
-                            <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $row['staff_name'] }}</td>
+                            <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>
+                                {{ $row['staff_name'] }}
+                                @if (!empty($row['is_returned']))
+                                <span class="return-badge">差戻中</span>
+                                @endif
+                            </td>
                             <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $row['self_applied_at'] }}</td>
                             <td @class(['daily-row-returned-cell'=> !empty($row['is_returned'])])>{{ $row['admin_approved'] }}</td>
                             <td><a class="btn btn_small" href="{{ $row['detail_url'] }}">詳細</a></td>

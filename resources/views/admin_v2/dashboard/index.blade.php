@@ -10,15 +10,12 @@
     ['key' => 'bonus-detail', 'label' => '賞与計算', 'url' => '/admin/bonus'],
     ['key' => 'paid-leave-manage', 'label' => '有休管理', 'url' => '/admin/paid-leave'],
     ['key' => 'year-end-adjustments', 'label' => '年末調整管理', 'url' => route('admin.work.year_end_adjustments')],
-    ['key' => 'profile-requests', 'label' => '個人情報変更申請管理', 'url' => route('admin.work.profile_requests')],
-    ['key' => 'onboarding-requests', 'label' => '入社手続き申請管理', 'url' => route('admin.work.onboarding_requests')],
     ],
     '売上' => [
     ['key' => 'sales-preview', 'label' => '店舗売上', 'url' => '/admin/sales'],
     ['key' => 'accounts-receivable', 'label' => '未収入金', 'url' => '/staff/office/sales/uncollected'],
     ['key' => 'high-cost-medical', 'label' => '高額療養費', 'url' => '/staff/office/receipt/high_medical'],
     ['key' => 'home-visit-counter-list', 'label' => '往診窓口一覧', 'url' => '/staff/office/receipt/home-visit-counter'],
-    ['key' => 'monthly-unlock', 'label' => '月次処理', 'url' => '/admin'],
     ['key' => 'return-processing', 'label' => '返戻処理', 'url' => '/admin'],
     ],
     '請求・仕訳' => [
@@ -29,16 +26,19 @@
     ],
     '帳票' => [
     ['key' => 'report-center', 'label' => '給与帳票', 'url' => '/admin/reports'],
-    ['key' => 'manager-documents', 'label' => '入社書類', 'url' => '/staff/attendance/management'],
+    ['key' => 'manager-documents', 'label' => '入社書類', 'url' => route('office.documents')],
     ],
     /*'月次処理' => [
     ['key' => 'rese_unlock', 'label' => 'レセ解除', 'url' => '/admin/work/information'],
     ['key' => 'dairy_unlock', 'label' => '日報解除', 'url' => '/admin/'],
     ['key' => 'cash_unlock', 'label' => '小口現金解除', 'url' => '/admin/'],
     ],*/
-    '通知' => [
+    '通知・申請' => [
     ['key' => 'information', 'label' => 'インフォメーション', 'url' => '/admin/work/information'],
+    ['key' => 'maintenance', 'label' => 'メンテナンス設定', 'url' => route('admin.work.maintenance')],
     ['key' => 'message', 'label' => '個人メッセージ', 'url' => '/admin/'],
+    ['key' => 'profile-requests', 'label' => '個人情報変更申請管理', 'url' => route('admin.work.profile_requests')],
+    ['key' => 'onboarding-requests', 'label' => '入社手続き申請管理', 'url' => route('admin.work.onboarding_requests')],
     ],
     'マスタ' => [
     ['key' => 'master-company', 'label' => '会社マスタ', 'url' => '/admin/master/company'],
@@ -89,7 +89,7 @@
     'petty-cash-list' => ['title' => '現金出納帳', 'description' => '小口現金の確認'],
     'return-processing' => ['title' => '返戻処理', 'description' => '不要？未収入金に統合？'],
     'information' => ['title' => 'インフォメーション', 'description' => 'お知らせの公開、非公開'],
-    'monthly-unlock' => ['title' => '月次処理', 'description' => '月次、売上などの解除'],
+    'maintenance' => ['title' => 'メンテナンス設定', 'description' => 'メンテナンス時間帯の設定'],
     'rese_unlock' => ['title' => 'レセ解除', 'description' => '月次：入金確認、往診売上　仕訳削除'],
     'dairy_unlock' => ['title' => '日報解除', 'description' => '月次：日報、店舗売上　仕訳削除'],
     'cash_unlock' => ['title' => '小口現金解除', 'description' => '月次：経理、残高繰越　削除'],
@@ -130,6 +130,27 @@
                     </form>
                 </aside>
             </section>
+
+            @if (!empty($returnedAttendanceStaff))
+            <section class="dashboard-alert">
+                <span class="dashboard-alert-badge">要確認</span>
+                <span>修正が必要な勤怠があります（差戻中）: {{ implode('、', $returnedAttendanceStaff) }}</span>
+            </section>
+            @endif
+
+            @if (!empty($paidLeaveGrantTargetStaff))
+            <section class="dashboard-notice">
+                <span class="dashboard-notice-badge">今月</span>
+                <span>今月が有休付与月のスタッフがいます: {{ implode('、', $paidLeaveGrantTargetStaff) }}</span>
+            </section>
+            @endif
+
+            @if (!empty($kaigoInsuranceStartTargetStaff))
+            <section class="dashboard-notice">
+                <span class="dashboard-notice-badge">今月</span>
+                <span>今月から介護保険料の徴収が始まるスタッフがいます（イレギュラー業務対象・要確認）: {{ implode('、', $kaigoInsuranceStartTargetStaff) }}</span>
+            </section>
+            @endif
 
             <section class="menu-grid">
                 @foreach ($menuGroups as $groupName => $items)

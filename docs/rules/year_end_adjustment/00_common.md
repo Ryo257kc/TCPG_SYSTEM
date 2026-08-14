@@ -7,9 +7,11 @@
 
 ## 基本方針
 
-- 年調申請の状態管理と、年調計算結果は分けて扱う。
-- 申請の入口は `staff_year_end_applications`。
-- 計算結果は既存の `mx_nen_tyo` に保存する。
+- 年調申請の状態管理（`application_status`等）と、年調計算結果は、概念としては分けて扱うが、
+  物理的には同じ `mx_nen_tyo` の行に同居する（2026年8月、`staff_year_end_applications`を廃止して
+  統合。旧テーブルは`x_staff_year_end_applications`にリネームして退避、コードからの参照は無し）。
+- 申請の入口も計算結果も `mx_nen_tyo`。`nen_tyo_no`が唯一の識別子（ルートの`applicationId`は
+  常に`nen_tyo_no`の値）。
 - 保険控除は既存の `mx_hoken` を使う。
 - 扶養情報は既存の `mx_fuyo` を使う。
 - 給与・賞与・扶養・保険は、帳票表示用に作り直さず、既存テーブルの値を参照する。

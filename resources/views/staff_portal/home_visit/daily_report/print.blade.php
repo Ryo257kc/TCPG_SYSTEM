@@ -196,7 +196,9 @@
                     <th>北在家</th>
                     <th>東加古川</th>
                     <th>播磨町</th>
+                    @if($isAccounting)
                     <th>売上金額</th>
+                    @endif
                     <th>自費</th>
                     <th>未収金</th>
                     <th>備考</th>
@@ -226,7 +228,9 @@
                         <td class="{{ $kitazaike_fee !== '' ? 'store-fee' : '' }}">{{ $kitazaike_fee }}</td>
                         <td class="{{ $higashikakogawa_fee !== '' ? 'store-fee' : '' }}">{{ $higashikakogawa_fee }}</td>
                         <td class="{{ $harimacho_fee !== '' ? 'private-fee' : '' }}">{{ $harimacho_fee }}</td>
+                        @if($isAccounting)
                         <td>{{ $sales_amount }}</td>
+                        @endif
                         <td>{{ $other_private_fee }}</td>
                         <td>{{ $uncollected_amount }}</td>
                         <td class="text-left">{{ $item->remarks ?? '' }}</td>

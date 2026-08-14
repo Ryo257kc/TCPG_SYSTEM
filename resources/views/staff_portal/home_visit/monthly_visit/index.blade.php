@@ -97,6 +97,11 @@
             min-width: 30px;
         }
 
+        .monthly-visit-day-multi {
+            color: #d0021b;
+            font-weight: 700;
+        }
+
         .monthly-visit-detail-button-cell {
             width: 30px;
             min-width: 30px;
@@ -322,7 +327,11 @@
                                 @endif
                             </td>
                             @foreach($days as $day)
-                            <td class="monthly-visit-day-cell">{{ $row->day_values[$day] ?? '' }}</td>
+                            @php
+                            $dayValue = $row->day_values[$day] ?? '';
+                            $isMultiVisit = is_numeric($dayValue) && (int) $dayValue >= 2;
+                            @endphp
+                            <td class="monthly-visit-day-cell {{ $isMultiVisit ? 'monthly-visit-day-multi' : '' }}">{{ $dayValue }}</td>
                             @endforeach
                             <td>{{ $row->total_count }}</td>
                             <td class="text-left">{{ $row->daily_report_facility_name }}</td>
@@ -369,7 +378,7 @@
                     <input type="hidden" name="patient_id" value="{{ $patient_id }}">
                 </form>
                 @endforeach
-                <div class="table-wrap">
+                <div class="table-wrap staff-viewport-list-wrap">
                     <table class="data-table monthly-visit-table">
                         <thead>
                             <colgroup>

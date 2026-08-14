@@ -14,12 +14,26 @@
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
         <style>
-            .home-visit-row {
-                background-color: #fff3cd;
+            .sales-amount-form {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+
+            .sales-amount-input {
+                width: 100%;
+                min-width: 0;
+                box-sizing: border-box;
+            }
+
+            .sales-amount-input:disabled {
+                background-color: #e9e9e9;
+                color: #888;
+                cursor: not-allowed;
             }
         </style>
 
-        <section class="panel">
+        <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">往診日報</h2>
             </div>
@@ -32,11 +46,11 @@
             <div class="error">{{ $errors->first() }}</div>
             @endif
 
-            <div class="toolbar-group filter-row">
+            <div class="dr-toolbar">
                 <form method="get" action="{{ route('home_visit.daily_report') }}">
                     <input type="date" name="date" value="{{ $date }}">
                     @if($canSelectStaff ?? false)
-                    <select name="staff_name" class="margin_l20">
+                    <select name="staff_name">
                         @foreach(($staffOptions ?? []) as $staff)
                         <option value="{{ $staff['staff_id'] }}" {{ ($targetStaffId ?? '') === $staff['staff_id'] ? 'selected' : '' }}>
                             {{ $staff['staff_name'] }}
@@ -44,26 +58,34 @@
                         @endforeach
                     </select>
                     @endif
-                    <button class="margin_l20" type="submit">表示</button>
+                    <button type="submit">表示</button>
+                </form>
+
+                <div class="dr-toolbar-divider"></div>
+
+                <form>
                     @if($items->where('is_confirmed', 1)->count() > 0)
-                    <input type="button" value="印刷" class="btn margin_l20" onclick="window.open('{{ route('home_visit.daily_report.print', ['date' => $date, 'staff_name' => $targetStaffId ?? '']) }}', '_blank')">
+                    <input type="button" value="印刷" class="btn" onclick="window.open('{{ route('home_visit.daily_report.print', ['date' => $date, 'staff_name' => $targetStaffId ?? '']) }}', '_blank')">
                     @endif
-                    <input type="button" value="前週へ複製" class="btn margin_l20"
+                    <input type="button" value="前週へ複製" class="btn"
                         onclick="if(confirm('前週に複製します。よろしいですか？')) location.href='{{ route('home_visit.daily_report.copy_week', ['date' => $date, 'staff_name' => $targetStaffId ?? '']) }}'">
                 </form>
+
                 @if($items->where('is_confirmed', 1)->count() === 0)
-                <form method="post" action="{{ route('home_visit.daily_report.quick_store') }}" style="display:inline;">
+                <div class="dr-toolbar-divider"></div>
+
+                <form method="post" action="{{ route('home_visit.daily_report.quick_store') }}">
                     @csrf
                     <input type="hidden" name="date" value="{{ $date }}">
                     <input type="hidden" name="staff_name" value="{{ $targetStaffId ?? '' }}">
-                    <button type="submit" class="btn margin_l20">新規追加</button>
+                    <button type="submit" class="btn">新規追加</button>
                 </form>
 
                 <form method="post" action="{{ route('home_visit.monthly_report.confirm') }}">
                     @csrf
                     <input type="hidden" name="date" value="{{ $date }}">
                     <input type="hidden" name="staff_name" value="{{ $targetStaffId ?? '' }}">
-                    <button class="btn apply margin_l20">確定</button>
+                    <button class="btn apply">確定</button>
                 </form>
                 @endif
             </div>
@@ -79,7 +101,7 @@
             </font>
             @endif
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <colgroup>
                         <col style="width: 40px;">
@@ -89,10 +111,11 @@
                         <col style="width: 50px;">
                         <col style="width: 70px;">
                         <col style="width: 50px;">
+                        @if($isAccounting)
+                        <col style="width: 90px;">
+                        @endif
                         <col style="width: 60px;">
                         <col style="width: 60px;">
-                        <col style="width: 60px;">
-                        <col style="width: 40px;">
                     </colgroup>
                     <thead>
                         <tr>
@@ -103,10 +126,11 @@
                             <th>終了</th>
                             <th>日報店舗</th>
                             <th>標準距離</th>
+                            @if($isAccounting)
                             <th>売上金額</th>
+                            @endif
                             <th>自費</th>
                             <th>未収金</th>
-                            <th>詳細</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -129,14 +153,27 @@
                             <td>{{ $end !== '00:00' ? $end : '' }}</td>
                             <td>{{ $item->daily_report_store_name }}</td>
                             <td>{{ formatNumber($item->standard_distance) }}</td>
-                            <td>{{ formatNumber(((float) ($item->sales_amount ?? 0)) * 100) }}</td>
-                            <td>{{ formatNumber($item->private_fee) }}</td>
-                            <td>{{ formatNumber($item->uncollected_amount) }}</td>
+                            @if($isAccounting)
+                            @php
+                            $salesNotYetReady = (int) $item->is_management_fixed !== 1;
+                            $salesRowLocked = ($isSalesLocked ?? false) || $salesNotYetReady;
+                            @endphp
                             <td>
                                 @if(!empty($item->daily_report_id))
-                                <a href="{{ route('home_visit.daily_report.edit', ['nippouNo' => $item->daily_report_id]) }}" class="btn btn_small">詳細</a>
+                                <form method="post" action="{{ route('home_visit.daily_report.sales_amount.update', ['nippouNo' => $item->daily_report_id]) }}" class="sales-amount-form">
+                                    @csrf
+                                    <input type="hidden" name="date" value="{{ $date }}">
+                                    <input type="hidden" name="staff_name" value="{{ $targetStaffId ?? '' }}">
+                                    <input type="number" step="1" name="sales_amount" value="{{ formatNumber($item->sales_amount) }}" class="sales-amount-input" {{ $salesRowLocked ? 'disabled' : '' }}>
+                                    @unless($salesRowLocked)
+                                    <button type="submit" class="btn btn_small">登録</button>
+                                    @endunless
+                                </form>
                                 @endif
                             </td>
+                            @endif
+                            <td>{{ formatNumber($item->private_fee) }}</td>
+                            <td>{{ formatNumber($item->uncollected_amount) }}</td>
                         </tr>
                         @endforeach
                     </tbody>

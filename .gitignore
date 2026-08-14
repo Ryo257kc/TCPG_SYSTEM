@@ -22,3 +22,13 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/.claude/settings.local.json
+
+# 旧システムの実物ミラー・DBサンプル等（アプリのソースではない。認証情報を含むファイルもあるため
+# 絶対にコミットしない。tests/内のこれ以外の内容は都度判断）
+/tests/TCPG_SYSTEM/
+/tests/hinata_oushin/
+*.accdb
+*.laccdb
+/tests/empty（メモリ解放）/
+/tests/empty（メモリ解放）.rar

@@ -53,11 +53,21 @@
     background: #fff4e8;
 }
 
-/* ヘッダー固定 */
-.table-wrap .data-table thead {
+/* ヘッダー固定（theadではなくthに直接効かせる方が安定する） */
+.table-wrap .data-table thead th {
     position: sticky;
     top: 0;
     z-index: 5;
+}
+
+/* 往診：往診分の行を強調表示 */
+.home-visit-row {
+    background-color: #fff3cd;
+}
+
+/* 未確認・未確定など、対応待ちの行を強調表示 */
+.status-pending-row {
+    background-color: #fff3cd;
 }
 
 /* .data-table thead tr:first-child th {

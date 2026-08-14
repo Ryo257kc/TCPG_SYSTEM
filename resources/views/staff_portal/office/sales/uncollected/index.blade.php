@@ -49,7 +49,7 @@
                 </div>
             </form>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size13">
                     <colgroup>
                         <col style="width: 50px;">

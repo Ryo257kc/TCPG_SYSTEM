@@ -7,6 +7,7 @@ use App\Services\Admin\V2\Master\CompanyV2Service;
 use App\Services\Admin\V2\Sales\SalesV2Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class DashboardV2Controller extends Controller
@@ -125,6 +126,72 @@ class DashboardV2Controller extends Controller
     {
         return view('admin_v2.dashboard.index', [
             'requestedPage' => $pageKey,
+            'returnedAttendanceStaff' => $this->returnedAttendanceStaffNames(),
+            'paidLeaveGrantTargetStaff' => $this->paidLeaveGrantTargetStaffNames(),
+            'kaigoInsuranceStartTargetStaff' => $this->kaigoInsuranceStartTargetStaffNames(),
         ]);
+    }
+
+    /** @return list<string> */
+    private function returnedAttendanceStaffNames(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards as tc')
+            ->leftJoin('dbo.mx_staffs as s', DB::raw('LTRIM(RTRIM(tc.staff_name))'), '=', DB::raw('LTRIM(RTRIM(s.staff_id))'))
+            ->where('tc.is_returned', 1)
+            ->selectRaw("DISTINCT LTRIM(RTRIM(COALESCE(s.staff_name, tc.staff_name, ''))) as staff_name")
+            ->pluck('staff_name')
+            ->map(static fn($name): string => self::compactStaffName((string) $name))
+            ->filter(static fn(string $name): bool => $name !== '')
+            ->values()
+            ->all();
+    }
+
+    // 今月が有休加算月（yukyu_month）に該当する在職スタッフ。
+    /** @return list<string> */
+    private function paidLeaveGrantTargetStaffNames(): array
+    {
+        $currentMonth = (string) (int) now('Asia/Tokyo')->format('n');
+
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('yukyu', 1)
+            ->where('employment', '在職')
+            ->whereRaw('LTRIM(RTRIM(yukyu_month)) = ?', [$currentMonth])
+            ->selectRaw("LTRIM(RTRIM(staff_name)) as staff_name")
+            ->pluck('staff_name')
+            ->map(static fn($name): string => self::compactStaffName((string) $name))
+            ->filter(static fn(string $name): bool => $name !== '')
+            ->values()
+            ->all();
+    }
+
+    // 今月から介護保険料の徴収が始まる（40歳到達の前日を含む月）在職スタッフ。
+    // 判定式は PayrollV2SocialInsuranceAmountService::shouldApplyKaigo() の起点計算と揃える。
+    /** @return list<string> */
+    private function kaigoInsuranceStartTargetStaffNames(): array
+    {
+        $now = now('Asia/Tokyo');
+        $monthStart = $now->copy()->startOfMonth()->format('Y-m-d');
+        $monthEnd = $now->copy()->startOfMonth()->addMonthNoOverflow()->format('Y-m-d');
+
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('employment', '在職')
+            ->whereNotNull('birthday')
+            ->whereRaw('DATEADD(day, -1, DATEADD(year, 40, birthday)) >= ?', [$monthStart])
+            ->whereRaw('DATEADD(day, -1, DATEADD(year, 40, birthday)) < ?', [$monthEnd])
+            ->selectRaw("LTRIM(RTRIM(staff_name)) as staff_name")
+            ->pluck('staff_name')
+            ->map(static fn($name): string => self::compactStaffName((string) $name))
+            ->filter(static fn(string $name): bool => $name !== '')
+            ->values()
+            ->all();
+    }
+
+    // 一覧表示用：staff_name内の姓名区切りの空白（全角・半角）を除いて詰めて表示する。
+    private static function compactStaffName(string $name): string
+    {
+        return str_replace(["\u{3000}", ' '], '', trim($name));
     }
 }

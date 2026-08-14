@@ -46,7 +46,7 @@
                 <button type="" class="btn">印刷／準備中</button>
             </form>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size12">
                     <colgroup>
                         <col style="width: 100px;">

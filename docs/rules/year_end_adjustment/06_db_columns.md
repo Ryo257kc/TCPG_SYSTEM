@@ -1,29 +1,24 @@
 # 年末調整 DB役割
 
-## staff_year_end_applications
-
-年調申請・対象者管理の入口。
-申請の状態、本人回答、変更有無、提出日時、確認日時などを持つ。
-計算結果そのものはここへ詰め込まない。
-
-主な役割:
-
-- 対象年
-- スタッフID
-- 年調する/しない
-- 個人情報変更有無
-- 扶養変更有無
-- 保険控除変更有無
-- 住宅ローン変更有無
-- 前職源泉変更有無
-- 特徴希望有無
-- ステータス
-
 ## mx_nen_tyo
 
-年調計算結果テーブル。
-Access時代の年調テーブルに相当する。
-帳票や源泉徴収簿へ表示する計算結果を保存する。
+年調計算結果テーブル（Access時代の年調テーブルに相当、帳票や源泉徴収簿へ表示する計算結果を
+保存する）と、年調申請・対象者管理（申請の状態、本人回答、変更有無、提出日時、確認日時など）を
+兼ねる。2026年8月に`staff_year_end_applications`を廃止して統合した（旧テーブルは実データ上は
+`x_staff_year_end_applications`にリネーム済みで参照されていない。物理削除はまだしていない）。
+
+申請管理まわりの主な列:
+
+- `application_status` / `submitted_at` / `confirmed_at` / `reflected_at` / `return_note`
+- `personal_info_changed` / `dependents_changed` / `insurance_deduction_changed` /
+  `housing_loan_changed` / `previous_job_withholding_changed` / `spouse_changed` /
+  `special_collection_requested` / `previous_job_already_submitted`
+- `new_address` / `new_address_furi` / `new_staff_name` / `new_staff_name_furi` / `new_birthday`
+  （氏名・住所等の変更申告。mx_staffsへの反映は「反映」操作を経由するステージング）
+- `address_change_certificate_*` / `name_change_certificate_*`（証憑ファイル、3列×2種）
+
+計算結果まわりの主な列（従来通り）は、`nen_tyo_no`（PK・唯一の識別子）、`staff_id`、`year_end`、
+`edit_lock`（処理済ロック）、その他約80の計算用カラム。
 
 ## mx_hoken
 

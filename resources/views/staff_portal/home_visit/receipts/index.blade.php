@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM - 往診入金管理</title>
+    <title>TCPG SYSTEM - 入金管理表</title>
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/home-visit-receipts.css') }}">
@@ -98,7 +98,7 @@
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
-                <h2 class="content-title">往診入金管理</h2>
+                <h2 class="content-title">入金管理表</h2>
             </div>
             @if($errors->any())
             <div class="error">{{ $errors->first() }}</div>
@@ -133,12 +133,13 @@
                     <button type="submit" class="btn receipts-toolbar-visible">表示</button>
                     <a href="{{ route('home_visit.receipts') }}" class="btn">クリア</a>
 
-                    <select class="receipts-print-select" name="print_type">
+                    <select class="receipts-print-select" name="print_type" id="receipts-print-type">
                         <option value="">-印刷選択-</option>
                         <option value="payment_management">入金管理表</option>
                         <option value="insurance_receipt">領収書（保険）</option>
                         <option value="private_receipt">領収書（自費）</option>
                     </select>
+                    <button type="button" class="btn" id="receipts-print-btn">印刷</button>
                 </form>
 
             </div>
@@ -170,7 +171,7 @@
                             </div>
                             @endif
                         </div>
-                        <h2 class="receipts-summary-title">入金管理表</h2>
+
                         <div class="receipts-summary-spacer"></div>
                     </div>
 
@@ -481,6 +482,35 @@
         </section>
     </main>
     <script>
+        document.getElementById('receipts-print-btn').addEventListener('click', () => {
+            const printType = document.getElementById('receipts-print-type').value;
+            const month = document.querySelector('.receipts-toolbar [name="month"]').value;
+            const paymentStaffField = document.querySelector('.receipts-toolbar [name="payment_staff"]');
+
+            if (printType === 'payment_management') {
+                const params = new URLSearchParams({ target_month: month });
+                if (paymentStaffField && paymentStaffField.value !== '') {
+                    params.set('payment_staff', paymentStaffField.value);
+                }
+                window.open('{{ route('hv_office.deposit_management.print') }}?' + params.toString(), '_blank');
+                return;
+            }
+
+            if (printType === 'insurance_receipt' || printType === 'private_receipt') {
+                const params = new URLSearchParams({
+                    month: month,
+                    type: printType === 'private_receipt' ? 'private' : 'insurance',
+                });
+                if (paymentStaffField && paymentStaffField.value !== '') {
+                    params.set('payment_staff', paymentStaffField.value);
+                }
+                window.open('{{ route('home_visit.receipts.print_receipt') }}?' + params.toString(), '_blank');
+                return;
+            }
+
+            alert('印刷内容を選択してください。');
+        });
+
         document.querySelectorAll('.edit-trigger').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tr = btn.closest('tr');

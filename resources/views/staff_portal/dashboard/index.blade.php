@@ -59,8 +59,8 @@
     [
     'type' => 'link',
     'route' => 'home_visit.receipts',
-    'title' => '入金管理',
-    'sub' => '往診入金管理一覧（印刷／準備中）',
+    'title' => '入金管理表',
+    'sub' => '往診入金管理一覧・印刷',
     ],
     [
     'type' => 'link',
@@ -74,19 +74,6 @@
     'route' => 'hv_office.payment_confirmed',
     'title' => '入金確定履歴',
     'sub' => '入力済入金管理の確定履歴（自分の分）',
-    ],
-    [
-    'type' => 'link',
-    'route' => 'hv_office.payment_confirmed.management',
-    'title' => '入金確定履歴（管理）',
-    'sub' => '全スタッフ分の入金確定状況',
-    'visible' => $isVisitManagement || $isViewOnly || $isAdmin,
-    ],
-    [
-    'type' => 'link',
-    'route' => 'hv_office.deposit_management',
-    'title' => '入金管理表',
-    'sub' => '入金管理表の表示・印刷',
     ],
     ],
     ],
@@ -187,8 +174,8 @@
     [
     'type' => 'link',
     'route' => 'home_visit.receipts',
-    'title' => '入金管理',
-    'sub' => '往診入金管理一覧（印刷／準備中）',
+    'title' => '入金管理表',
+    'sub' => '往診入金管理一覧・印刷',
     ],
     [
     'type' => 'link',
@@ -242,6 +229,13 @@
     'route' => 'home_visit.receipt_summary',
     'title' => '領収一覧',
     'sub' => '領収金額集計及び一覧',
+    ],
+    [
+    'type' => 'link',
+    'route' => 'hv_office.payment_confirmed.management',
+    'title' => '入金確定履歴（管理）',
+    'sub' => '全スタッフ分の入金確定状況',
+    'visible' => $isVisitManagement || $isViewOnly || $isAdmin,
     ],
     [
     'type' => 'link',
@@ -337,7 +331,7 @@
                 @endif
                 @endforeach
             </div>
-            @else
+            @elseif(!$needsCorrection && !($needsYearEndAttention ?? false) && empty($unconfirmedPaymentMonths))
             <p class="dashboard-info-text">お知らせはありません。</p>
             @endif
 
@@ -347,6 +341,10 @@
 
             @if($needsYearEndAttention ?? false)
             <div class="warn"><a href="{{ route('year_end_adjustment') }}">年末調整の申請が差し戻されました。内容を確認してください。</a></div>
+            @endif
+
+            @if(!empty($unconfirmedPaymentMonths))
+            <div class="warn"><a href="{{ route('hv_office.payment_confirmed') }}">入金確定が未確定です（{{ implode('、', $unconfirmedPaymentMonths) }}）。内容を確認してください。</a></div>
             @endif
         </section>
 

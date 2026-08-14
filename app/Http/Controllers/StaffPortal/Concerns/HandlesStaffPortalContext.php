@@ -434,13 +434,16 @@ trait HandlesStaffPortalContext
         return $employment !== '' && mb_strpos($employment, '退職') !== false;
     }
 
-    // メンテナンス
-    private function isMaintenanceWindow(): bool
+    // メンテナンス（管理画面「通知・申請」から設定）
+    protected function isMaintenanceWindow(): bool
     {
-        $now = Carbon::now('Asia/Tokyo');
+        $now = Carbon::now('Asia/Tokyo')->format('Y-m-d H:i:s');
 
-        // return $now->day === 20 && ((int) $now->format('H')) >= 18;
-        return false;
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_maintenance_windows')
+            ->where('start_at', '<=', $now)
+            ->where('end_at', '>=', $now)
+            ->exists();
     }
 
 

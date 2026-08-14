@@ -27,8 +27,9 @@
 
 ## 注意
 
-年調申請ステータスと、計算処理済は別。
-`staff_year_end_applications.status` を変えても、`mx_nen_tyo.edit_lock` を勝手に変えない。
+年調申請ステータスと、計算処理済は別（ただし`confirmApplication()`だけは意図的に連動、
+`01_admin_index.md`参照）。`mx_nen_tyo.application_status` を変える処理を追加するときも、
+`mx_nen_tyo.edit_lock` を意図せず変えないよう注意する。
 
 ## 基礎控除（kiso_koujyo）
 

@@ -225,7 +225,7 @@ class AttendanceController extends Controller
         $month = $this->resolveMonth((string) $request->input('month', date('Y-m', strtotime((string) $card->work_date))));
 
         if (!empty($card->staff_request)) {
-            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '差戻しました');
+            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '申請しました');
         }
 
         [$cardYear, $cardMonth] = $this->splitMonth($month);
@@ -309,6 +309,23 @@ class AttendanceController extends Controller
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
+
+        $alreadyApproved = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
+            ->whereRaw('YEAR(work_date) = ?', [$year])
+            ->whereRaw('MONTH(work_date) = ?', [$month])
+            ->whereNotNull('manager_approval')
+            ->exists();
+
+        // 未承認の申請を突き返すのは店舗管理者の権限、承認済みの確定を取り消すのはシステムマスタの権限
+        // （スタッフの確定は店舗管理者、店舗管理者の確定はシステムマスタが解除する、という運用ルール）。
+        // 店舗管理者が単独で承認済みを解除できると、本人へ黙って差戻された勤怠がシステムマスタの把握
+        // なく給与計算から漏れる事故につながるため（実際にこの事故が起きたことがあり、以後この制限にしている）。
+        if ($alreadyApproved && !$request->session()->get('admin_logged_in')) {
+            return redirect()
+                ->route('attendance.management.detail', ['staffId' => $staffId, 'month' => $selectedMonth]);
+        }
 
         DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards')

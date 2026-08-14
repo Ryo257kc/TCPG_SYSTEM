@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\V2\BillingListV2Controller;
 use App\Http\Controllers\Admin\V2\DashboardV2Controller;
 use App\Http\Controllers\Admin\V2\InformationV2Controller;
+use App\Http\Controllers\Admin\V2\MaintenanceV2Controller;
 use App\Http\Controllers\Admin\V2\LoginV2Controller;
 use App\Http\Controllers\Admin\V2\AccountingV2Controller;
 use App\Http\Controllers\Admin\V2\Master\AllowanceV2Controller;
@@ -89,6 +90,9 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/sales/pdf', [DashboardV2Controller::class, 'salesPdf'])->name('admin.sales.pdf');
         Route::get('/work/information', [InformationV2Controller::class, 'index'])->name('admin.work.information');
         Route::post('/work/information/save', [InformationV2Controller::class, 'save'])->name('admin.work.information.save');
+        Route::get('/work/maintenance', [MaintenanceV2Controller::class, 'index'])->name('admin.work.maintenance');
+        Route::post('/work/maintenance/save', [MaintenanceV2Controller::class, 'save'])->name('admin.work.maintenance.save');
+        Route::delete('/work/maintenance/{maintenanceId}', [MaintenanceV2Controller::class, 'destroy'])->name('admin.work.maintenance.destroy');
         Route::get('/work/journal-entries', [AccountingV2Controller::class, 'journalEntries'])->name('admin.work.journal_entries');
         Route::get('/work/journal-entries/sakura-reward-print', [AccountingV2Controller::class, 'sakuraRewardPrint'])->name('admin.work.journal_entries.sakura_reward_print');
         Route::post('/work/journal-entries/import', [AccountingV2Controller::class, 'importJournalEntries'])->name('admin.work.journal_entries.import');
@@ -98,6 +102,7 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/work/billing-list', [BillingListV2Controller::class, 'index'])->name('admin.work.billing_list');
         Route::get('/year-end-adjustments', [YearEndAdjustmentV2Controller::class, 'index'])->name('admin.work.year_end_adjustments');
         Route::post('/year-end-adjustments/create-targets', [YearEndAdjustmentV2Controller::class, 'createTargets'])->name('admin.work.year_end_adjustments.create_targets');
+        Route::post('/year-end-adjustments/publish-date', [YearEndAdjustmentV2Controller::class, 'savePublishDate'])->name('admin.work.year_end_adjustments.publish_date');
         Route::get('/year-end-adjustments/bulk-preview', [YearEndAdjustmentV2Controller::class, 'bulkPreview'])->name('admin.work.year_end_adjustments.bulk_preview');
         Route::get('/year-end-adjustments/{applicationId}', [YearEndAdjustmentV2Controller::class, 'show'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.show');
         Route::get('/year-end-adjustments/{applicationId}/hoken-preview', [YearEndAdjustmentV2Controller::class, 'hokenPreview'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.hoken.preview');
@@ -315,6 +320,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::post('/home_visit/daily_report/quick-store', [DailyReportController::class, 'quickStore'])->name('home_visit.daily_report.quick_store');
     Route::get('/home_visit/daily_report/{nippouNo}/edit', [DailyReportController::class, 'edit'])->name('home_visit.daily_report.edit');
     Route::post('/home_visit/daily_report/{nippouNo}/update', [DailyReportController::class, 'update'])->name('home_visit.daily_report.update');
+    Route::post('/home_visit/daily_report/{nippouNo}/sales-amount', [DailyReportController::class, 'updateSalesAmount'])->name('home_visit.daily_report.sales_amount.update');
     Route::post('/home_visit/daily_report/{nippouNo}/delete', [DailyReportController::class, 'destroy'])->name('home_visit.daily_report.destroy');
     Route::post('/staff-portal/home-visit/receipts/{id}/update', [ReceiptController::class, 'update'])->name('home_visit.receipts.update');
     Route::delete('/staff-portal/home-visit/receipts/{id}', [ReceiptController::class, 'destroy'])->name('home_visit.receipts.destroy');
@@ -339,6 +345,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
 
     // 往診入金管理
     Route::get('/home_visit/receipts', [ReceiptController::class, 'index'])->name('home_visit.receipts');
+    Route::get('/home_visit/receipts/print-receipt', [ReceiptController::class, 'printReceipt'])->name('home_visit.receipts.print_receipt');
     Route::get('/home_visit/receipt-summary', [ReceiptSummaryController::class, 'index'])->name('home_visit.receipt_summary');
     Route::post('/home_visit/receipt-summary/confirm', [ReceiptSummaryController::class, 'confirm'])->name('home_visit.receipt_summary.confirm');
     Route::get('/home_visit/sales', [SalesController::class, 'index'])->name('home_visit.sales');
@@ -347,7 +354,6 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
 
 
     // 往診事務
-    Route::get('/hv_office/deposit_management', [DepositManagementController::class, 'index'])->name('hv_office.deposit_management');
     Route::get('/hv_office/deposit_management/print', [DepositManagementController::class, 'print'])->name('hv_office.deposit_management.print');
     Route::get('/hv_office/download', [DownloadController::class, 'index'])->name('hv_office.download');
     Route::get('/hv_office/download/csv', [DownloadController::class, 'csv'])->name('hv_office.download.csv');

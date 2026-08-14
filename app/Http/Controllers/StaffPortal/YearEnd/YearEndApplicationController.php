@@ -35,7 +35,6 @@ class YearEndApplicationController extends Controller
         'submitted' => '提出済',
         'returned' => '差戻し',
         'confirmed' => '確認済',
-        'reflected' => '反映済',
         'excluded' => '対象外',
         'retired' => '退職済',
     ];
@@ -48,7 +47,8 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, $staffRow, $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $status = $this->applicationStatus($nenTyo);
 
         $allFuyoRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
@@ -62,8 +62,6 @@ class YearEndApplicationController extends Controller
 
         $spouseFuyoRow = $allFuyoRows->first($isSpouseRow);
         $dependentRows = $allFuyoRows->reject($isSpouseRow)->values()->all();
-
-        $nenTyoRow = $this->currentNenTyoRow($staffId, $targetYear, (int) ($application['nen_tyo_no'] ?? 0));
 
         $hokenRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_hoken')
@@ -83,9 +81,9 @@ class YearEndApplicationController extends Controller
         return view('staff_portal.year_end.index', $this->commonViewData($request, [
             'staffId' => $staffId,
             'targetYear' => $targetYear,
-            'application' => $application,
-            'editable' => in_array($application['status'], self::EDITABLE_STATUSES, true),
-            'statusLabel' => self::STATUS_LABELS[$application['status']] ?? $application['status'],
+            'application' => $nenTyo,
+            'editable' => in_array($status, self::EDITABLE_STATUSES, true),
+            'statusLabel' => self::STATUS_LABELS[$status] ?? $status,
             'currentAddress' => trim((string) ($staffRow['address'] ?? '')),
             'currentAddressFuri' => trim((string) ($staffRow['address_furi'] ?? '')),
             'currentStaffName' => trim((string) ($staffRow['staff_name'] ?? '')),
@@ -97,14 +95,15 @@ class YearEndApplicationController extends Controller
             'spouseFuyoRow' => $spouseFuyoRow,
             'hokenRows' => $hokenRows,
             'hasPreviousYearInsurance' => $hasPreviousYearInsurance,
-            'currentNenTyo' => $nenTyoRow,
+            'currentNenTyo' => $nenTyo,
         ]));
     }
 
     /**
      * 前職の情報はmx_nen_tyo（zen_*列）へ直接書き込む。mx_nen_tyoは年調専用・年ごとに
      * 行が分かれるため（mx_staffs等と違い）、スタッフの直書きでも過去のデータは壊れない。
-     * 「入社時に提出済み」フラグ自体は申告メタ情報のためstaff_year_end_applicationsに残す。
+     * 「入社時に提出済み」フラグも同じmx_nen_tyoの行にまとめて書く（申告メタ情報用の
+     * 別テーブルは持たない）。
      */
     public function updatePreviousJob(Request $request): RedirectResponse
     {
@@ -114,13 +113,12 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
 
-        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear, (int) ($application['nen_tyo_no'] ?? 0));
         $previous = (object) $nenTyo;
 
         // 二段階の確認：①今年、前職はあるか ②あるなら、源泉徴収票は入社時に提出済みか。
@@ -128,7 +126,10 @@ class YearEndApplicationController extends Controller
         $hasPreviousJob = $request->boolean('previous_job_withholding_changed');
         $alreadySubmitted = $request->boolean('previous_job_already_submitted');
 
-        $nenTyoValues = [];
+        $nenTyoValues = [
+            'previous_job_withholding_changed' => $hasPreviousJob,
+            'previous_job_already_submitted' => $hasPreviousJob ? $alreadySubmitted : null,
+        ];
 
         if ($hasPreviousJob && !$alreadySubmitted) {
             $validated = $request->validate([
@@ -172,14 +173,6 @@ class YearEndApplicationController extends Controller
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update($nenTyoValues);
 
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
-            ->update([
-                'previous_job_withholding_changed' => $hasPreviousJob,
-                'previous_job_already_submitted' => $hasPreviousJob ? $alreadySubmitted : null,
-            ]);
-
         return redirect()->route('year_end_adjustment')->with('statusMessage', '前職の申告内容を保存しました。');
     }
 
@@ -196,17 +189,16 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
 
-        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear, (int) ($application['nen_tyo_no'] ?? 0));
         $previous = (object) $nenTyo;
 
         $changed = $request->boolean('housing_loan_changed');
-        $nenTyoValues = [];
+        $nenTyoValues = ['housing_loan_changed' => $changed];
 
         if ($changed) {
             $validated = $request->validate([
@@ -215,6 +207,7 @@ class YearEndApplicationController extends Controller
                 'toku_kubun' => ['nullable', 'string', 'max:50'],
                 'koujyo_kubun_no' => ['nullable', 'string', 'max:50'],
             ]);
+            $nenTyoValues['housing_loan_declared_amount'] = $validated['housing_loan_declared_amount'];
             $nenTyoValues['jyu_kari_kou'] = $validated['housing_loan_declared_amount'];
             $nenTyoValues['jyu_kojyo_kubun'] = $validated['jyu_kojyo_kubun'] ?? null;
             $nenTyoValues['toku_kubun'] = $validated['toku_kubun'] ?? null;
@@ -224,6 +217,7 @@ class YearEndApplicationController extends Controller
             $nenTyoValues = array_merge($nenTyoValues, $this->resolveCertificateFieldsFor($request, 'housing_loan_certificate_file', $previous, 'housing_loan_certificate', $staffId, $targetYear, 'jyutaku'));
         } else {
             $this->deleteCertificateIfPresent($previous->housing_loan_certificate_file_path ?? null);
+            $nenTyoValues['housing_loan_declared_amount'] = null;
             $nenTyoValues['jyu_kari_kou'] = null;
             $nenTyoValues['jyu_kojyo_kubun'] = null;
             $nenTyoValues['toku_kubun'] = null;
@@ -237,11 +231,6 @@ class YearEndApplicationController extends Controller
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update($nenTyoValues);
-
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
-            ->update(['housing_loan_changed' => $changed]);
 
         return redirect()->route('year_end_adjustment')->with('statusMessage', '住宅ローン控除の申告内容を保存しました。');
     }
@@ -259,8 +248,8 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -301,8 +290,8 @@ class YearEndApplicationController extends Controller
             ->insert($insertRows);
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update(['insurance_deduction_changed' => 1]);
 
         return redirect()->route('year_end_adjustment')->with('statusMessage', '前年の保険料控除データを' . $previousYearRows->count() . '件コピーしました。内容を確認し、証憑を添付して保存してください。');
@@ -321,8 +310,8 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -415,8 +404,8 @@ class YearEndApplicationController extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update(['insurance_deduction_changed' => $anyChange ? 1 : 0]);
 
         return redirect()->route('year_end_adjustment')->with('statusMessage', '保険料控除の申告内容を保存しました。');
@@ -544,8 +533,8 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -563,8 +552,8 @@ class YearEndApplicationController extends Controller
 
         if (!$engaged) {
             DB::connection('sqlsrv_payroll')
-                ->table('dbo.staff_year_end_applications')
-                ->where('application_id', $application['application_id'])
+                ->table('dbo.mx_nen_tyo')
+                ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
                 ->update(['spouse_changed' => false]);
 
             return redirect()->route('year_end_adjustment')->with('statusMessage', '配偶者の申告内容を保存しました。');
@@ -610,24 +599,19 @@ class YearEndApplicationController extends Controller
                 ]));
         }
 
-        // 正本：ステージング時点の値を鵜呑みにせず、保存の瞬間にここで再計算する。
+        // 正本：申告値を鵜呑みにせず、保存の瞬間にここで再計算する。
         $recomputedIncome = $deductionTarget === 1
             ? $this->calculationService->salaryIncomeAfterDeduction((float) $validated['fuyo_shunyu'], $targetYear)
             : null;
 
-        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear, (int) ($application['nen_tyo_no'] ?? 0));
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update([
                 'haigu_umu' => $deductionTarget === 1 ? '〇' : null,
                 'haigu_shotoku' => $recomputedIncome,
+                'spouse_changed' => true,
             ]);
-
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
-            ->update(['spouse_changed' => true]);
 
         // 翌年分もこの場で作成しておく（今年の内容をそのままコピー、収入見込みだけ
         // 変更予定があれば上書き）。翌年の扶養控除申告書・給与の源泉徴収税額表の
@@ -663,46 +647,14 @@ class YearEndApplicationController extends Controller
         return redirect()->route('year_end_adjustment')->with('statusMessage', '配偶者の申告内容を保存しました（翌年分の扶養データも作成しました）。');
     }
 
-    /** 表示専用（見つからなければ空配列）。書き込み時はfindOrCreateNenTyoRow()を使う。 */
-    /** @return array<string, mixed> */
-    private function currentNenTyoRow(string $staffId, int $targetYear, int $nenTyoNo): array
-    {
-        $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo');
-
-        if ($nenTyoNo > 0) {
-            $row = $query->where('nen_tyo_no', $nenTyoNo)->first();
-            if ($row !== null) {
-                return (array) $row;
-            }
-        }
-
-        $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-            ->whereYear('year_end', $targetYear)
-            ->orderBy('nen_tyo_no')
-            ->first();
-
-        return $row !== null ? (array) $row : [];
-    }
-
     /**
      * mx_nen_tyoの当年行を取得、なければ作成する（admin側findOrCreateNenTyoRow()と同じ
-     * ロジック）。スタッフが住宅ローン・前職・配偶者・本人状況フラグを直接書き込む際に使う。
+     * ロジック）。申請ワークフロー状態（application_status等）もこの行に同居している。
      *
      * @return array<string, mixed>
      */
-    private function findOrCreateNenTyoRow(string $staffId, int $targetYear, int $nenTyoNo): array
+    private function findOrCreateNenTyoRow(string $staffId, int $targetYear): array
     {
-        $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo');
-
-        if ($nenTyoNo > 0) {
-            $row = $query->where('nen_tyo_no', $nenTyoNo)->first();
-            if ($row !== null) {
-                return (array) $row;
-            }
-        }
-
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
@@ -722,6 +674,7 @@ class YearEndApplicationController extends Controller
                 'year_end' => sprintf('%04d-12-31', $targetYear),
                 'nen_tyo_false' => 0,
                 'edit_lock' => 0,
+                'application_status' => 'draft',
             ], 'nen_tyo_no');
 
         return (array) DB::connection('sqlsrv_payroll')
@@ -731,11 +684,26 @@ class YearEndApplicationController extends Controller
     }
 
     /**
+     * application_statusが未設定（新規追加した列のため、既存の年調行では空）の場合、
+     * edit_lockから状態を補う。edit_lock=1（計算確定済み）を「下書き」扱いにしてしまうと
+     * 誤って編集可能と判定されてしまうため、必ずこちらを経由して判定する。
+     */
+    private function applicationStatus(array $nenTyo): string
+    {
+        $status = trim((string) ($nenTyo['application_status'] ?? ''));
+        if ($status !== '') {
+            return $status;
+        }
+
+        return (int) ($nenTyo['edit_lock'] ?? 0) === 1 ? 'confirmed' : 'draft';
+    }
+
+    /**
      * 氏名・住所・生年月日・世帯主情報（mx_staffs.head_house/relationship。扶養控除
-     * 申告書PDFもここから読んでいる）は引き続きstaff_year_end_applicationsへ
-     * ステージングし、事務所確認後にmx_staffsへ反映する（履歴を持たない単一マスタのため）。
-     * 本人状況フラグ（障害者・ひとり親・寡婦・勤労学生）は年調専用のmx_nen_tyoへ
-     * その場で直接書き込む（同じ1回の送信で2箇所に書き込む）。
+     * 申告書PDFもここから読んでいる）は引き続きmx_nen_tyoへステージングし、事務所確認後に
+     * mx_staffsへ反映する（mx_staffsは履歴を持たない単一マスタのため）。
+     * 本人状況フラグ（障害者・ひとり親・寡婦・勤労学生）は同じmx_nen_tyoの行へ
+     * その場で直接書き込む（同じ1回の送信で1つの行にまとめて書く）。
      */
     public function updatePersonalInfo(Request $request): RedirectResponse
     {
@@ -745,29 +713,18 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, $staffRow, $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
 
         $currentAddress = trim((string) ($staffRow['address'] ?? ''));
         $currentStaffName = trim((string) ($staffRow['staff_name'] ?? ''));
-
-        $previousApp = (array) DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
-            ->first([
-                'address_change_certificate_file_path', 'address_change_certificate_original_name', 'address_change_certificate_uploaded_at',
-                'name_change_certificate_file_path', 'name_change_certificate_original_name', 'name_change_certificate_uploaded_at',
-            ]);
-
-        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear, (int) ($application['nen_tyo_no'] ?? 0));
-        $previousNenTyo = (object) $nenTyo;
+        $previous = (object) $nenTyo;
 
         $changed = $request->boolean('personal_info_changed');
-        $appValues = ['personal_info_changed' => $changed];
-        $nenTyoValues = [];
+        $nenTyoValues = ['personal_info_changed' => $changed];
 
         if ($changed) {
             $validated = $request->validate([
@@ -779,15 +736,15 @@ class YearEndApplicationController extends Controller
                 'setai_nushi' => ['nullable', 'string', 'max:50'],
                 'setai_zoku_gara' => ['nullable', 'string', 'max:20'],
             ]);
-            $appValues['new_address'] = $validated['new_address'];
-            $appValues['new_address_furi'] = $validated['new_address_furi'] ?? null;
-            $appValues['new_staff_name'] = $validated['new_staff_name'];
-            $appValues['new_staff_name_furi'] = $validated['new_staff_name_furi'] ?? null;
-            $appValues['new_birthday'] = $validated['new_birthday'] ?? null;
+            $nenTyoValues['new_address'] = $validated['new_address'];
+            $nenTyoValues['new_address_furi'] = $validated['new_address_furi'] ?? null;
+            $nenTyoValues['new_staff_name'] = $validated['new_staff_name'];
+            $nenTyoValues['new_staff_name_furi'] = $validated['new_staff_name_furi'] ?? null;
+            $nenTyoValues['new_birthday'] = $validated['new_birthday'] ?? null;
             // 世帯主情報はmx_staffs.head_house/relationshipが正本（扶養控除申告書PDFも
             // ここから読んでいる）。氏名・住所と同じくステージング経由でmx_staffsへ反映する。
-            $appValues['setai_nushi'] = $validated['setai_nushi'] ?? null;
-            $appValues['setai_zoku_gara'] = $validated['setai_zoku_gara'] ?? null;
+            $nenTyoValues['setai_nushi'] = $validated['setai_nushi'] ?? null;
+            $nenTyoValues['setai_zoku_gara'] = $validated['setai_zoku_gara'] ?? null;
 
             $nenTyoValues['hon_shougai_toku'] = $request->boolean('hon_shougai_toku') ? 1 : 0;
             $nenTyoValues['hon_shougai_ta'] = $request->boolean('hon_shougai_ta') ? 1 : 0;
@@ -801,51 +758,51 @@ class YearEndApplicationController extends Controller
             $hasDisability = (bool) $nenTyoValues['hon_shougai_toku'] || (bool) $nenTyoValues['hon_shougai_ta'];
 
             if ($addressActuallyChanged) {
-                $this->requireCertificate($request, 'address_change_certificate_file', (object) $previousApp, '住所変更の証憑（住民票等）を添付してください。', 'address_change_certificate_file_path');
-                $appValues = array_merge($appValues, $this->resolveCertificateFieldsFor($request, 'address_change_certificate_file', (object) $previousApp, 'address_change_certificate', $staffId, $targetYear, 'jusho'));
+                $this->requireCertificate($request, 'address_change_certificate_file', $previous, '住所変更の証憑（住民票等）を添付してください。', 'address_change_certificate_file_path');
+                $nenTyoValues = array_merge($nenTyoValues, $this->resolveCertificateFieldsFor($request, 'address_change_certificate_file', $previous, 'address_change_certificate', $staffId, $targetYear, 'jusho'));
             } else {
-                $this->deleteCertificateIfPresent($previousApp['address_change_certificate_file_path'] ?? null);
-                $appValues['address_change_certificate_file_path'] = null;
-                $appValues['address_change_certificate_original_name'] = null;
-                $appValues['address_change_certificate_uploaded_at'] = null;
+                $this->deleteCertificateIfPresent($previous->address_change_certificate_file_path ?? null);
+                $nenTyoValues['address_change_certificate_file_path'] = null;
+                $nenTyoValues['address_change_certificate_original_name'] = null;
+                $nenTyoValues['address_change_certificate_uploaded_at'] = null;
             }
 
             if ($nameActuallyChanged) {
-                $this->requireCertificate($request, 'name_change_certificate_file', (object) $previousApp, '氏名変更の証憑（戸籍謄本・婚姻届受理証明書等）を添付してください。', 'name_change_certificate_file_path');
-                $appValues = array_merge($appValues, $this->resolveCertificateFieldsFor($request, 'name_change_certificate_file', (object) $previousApp, 'name_change_certificate', $staffId, $targetYear, 'shimei'));
+                $this->requireCertificate($request, 'name_change_certificate_file', $previous, '氏名変更の証憑（戸籍謄本・婚姻届受理証明書等）を添付してください。', 'name_change_certificate_file_path');
+                $nenTyoValues = array_merge($nenTyoValues, $this->resolveCertificateFieldsFor($request, 'name_change_certificate_file', $previous, 'name_change_certificate', $staffId, $targetYear, 'shimei'));
             } else {
-                $this->deleteCertificateIfPresent($previousApp['name_change_certificate_file_path'] ?? null);
-                $appValues['name_change_certificate_file_path'] = null;
-                $appValues['name_change_certificate_original_name'] = null;
-                $appValues['name_change_certificate_uploaded_at'] = null;
+                $this->deleteCertificateIfPresent($previous->name_change_certificate_file_path ?? null);
+                $nenTyoValues['name_change_certificate_file_path'] = null;
+                $nenTyoValues['name_change_certificate_original_name'] = null;
+                $nenTyoValues['name_change_certificate_uploaded_at'] = null;
             }
 
             if ($hasDisability) {
-                $this->requireCertificate($request, 'disability_certificate_file', $previousNenTyo, '障害者手帳の写しを添付してください。', 'disability_certificate_file_path');
-                $nenTyoValues = array_merge($nenTyoValues, $this->resolveCertificateFieldsFor($request, 'disability_certificate_file', $previousNenTyo, 'disability_certificate', $staffId, $targetYear, 'shougai'));
+                $this->requireCertificate($request, 'disability_certificate_file', $previous, '障害者手帳の写しを添付してください。', 'disability_certificate_file_path');
+                $nenTyoValues = array_merge($nenTyoValues, $this->resolveCertificateFieldsFor($request, 'disability_certificate_file', $previous, 'disability_certificate', $staffId, $targetYear, 'shougai'));
             } else {
-                $this->deleteCertificateIfPresent($previousNenTyo->disability_certificate_file_path ?? null);
+                $this->deleteCertificateIfPresent($previous->disability_certificate_file_path ?? null);
                 $nenTyoValues['disability_certificate_file_path'] = null;
                 $nenTyoValues['disability_certificate_original_name'] = null;
                 $nenTyoValues['disability_certificate_uploaded_at'] = null;
             }
         } else {
-            $appValues['new_address'] = null;
-            $appValues['new_address_furi'] = null;
-            $appValues['new_staff_name'] = null;
-            $appValues['new_staff_name_furi'] = null;
-            $appValues['new_birthday'] = null;
-            $appValues['setai_nushi'] = null;
-            $appValues['setai_zoku_gara'] = null;
+            $nenTyoValues['new_address'] = null;
+            $nenTyoValues['new_address_furi'] = null;
+            $nenTyoValues['new_staff_name'] = null;
+            $nenTyoValues['new_staff_name_furi'] = null;
+            $nenTyoValues['new_birthday'] = null;
+            $nenTyoValues['setai_nushi'] = null;
+            $nenTyoValues['setai_zoku_gara'] = null;
 
-            $this->deleteCertificateIfPresent($previousApp['address_change_certificate_file_path'] ?? null);
-            $this->deleteCertificateIfPresent($previousApp['name_change_certificate_file_path'] ?? null);
-            $appValues['address_change_certificate_file_path'] = null;
-            $appValues['address_change_certificate_original_name'] = null;
-            $appValues['address_change_certificate_uploaded_at'] = null;
-            $appValues['name_change_certificate_file_path'] = null;
-            $appValues['name_change_certificate_original_name'] = null;
-            $appValues['name_change_certificate_uploaded_at'] = null;
+            $this->deleteCertificateIfPresent($previous->address_change_certificate_file_path ?? null);
+            $this->deleteCertificateIfPresent($previous->name_change_certificate_file_path ?? null);
+            $nenTyoValues['address_change_certificate_file_path'] = null;
+            $nenTyoValues['address_change_certificate_original_name'] = null;
+            $nenTyoValues['address_change_certificate_uploaded_at'] = null;
+            $nenTyoValues['name_change_certificate_file_path'] = null;
+            $nenTyoValues['name_change_certificate_original_name'] = null;
+            $nenTyoValues['name_change_certificate_uploaded_at'] = null;
 
             $nenTyoValues['hon_shougai_toku'] = null;
             $nenTyoValues['hon_shougai_ta'] = null;
@@ -853,16 +810,11 @@ class YearEndApplicationController extends Controller
             $nenTyoValues['kafu'] = null;
             $nenTyoValues['student'] = null;
 
-            $this->deleteCertificateIfPresent($previousNenTyo->disability_certificate_file_path ?? null);
+            $this->deleteCertificateIfPresent($previous->disability_certificate_file_path ?? null);
             $nenTyoValues['disability_certificate_file_path'] = null;
             $nenTyoValues['disability_certificate_original_name'] = null;
             $nenTyoValues['disability_certificate_uploaded_at'] = null;
         }
-
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
-            ->update($appValues);
 
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
@@ -882,8 +834,7 @@ class YearEndApplicationController extends Controller
     /**
      * 証憑系（住所変更・氏名変更・障害者手帳・住宅ローン・前職）共通の保存処理。
      * $columnPrefixに応じて {$columnPrefix}_file_path 等のキーで返す。新しいファイルが
-     * あれば対象行の既存ファイルを削除してから保存する（ステージングの「引き継ぎ」処理が
-     * 無くなったため、差し替え時は呼び出し側でなくここで確実に消す）。
+     * あれば対象行の既存ファイルを削除してから保存する。
      *
      * @return array<string, mixed>
      */
@@ -920,6 +871,8 @@ class YearEndApplicationController extends Controller
      * 年ごとに行が分かれるため、スタッフの直書きでも過去のデータは壊れない。
      * deduction_targetの解除（対象外化）も既存行の編集から行える
      * （他に事務所へ伝わる経路がないため、ここがスタッフからの唯一の申告手段）。
+     * スタッフは削除できない（既存行のdeduction_targetを外すのみ）。削除は
+     * システムマスタが管理側画面から行う。
      */
     public function updateDependents(Request $request): RedirectResponse
     {
@@ -929,8 +882,8 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -1012,8 +965,8 @@ class YearEndApplicationController extends Controller
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update(['dependents_changed' => $anyChange ? 1 : 0]);
 
         return redirect()->route('year_end_adjustment')->with('statusMessage', '扶養の申告内容を保存しました。');
@@ -1027,17 +980,17 @@ class YearEndApplicationController extends Controller
         }
         [$staffId, , $targetYear] = $context;
 
-        $application = $this->findOrCreateApplication($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($application);
+        $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
+        $blocked = $this->blockIfNotEditable($nenTyo);
         if ($blocked !== null) {
             return $blocked;
         }
 
         DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $application['application_id'])
+            ->table('dbo.mx_nen_tyo')
+            ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update([
-                'status' => 'submitted',
+                'application_status' => 'submitted',
                 'submitted_at' => now(),
             ]);
 
@@ -1060,39 +1013,12 @@ class YearEndApplicationController extends Controller
         return [$staffId, $staffRow ?? [], (int) date('Y')];
     }
 
-    private function blockIfNotEditable(array $application): ?RedirectResponse
+    private function blockIfNotEditable(array $nenTyo): ?RedirectResponse
     {
-        if (in_array($application['status'], self::EDITABLE_STATUSES, true)) {
+        if (in_array($this->applicationStatus($nenTyo), self::EDITABLE_STATUSES, true)) {
             return null;
         }
 
         return redirect()->route('year_end_adjustment')->with('errorMessage', '提出済みのため編集できません。');
-    }
-
-    /** @return array<string, mixed> */
-    private function findOrCreateApplication(string $staffId, int $targetYear): array
-    {
-        $row = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-            ->where('target_year', $targetYear)
-            ->first();
-
-        if ($row !== null) {
-            return (array) $row;
-        }
-
-        $applicationId = DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->insertGetId([
-                'staff_id' => $staffId,
-                'target_year' => $targetYear,
-                'status' => 'draft',
-            ], 'application_id');
-
-        return (array) DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('application_id', $applicationId)
-            ->first();
     }
 }

@@ -33,7 +33,7 @@
             @if ($rowCount === 0)
             <div class="empty">「{{ $selectedMonth }}」の交通事故はありません。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <thead>
                         <tr>

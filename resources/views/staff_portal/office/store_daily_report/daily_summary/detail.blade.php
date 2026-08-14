@@ -583,7 +583,7 @@
                 </div>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size12 daily-summary-patient-table">
                     <colgroup>
                         <col style="width: 20px;">

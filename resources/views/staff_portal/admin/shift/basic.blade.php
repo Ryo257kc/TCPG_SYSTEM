@@ -53,7 +53,7 @@
             @if ($rowCount === 0)
             <div class="empty">基本シフトはありません。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <colgroup>
                         <col style="width: 60px;">

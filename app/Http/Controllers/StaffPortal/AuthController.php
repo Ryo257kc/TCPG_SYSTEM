@@ -19,7 +19,7 @@ class AuthController extends Controller
     public function index(Request $request): View
     {
         return view('staff_portal.login', [
-            // 'isMaintenance' => $this->isMaintenanceWindow(),
+            'isMaintenance' => $this->isMaintenanceWindow(),
             'errorMessage' => (string) $request->session()->get('errorMessage', ''),
         ]);
     }
@@ -46,6 +46,10 @@ class AuthController extends Controller
 
         if ($this->isRetired($staff)) {
             return back()->withInput($request->only('staff_id'))->with('errorMessage', $loginError);
+        }
+
+        if (!$this->isAdmin($staff) && $this->isMaintenanceWindow()) {
+            return back()->withInput($request->only('staff_id'))->with('errorMessage', 'ただいまメンテナンス中です。しばらくしてから再度ログインしてください。');
         }
 
         // NOTE:
@@ -78,17 +82,38 @@ class AuthController extends Controller
             'staffId' => $staffId,
             'needsCorrection' => $this->hasReturnedAttendance($staffId),
             'needsYearEndAttention' => $this->hasReturnedYearEndApplication($staffId),
+            'unconfirmedPaymentMonths' => $this->unconfirmedPaymentMonths($staffId),
             'informationMessages' => $this->informationMessages(),
         ]));
+    }
+
+    // 自分の入金確定がまだの月一覧
+    private function unconfirmedPaymentMonths(string $staffId): array
+    {
+        $monthEnd = now('Asia/Tokyo')->startOfMonth()->addMonthNoOverflow()->format('Y-m-d');
+
+        return DB::connection('sqlsrv')
+            ->table('dbo.hv_ryoukin')
+            ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
+            ->where('target_month', '<', $monthEnd)
+            ->where(function ($query): void {
+                $query->whereNull('is_payment_confirmed')
+                    ->orWhere('is_payment_confirmed', 0);
+            })
+            ->selectRaw('DISTINCT target_month')
+            ->orderBy('target_month')
+            ->pluck('target_month')
+            ->map(fn($month): string => Carbon::parse($month)->format('Y年n月'))
+            ->all();
     }
 
     private function hasReturnedYearEndApplication(string $staffId): bool
     {
         return DB::connection('sqlsrv_payroll')
-            ->table('dbo.staff_year_end_applications')
-            ->where('staff_id', $staffId)
-            ->where('target_year', (int) date('Y'))
-            ->where('status', 'returned')
+            ->table('dbo.mx_nen_tyo')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->whereYear('year_end', (int) date('Y'))
+            ->where('application_status', 'returned')
             ->exists();
     }
 

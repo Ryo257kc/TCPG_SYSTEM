@@ -218,7 +218,7 @@
 
             <p class="year-end-status">申請状況：{{ $statusLabel }}</p>
 
-            @if ($application['status'] === 'returned' && !empty($application['return_note']))
+            @if (($application['application_status'] ?? '') === 'returned' && !empty($application['return_note']))
             <div class="year-end-return-note">
                 <strong>差戻し理由</strong>
                 <p>{{ $application['return_note'] }}</p>

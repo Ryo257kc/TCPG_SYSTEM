@@ -56,7 +56,7 @@
                 <a class="btn" target="_blank" rel="noopener" href="{{ route('office.store_daily_report.other_list.print', ['target_month' => $targetMonth, 'レジ店舗' => $selectedStore]) }}">印刷</a>
             </form>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size14">
                     <thead>
                         <tr>

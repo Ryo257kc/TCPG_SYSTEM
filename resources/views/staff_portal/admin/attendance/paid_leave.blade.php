@@ -26,7 +26,7 @@
             @if ($rowCount === 0)
             <div class="empty">「{{ $selectedMonth }}」の有休申請はありません。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <colgroup>
                         <col style="width: 30px;">

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\StaffPortal\home_visit;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
+use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,23 @@ class DailyReportController extends Controller
     private function canSelectDailyReportStaff(?array $staffRow): bool
     {
         return $this->isVisitManagement($staffRow) || $this->isAdmin($staffRow);
+    }
+
+    // 担当スタッフのその月の勤怠が確定済みか（確定後は給与の歩合計算に使われるため、
+    // 売上金額を含む日報の編集を丸ごとロックする。誰が確定したかに関わらず一律ロック）。
+    private function isSalesLockedByAttendance(string $staffId, string $treatmentDate): bool
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '') {
+            return false;
+        }
+
+        $year = (int) date('Y', strtotime($treatmentDate));
+        $month = (int) date('n', strtotime($treatmentDate));
+
+        $map = app(AttendanceV2ConfirmedStateService::class)->mapByStaffIds([$staffId], $year, $month);
+
+        return $map[$staffId] ?? false;
     }
 
     // 往診閲覧: 編集権限は無いが全スタッフのデータを閲覧できる
@@ -111,6 +129,7 @@ class DailyReportController extends Controller
 
         $canSelectStaff = $this->canViewAnyDailyReportStaff($staffRow);
         $targetMonthStart = date('Y-m-01', strtotime($date));
+        $isSalesLocked = $this->isSalesLockedByAttendance($targetStaffId, $date);
 
         return view('staff_portal.home_visit.daily_report.index', $this->commonViewData($request, [
             'date' => $date,
@@ -119,6 +138,7 @@ class DailyReportController extends Controller
             'staffOptions' => $canSelectStaff ? $this->homeVisitStaffOptions($targetMonthStart) : [],
             'items' => $items,
             'summary' => $summary,
+            'isSalesLocked' => $isSalesLocked,
         ]));
     }
 
@@ -427,7 +447,7 @@ class DailyReportController extends Controller
         $existing = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->where('daily_report_id', $nippouNo)
-            ->first(['staff_name', 'is_confirmed', 'is_management_fixed']);
+            ->first(['staff_name', 'treatment_date', 'is_confirmed', 'is_management_fixed']);
 
         if (!$existing) {
             return back()->withInput()->withErrors([
@@ -523,6 +543,58 @@ class DailyReportController extends Controller
         return redirect()->route('home_visit.daily_report', [
             'date' => $validated['treatment_date'],
         ])->with('status', '往診データを更新しました。');
+    }
+
+    // 売上金額のみの更新（日報一覧から直接入力。往診売上権限を持つ人だけが対象）
+    public function updateSalesAmount(Request $request, string $nippouNo): RedirectResponse
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isAccounting($staffRow)) {
+            abort(403);
+        }
+
+        $date = trim((string) $request->input('date', now()->format('Y-m-d')));
+        $targetStaffId = trim((string) $request->input('staff_name', ''));
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->first(['staff_name', 'treatment_date', 'is_management_fixed']);
+
+        if (!$existing) {
+            return back()->withErrors([
+                'visits' => '対象の往診データが見つかりません。',
+            ]);
+        }
+
+        if ((int) $existing->is_management_fixed !== 1) {
+            return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+                ->withErrors(['visits' => '管理者が日報を確定していないため、売上金額を入力できません。']);
+        }
+
+        if ($this->isSalesLockedByAttendance((string) $existing->staff_name, (string) $existing->treatment_date)) {
+            return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+                ->withErrors(['visits' => '担当スタッフの勤怠が確定済みのため編集できません。']);
+        }
+
+        $validated = $request->validate([
+            'sales_amount' => ['nullable'],
+        ]);
+
+        DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->update([
+                'sales_amount' => $validated['sales_amount'] !== '' ? $validated['sales_amount'] : null,
+            ]);
+
+        return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+            ->with('status', '売上金額を更新しました。');
     }
 
     // 往診1件削除

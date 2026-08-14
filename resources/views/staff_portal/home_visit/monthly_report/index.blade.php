@@ -13,13 +13,7 @@
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
-        <style>
-            .home-visit-row {
-                background-color: #fff3cd;
-            }
-        </style>
-
-        <section class="panel">
+        <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">往診月報</h2>
             </div>
@@ -33,14 +27,16 @@
             @endif
 
 
-            <div class="toolbar-group filter-row ">
-                <form method="get" action="{{ route('home_visit.monthly_report') }}" class="mb-4">
+            <div class="dr-toolbar">
+                <form method="get" action="{{ route('home_visit.monthly_report') }}">
                     <label for="month">対象月</label>
                     <input type="month" id="month" name="month" value="{{ $month }}">
                     <button type="submit" class="btn">表示</button>
                 </form>
+            </div>
 
-                <div class="table-wrap">
+            <div class="toolbar-group filter-row">
+                <div class="table-wrap staff-viewport-list-wrap">
 
                     @if($rows->isEmpty())
                     <p>この月のデータはありません。</p>
@@ -74,7 +70,7 @@
                                     {{ $row->count }}
                                 </td>
 
-                                <td style="{{ empty($row->is_confirmed) ? 'background:#fff3cd;' : '' }} text-align:center;">
+                                <td class="{{ empty($row->is_confirmed) ? 'status-pending-row' : '' }}" style="text-align:center;">
                                     {{ empty($row->is_confirmed) ? '未確認' : '確認済' }}
                                 </td>
 

@@ -36,12 +36,29 @@
             font-weight: 800;
         }
 
+        .year-end-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+        }
+
+        .year-end-filter-divider {
+            align-self: stretch;
+            width: 1px;
+            background: #e2e8f0;
+        }
+
         .year-end-toolbar {
             display: flex;
             align-items: flex-end;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 14px;
+            gap: 8px;
+            margin: 0;
         }
 
         .year-end-toolbar label {
@@ -50,6 +67,24 @@
             color: #44546f;
             font-size: 12px;
             font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .year-end-filter-bar select,
+        .year-end-filter-bar input[type="datetime-local"] {
+            min-width: 140px;
+            height: 34px;
+            padding: 4px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #fff;
+            box-sizing: border-box;
+        }
+
+        .year-end-filter-bar .btn {
+            height: 34px;
+            box-sizing: border-box;
         }
 
         .year-end-table-wrap {
@@ -124,11 +159,6 @@
             color: #065f46;
         }
 
-        .year-end-status-reflected {
-            background: #bbf7d0;
-            color: #14532d;
-        }
-
         .year-end-status-retired {
             background: #e4e4e7;
             color: #52525b;
@@ -137,6 +167,17 @@
         .year-end-status-excluded {
             background: #ede9fe;
             color: #5b21b6;
+        }
+
+        .year-end-status-legacy-confirmed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .year-end-status-legacy-draft {
+            background: #fff;
+            border: 1px dashed #d0d5dd;
+            color: #98a2b3;
         }
 
         @media (max-width: 1000px) {
@@ -160,49 +201,67 @@
         @endif
 
         @if (!$tableExists)
-        <div class="error">staff_year_end_applications テーブルが見つかりません。</div>
+        <div class="error">mx_nen_tyo テーブルが見つかりません。</div>
         @endif
 
         <section class="panel">
-            <form method="get" action="{{ route('admin.work.year_end_adjustments') }}" class="year-end-toolbar">
-                <label>
-                    <span>対象年</span>
-                    <select name="target_year">
-                        @foreach ($yearOptions as $year)
-                        <option value="{{ $year }}" @selected((int) $targetYear === (int) $year)>{{ $year }}年</option>
-                        @endforeach
-                    </select>
-                </label>
-                <button type="submit" class="btn btn-primary">表示</button>
-            </form>
+            <div class="year-end-filter-bar">
+                <form method="get" action="{{ route('admin.work.year_end_adjustments') }}" class="year-end-toolbar">
+                    <label>
+                        <span>対象年</span>
+                        <select name="target_year">
+                            @foreach ($yearOptions as $year)
+                            <option value="{{ $year }}" @selected((int) $targetYear === (int) $year)>{{ $year }}年</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <button type="submit" class="btn btn-primary">表示</button>
+                </form>
 
-            <form method="post" action="{{ route('admin.work.year_end_adjustments.create_targets') }}" class="year-end-toolbar" onsubmit="return confirm('{{ $targetYear }}年の対象者を作成します。作成済みのスタッフはスキップします。');">
-                @csrf
-                <input type="hidden" name="target_year" value="{{ $targetYear }}">
-                <button type="submit" class="btn btn-primary" @disabled(!$tableExists)>対象者作成</button>
-            </form>
+                <span class="year-end-filter-divider"></span>
 
-            <form method="get" action="{{ route('admin.work.year_end_adjustments.bulk_preview') }}" target="_blank" class="year-end-toolbar">
-                <input type="hidden" name="target_year" value="{{ $targetYear }}">
-                <label>
-                    <span>会社</span>
-                    <select name="company_id">
-                        <option value="">全社</option>
-                        @foreach (($companyOptions ?? []) as $company)
-                        <option value="{{ $company['company_id'] }}">{{ $company['company_name'] }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <label>
-                    <span>帳票</span>
-                    <select name="report">
-                        @foreach (($bulkReportOptions ?? []) as $key => $label)
-                        <option value="{{ $key }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <button type="submit" class="btn btn-primary">全員分まとめて出力</button>
-            </form>
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.create_targets') }}" class="year-end-toolbar" onsubmit="return confirm('{{ $targetYear }}年の対象者を作成します。作成済みのスタッフはスキップします。');">
+                    @csrf
+                    <input type="hidden" name="target_year" value="{{ $targetYear }}">
+                    <button type="submit" class="btn btn-primary" @disabled(!$tableExists)>対象者作成</button>
+                </form>
+
+                <span class="year-end-filter-divider"></span>
+
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.publish_date') }}" class="year-end-toolbar">
+                    @csrf
+                    <input type="hidden" name="target_year" value="{{ $targetYear }}">
+                    <label>
+                        <span>{{ $targetYear }}年 スタッフ公開日時</span>
+                        <input type="datetime-local" name="publish_date" value="{{ $publishDate }}">
+                    </label>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </form>
+
+                <span class="year-end-filter-divider"></span>
+
+                <form method="get" action="{{ route('admin.work.year_end_adjustments.bulk_preview') }}" target="_blank" class="year-end-toolbar">
+                    <input type="hidden" name="target_year" value="{{ $targetYear }}">
+                    <label>
+                        <span>会社</span>
+                        <select name="company_id">
+                            <option value="">全社</option>
+                            @foreach (($companyOptions ?? []) as $company)
+                            <option value="{{ $company['company_id'] }}">{{ $company['company_name'] }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label>
+                        <span>帳票</span>
+                        <select name="report">
+                            @foreach (($bulkReportOptions ?? []) as $key => $label)
+                            <option value="{{ $key }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <button type="submit" class="btn btn-primary">全員分まとめて出力</button>
+                </form>
+            </div>
 
             <div class="year-end-summary">
                 <div class="year-end-summary-item">
@@ -210,7 +269,7 @@
                     <div class="year-end-summary-value">{{ count($rows) }}</div>
                 </div>
                 <div class="year-end-summary-item">
-                    <div class="year-end-summary-label">下書き</div>
+                    <div class="year-end-summary-label">未提出</div>
                     <div class="year-end-summary-value">{{ $statusCounts['draft'] }}</div>
                 </div>
                 <div class="year-end-summary-item">
@@ -224,10 +283,6 @@
                 <div class="year-end-summary-item">
                     <div class="year-end-summary-label">確認済</div>
                     <div class="year-end-summary-value">{{ $statusCounts['confirmed'] }}</div>
-                </div>
-                <div class="year-end-summary-item">
-                    <div class="year-end-summary-label">反映済</div>
-                    <div class="year-end-summary-value">{{ $statusCounts['reflected'] }}</div>
                 </div>
                 <div class="year-end-summary-item">
                     <div class="year-end-summary-label">対象外</div>
@@ -263,6 +318,7 @@
                             </td>
                             <td>{{ $row['submitted_at'] }}</td>
                             <td>
+                                @if ($row['application_id'] !== '')
                                 <div class="year-end-actions">
                                     <a href="{{ route('admin.work.year_end_adjustments.show', ['applicationId' => $row['application_id']]) }}" class="btn btn-outline">詳細</a>
                                     <form method="post" action="{{ route('admin.work.year_end_adjustments.update_status') }}" class="year-end-status-form">
@@ -285,6 +341,9 @@
                                     </form>
                                     @endif
                                 </div>
+                                @else
+                                <span class="year-end-legacy-note">申請ワークフロー対象外（旧年調）</span>
+                                @endif
                             </td>
                         </tr>
                         @empty

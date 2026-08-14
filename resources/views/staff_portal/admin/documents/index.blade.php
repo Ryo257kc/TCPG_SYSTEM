@@ -62,7 +62,7 @@
             <div class="content-head">
                 <h2 class="content-title">入社準備書類</h2>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table>
                     <thead>
                         <tr>

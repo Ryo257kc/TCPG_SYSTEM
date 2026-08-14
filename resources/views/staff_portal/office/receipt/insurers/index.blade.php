@@ -149,7 +149,7 @@
                 <button type="button" class="btn insurers-tab-add-btn" data-insurer-add>新規追加</button>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table f_size13">
                     <colgroup>
                         <col style="width: 40px;">

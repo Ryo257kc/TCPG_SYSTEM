@@ -392,4 +392,104 @@ class ReceiptController extends Controller
 
         return back()->with('status', '削除しました。');
     }
+
+    // 領収書（保険／自費）印刷。旧システムのryoushu_print.php / ryoushu_jihi_print.phpを踏襲。
+    public function printReceipt(Request $request): RedirectResponse|View
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $isPrivate = trim((string) $request->query('type', 'insurance')) === 'private';
+        $month = trim((string) $request->query('month', now()->format('Y-m')));
+        $targetMonthStart = $month . '-01';
+        $targetMonthNext = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        $canFilterPaymentStaff = $this->isVisitManagement($staffRow)
+            || $this->isAccounting($staffRow)
+            || $this->isAdmin($staffRow)
+            || $this->isViewOnly($staffRow);
+        $paymentStaff = trim((string) $request->query('payment_staff', ''));
+        if (!$canFilterPaymentStaff || $paymentStaff === '') {
+            $paymentStaff = $staffId;
+        }
+        $selectedPatientId = trim((string) $request->query('patient_id', ''));
+
+        $rowsQuery = DB::connection('sqlsrv')
+            ->table('dbo.hv_ryoukin as r')
+            ->leftJoin('dbo.hv_kanjya_info as k', 'r.patient_id', '=', 'k.patient_id')
+            ->leftJoin('dbo.mx_stores as s', 's.visit_area', '=', 'r.payment_store_name')
+            ->select([
+                'r.charge_id',
+                'r.patient_id',
+                'r.description',
+                'r.unit_price',
+                'r.billing_count',
+                'r.is_bank_transfer',
+                'k.patient_name',
+                'k.burden_ratio',
+                'k.facility_name',
+                's.store_name',
+                's.store_address',
+                's.phone',
+            ])
+            ->whereRaw('LTRIM(RTRIM(r.payment_staff)) = ?', [$paymentStaff])
+            ->where('r.target_month', '>=', $targetMonthStart)
+            ->where('r.target_month', '<', $targetMonthNext)
+            ->where('r.is_private_charge', $isPrivate ? 1 : 0);
+
+        if ($selectedPatientId !== '') {
+            $rowsQuery->where('r.patient_id', $selectedPatientId);
+        }
+
+        $rows = $rowsQuery
+            ->orderBy('k.patient_name')
+            ->orderBy('r.charge_id')
+            ->get();
+
+        $billingDateLabel = \Carbon\Carbon::createFromFormat('Y-m-d', $targetMonthStart)->endOfMonth()->format('Y年n月j日');
+
+        $receipts = $rows
+            ->groupBy('patient_id')
+            ->map(function ($group) use ($billingDateLabel): array {
+                $first = $group->first();
+                $total = $group->sum(fn($row) => (float) $row->unit_price * (float) $row->billing_count);
+                $isBankTransfer = (int) $first->is_bank_transfer === 1;
+                $facilityName = trim((string) ($first->facility_name ?? ''));
+
+                if ($isBankTransfer) {
+                    $heading = '請求書';
+                } elseif ($facilityName === '') {
+                    $heading = '請求書 兼 領収書';
+                } else {
+                    $heading = '領収書';
+                }
+
+                return [
+                    'heading' => $heading,
+                    'patient_name' => $first->patient_name,
+                    'burden_ratio' => $first->burden_ratio,
+                    'store_name' => $first->store_name,
+                    'store_address' => $first->store_address,
+                    'phone' => $first->phone,
+                    'billing_date_label' => $billingDateLabel,
+                    'total' => $total,
+                    'lines' => $group->map(fn($row): array => [
+                        'description' => $row->description,
+                        'unit_price' => $row->unit_price,
+                        'billing_count' => $row->billing_count,
+                        'subtotal' => (float) $row->unit_price * (float) $row->billing_count,
+                    ])->values()->all(),
+                ];
+            })
+            ->values();
+
+        return view('staff_portal.home_visit.receipts.print_receipt', [
+            'isPrivate' => $isPrivate,
+            'month' => $month,
+            'receipts' => $receipts,
+        ]);
+    }
 }

@@ -4,8 +4,7 @@
 
 年末調整
 ├ YearEndAdjustmentV2Controller
-├ staff_year_end_applications
-├ mx_nen_tyo
+├ mx_nen_tyo（計算結果＋申請管理、2026年8月にstaff_year_end_applicationsを統合）
 ├ mx_hoken
 ├ mx_fuyo
 ├ mx_staffs

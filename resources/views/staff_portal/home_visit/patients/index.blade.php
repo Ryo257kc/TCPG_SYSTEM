@@ -74,7 +74,7 @@
             @if(count($items) === 0)
             <div class="empty">該当するデータがありません。</div>
             @else
-            <div class="table-wrap">
+            <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <colgroup>
                         <col style="width: 20px;">
