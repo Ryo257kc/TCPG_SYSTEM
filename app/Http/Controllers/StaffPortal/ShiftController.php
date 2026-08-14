@@ -586,6 +586,10 @@ class ShiftController extends Controller
             return '';
         }
 
+        if (\App\Support\AttendanceTime::isZeroPlaceholder($value)) {
+            return '';
+        }
+
         try {
             return Carbon::parse((string) $value)->format('H:i');
         } catch (\Throwable) {
