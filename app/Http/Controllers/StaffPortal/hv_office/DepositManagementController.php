@@ -52,7 +52,7 @@ class DepositManagementController extends Controller
                 'r.is_payment_confirmed',
                 'r.payment_confirmed_at',
             ])
-            ->where('r.payment_staff', $targetStaffId)
+            ->whereRaw('LTRIM(RTRIM(r.payment_staff)) = ?', [$targetStaffId])
             ->where('r.target_month', '>=', $targetMonthStart)
             ->where('r.target_month', '<', $targetMonthNext)
             ->orderBy('k.patient_name')
@@ -125,7 +125,7 @@ class DepositManagementController extends Controller
 
         $staffName = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $targetStaffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$targetStaffId])
             ->value('staff_name');
 
         return view('staff_portal.hv_office.deposit_management.print', $this->commonViewData($request, [

@@ -503,20 +503,22 @@ class AccountingV2Controller extends Controller
                     'summary_text' => $payload['summary_text'] ?? null,
                 ], $journalColumns);
 
-                $existsQuery = DB::connection('sqlsrv')
+                $matchQuery = DB::connection('sqlsrv')
                     ->table('dbo.mx_journal_entries');
                 foreach ($importKey as $column => $value) {
-                    $existsQuery->where($column, $value);
+                    $matchQuery->where($column, $value);
                 }
-                $exists = $existsQuery->exists();
 
-                DB::connection('sqlsrv')
-                    ->table('dbo.mx_journal_entries')
-                    ->updateOrInsert($importKey, $payload);
-
-                if ($exists) {
+                // updateOrInsert()は内部でも同じ条件のexists判定を行うため、
+                // 件数集計に使うexists判定と合わせて二重に問い合わせていた。
+                // ここで判定した結果をそのままupdate/insertの分岐に使い、1回にまとめる。
+                if ((clone $matchQuery)->exists()) {
+                    $matchQuery->update($payload);
                     $updatedCount++;
                 } else {
+                    DB::connection('sqlsrv')
+                        ->table('dbo.mx_journal_entries')
+                        ->insert(array_merge($importKey, $payload));
                     $importedCount++;
                 }
             }

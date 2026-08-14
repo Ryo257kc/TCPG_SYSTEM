@@ -29,15 +29,27 @@ class PayrollV2DeleteService
             return $result;
         }
 
-        foreach ($staffIds as $staffId) {
-            $deleted = DB::connection('sqlsrv_payroll')
+        $matchingStaffIds = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', $bonus ? 1 : 0)
+            ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
+            ->whereIn(DB::raw('LTRIM(RTRIM([kyuyo_staff_id]))'), $staffIds)
+            ->pluck('kyuyo_staff_id')
+            ->map(static fn ($id): string => trim((string) $id))
+            ->unique()
+            ->all();
+
+        if ($matchingStaffIds !== []) {
+            DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_kyuyo_shou')
                 ->where('bonus', $bonus ? 1 : 0)
                 ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
-                ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+                ->whereIn(DB::raw('LTRIM(RTRIM([kyuyo_staff_id]))'), $matchingStaffIds)
                 ->delete();
+        }
 
-            if ($deleted > 0) {
+        foreach ($staffIds as $staffId) {
+            if (in_array($staffId, $matchingStaffIds, true)) {
                 $result['deleted']++;
                 $result['deleted_ids'][] = $staffId;
             } else {

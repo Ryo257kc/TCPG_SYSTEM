@@ -71,6 +71,21 @@
             <div class="table-wrap staff-viewport-list-wrap">
                 <table class="data-table">
                     <thead>
+                        @if($csv_type === 'massage')
+                        <tr>
+                            <th>ID</th>
+                            <th>患者名</th>
+                            <th>施設名</th>
+                            <th>申請日</th>
+                            <th>施術分類</th>
+                            <th>施術</th>
+                            <th>変形徒手</th>
+                            <th>施術報告書</th>
+                            <th>店舗</th>
+                            <th>施術期間自</th>
+                            <th>施術期間至</th>
+                        </tr>
+                        @else
                         <tr>
                             <th>ID</th>
                             <th>患者名</th>
@@ -83,14 +98,42 @@
                             <th>施術期間自</th>
                             <th>施術期間至</th>
                         </tr>
+                        @endif
                     </thead>
                     <tbody>
                         @foreach($rows as $row)
+                        @if($csv_type === 'massage')
+                        @php
+                        $appliedAt = $row->ma_applied_at ? \Carbon\Carbon::parse($row->ma_applied_at) : null;
+                        $distance = trim((string) ($row->receipt_home_visit_distance_ma ?? ''));
+                        $treatmentName = match ($distance) {
+                        '〇' => '通所',
+                        '△' => '通所(往療なし)',
+                        '◎' => '通所(往療あり)',
+                        '①' => '施術1',
+                        '②' => '施術2',
+                        '③' => '施術3',
+                        '④' => '施術4',
+                        default => '',
+                        };
+                        @endphp
+                        <tr>
+                            <td>{{ $row->massage_id }}</td>
+                            <td>{{ $row->patient_name }}</td>
+                            <td>{{ $row->facility_name }}</td>
+                            <td>{{ $appliedAt ? $appliedAt->format('Y/m/d') : '' }}</td>
+                            <td>{{ $distance }}</td>
+                            <td>{{ $treatmentName }}</td>
+                            <td>{{ (int) ($row->is_deformity_manual_therapy ?? 0) === 1 ? 'あり' : '' }}</td>
+                            <td>{{ (int) ($row->is_treatment_report_submitted ?? 0) === 1 ? '施術報告書あり' : '' }}</td>
+                            <td>{{ $row->massage_store_name }}</td>
+                            <td>{{ $appliedAt ? $appliedAt->copy()->startOfMonth()->format('Y/m/d') : '' }}</td>
+                            <td>{{ $appliedAt ? $appliedAt->copy()->endOfMonth()->format('Y-m-d') : '' }}</td>
+                        </tr>
+                        @else
                         @php
                         $addedAt = $row->added_at ? \Carbon\Carbon::parse($row->added_at) : null;
-                        $receipt_home_visit_distance = $csv_type === 'massage'
-                        ? trim((string) ($row->receipt_home_visit_distance_ma ?? ''))
-                        : trim((string) ($row->receipt_home_visit_distance ?? ''));
+                        $receipt_home_visit_distance = trim((string) ($row->receipt_home_visit_distance ?? ''));
                         $treatmentName = match ($receipt_home_visit_distance) {
                         '〇' => '通所',
                         '◎' => '通所(往療)',
@@ -113,6 +156,7 @@
                             <td>{{ $addedAt ? $addedAt->copy()->startOfMonth()->format('Y/m/d') : '' }}</td>
                             <td>{{ $addedAt ? $addedAt->copy()->endOfMonth()->format('Y-m-d') : '' }}</td>
                         </tr>
+                        @endif
                         @endforeach
                     </tbody>
                 </table>

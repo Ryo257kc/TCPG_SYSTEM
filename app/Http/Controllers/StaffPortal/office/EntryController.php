@@ -903,9 +903,12 @@ class EntryController extends Controller
                 }
             }
 
-            DB::connection('sqlsrv')
-                ->table('dbo.mx_insurance_claim_details')
-                ->insert($importRows);
+            // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう、9列×200行=1800個で分割する。
+            foreach (array_chunk($importRows, 200) as $chunk) {
+                DB::connection('sqlsrv')
+                    ->table('dbo.mx_insurance_claim_details')
+                    ->insert($chunk);
+            }
         });
 
         return redirect()->route('office.receipt.entry', [

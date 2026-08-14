@@ -224,10 +224,6 @@ class AuthController extends Controller
 
     private function getStaffRow(string $staffId): ?array
     {
-        if (!$this->useMxStaffTable()) {
-            return null;
-        }
-
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->where(function ($q) use ($staffId): void {

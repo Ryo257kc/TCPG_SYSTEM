@@ -57,7 +57,7 @@ class YearEndAdjustmentV2Controller extends Controller
             'other' => 0,
         ];
 
-        $tableExists = Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications');
+        $tableExists = true;
 
         if ($tableExists) {
             $applications = DB::connection('sqlsrv_payroll')
@@ -157,8 +157,6 @@ class YearEndAdjustmentV2Controller extends Controller
 
     public function show(int $applicationId): View
     {
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
-
         $application = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
             ->where('application_id', $applicationId)
@@ -195,7 +193,7 @@ class YearEndAdjustmentV2Controller extends Controller
     {
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->first();
@@ -233,9 +231,6 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     public function updateNenTyo(Request $request, int $applicationId)
     {
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('mx_nen_tyo'), 404);
-
         $application = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
             ->where('application_id', $applicationId)
@@ -287,9 +282,6 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     public function toggleNenTyoLock(int $applicationId)
     {
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('mx_nen_tyo'), 404);
-
         $application = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
             ->where('application_id', $applicationId)
@@ -806,8 +798,6 @@ class YearEndAdjustmentV2Controller extends Controller
         $companyId = trim((string) $request->query('company_id', ''));
         $templateKey = trim((string) $request->query('report', ''));
         abort_unless(array_key_exists($templateKey, $this->bulkReportOptions()), 404);
-
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
 
         $applications = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
@@ -1731,10 +1721,6 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return list<array<string, string>> */
     private function yearEndPayrollLedgerRows(string $staffId, int $targetYear, string $companyName): array
     {
-        if (!Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')) {
-            return [];
-        }
-
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('kyuyo_staff_id', $staffId)
@@ -2103,7 +2089,7 @@ class YearEndAdjustmentV2Controller extends Controller
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->first();
         abort_unless($row, 404);
@@ -2123,11 +2109,6 @@ class YearEndAdjustmentV2Controller extends Controller
         ]);
 
         $targetYear = (int) $values['target_year'];
-        if (!Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications')) {
-            return redirect()
-                ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
-                ->with('status', '年末調整申請テーブルが見つかりません。');
-        }
 
         $staffRows = $this->activeStaffRows();
         $nenTyoNoMap = $this->nenTyoNoMap($targetYear);
@@ -2176,10 +2157,12 @@ class YearEndAdjustmentV2Controller extends Controller
             $created++;
         }
 
-        if ($insertRows !== []) {
+        // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう、4列×500行=2000個で分割する。
+        // 全社対象者数に比例して行数が増えるため、将来的に上限を超える可能性がある。
+        foreach (array_chunk($insertRows, 500) as $chunk) {
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.staff_year_end_applications')
-                ->insert($insertRows);
+                ->insert($chunk);
         }
 
         return redirect()
@@ -2296,7 +2279,7 @@ class YearEndAdjustmentV2Controller extends Controller
 
             DB::connection('sqlsrv')
                 ->table('dbo.mx_staffs')
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update($staffUpdate);
         }
 
@@ -2347,11 +2330,6 @@ class YearEndAdjustmentV2Controller extends Controller
         ]);
 
         $targetYear = (int) $values['target_year'];
-        if (!Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications')) {
-            return redirect()
-                ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
-                ->with('status', '年末調整申請テーブルが見つかりません。');
-        }
 
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
@@ -2415,9 +2393,6 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     private function yearEndApplicationContext(int $applicationId): array
     {
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('mx_nen_tyo'), 404);
-
         $application = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
             ->where('application_id', $applicationId)
@@ -2749,7 +2724,7 @@ class YearEndAdjustmentV2Controller extends Controller
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->first();
         abort_unless($row, 404);
@@ -2805,7 +2780,7 @@ class YearEndAdjustmentV2Controller extends Controller
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->update($payload);
 
         return redirect()
@@ -2818,9 +2793,6 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     private function hokenApplicationContext(int $applicationId): array
     {
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('staff_year_end_applications'), 404);
-        abort_unless(Schema::connection('sqlsrv_payroll')->hasTable('mx_hoken'), 404);
-
         $application = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
             ->where('application_id', $applicationId)
@@ -3090,10 +3062,6 @@ class YearEndAdjustmentV2Controller extends Controller
 
     private function activeStaffRows(): Collection
     {
-        if (!Schema::connection('sqlsrv')->hasTable('mx_staffs')) {
-            return collect();
-        }
-
         return DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->select(['staff_id', 'staff_name', 'tai_date', 'staff_division', 'employment'])
@@ -3152,7 +3120,7 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return array<string, string> */
     private function staffDetail(string $staffId): array
     {
-        if ($staffId === '' || !Schema::connection('sqlsrv')->hasTable('mx_staffs')) {
+        if ($staffId === '') {
             return [];
         }
 
@@ -3168,7 +3136,7 @@ class YearEndAdjustmentV2Controller extends Controller
         $detail = $this->objectToArray($row);
         $section = trim((string) ($detail['section'] ?? ''));
         $storeCode = $section !== '' && ctype_digit($section) ? str_pad($section, 3, '0', STR_PAD_LEFT) : $section;
-        if ($storeCode !== '' && Schema::connection('sqlsrv')->hasTable('mx_stores') && Schema::connection('sqlsrv')->hasTable('mx_companies')) {
+        if ($storeCode !== '') {
             $company = DB::connection('sqlsrv')
                 ->table('dbo.mx_stores as s')
                 ->leftJoin('dbo.mx_companies as c', 's.company_id', '=', 'c.company_id')
@@ -3196,10 +3164,6 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return array<string, string> */
     private function nenTyoDetail(object $application, string $staffId, int $targetYear): array
     {
-        if (!Schema::connection('sqlsrv_payroll')->hasTable('mx_nen_tyo')) {
-            return [];
-        }
-
         $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo');
         $nenTyoNo = (int) ($application->nen_tyo_no ?? 0);
         if ($nenTyoNo > 0) {
@@ -3217,14 +3181,12 @@ class YearEndAdjustmentV2Controller extends Controller
         // 生命保険料・地震保険料の内訳（新旧生命保険・介護医療・新旧個人年金・地震・旧長期損害の
         // 各申告額）は mx_nen_tyo ではなく mx_deduction_shou（nen_tyo_noで1:1）に保存されている。
         // ここで合わせて取得し、以降は $nenTyo 配列から他の列と同じように参照できるようにする。
-        if (Schema::connection('sqlsrv_payroll')->hasTable('mx_deduction_shou')) {
-            $deductionRow = DB::connection('sqlsrv_payroll')
-                ->table('dbo.mx_deduction_shou')
-                ->where('nen_tyo_no', (int) ($nenTyo['nen_tyo_no'] ?? 0))
-                ->first();
-            if ($deductionRow) {
-                $nenTyo = array_merge($nenTyo, $this->objectToArray($deductionRow));
-            }
+        $deductionRow = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_deduction_shou')
+            ->where('nen_tyo_no', (int) ($nenTyo['nen_tyo_no'] ?? 0))
+            ->first();
+        if ($deductionRow) {
+            $nenTyo = array_merge($nenTyo, $this->objectToArray($deductionRow));
         }
 
         return $nenTyo;
@@ -3233,11 +3195,11 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return list<array<string, string>> */
     private function fuyoRows(string $staffId, int $targetYear): array
     {
-        if ($staffId === '' || !Schema::connection('sqlsrv_payroll')->hasTable('mx_fuyo')) {
+        if ($staffId === '') {
             return [];
         }
 
-        $columns = Schema::connection('sqlsrv_payroll')->getColumnListing('mx_fuyo');
+        $columns = Schema::connection('sqlsrv_payroll')->getColumnListing('dbo.mx_fuyo');
         $query = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('staff_id', $staffId);
@@ -3252,7 +3214,7 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return list<array<string, string>> */
     private function hokenRows(string $staffId, int $targetYear): array
     {
-        if ($staffId === '' || !Schema::connection('sqlsrv_payroll')->hasTable('mx_hoken')) {
+        if ($staffId === '') {
             return [];
         }
 
@@ -3353,10 +3315,6 @@ class YearEndAdjustmentV2Controller extends Controller
     /** @return array<string, int> */
     private function nenTyoNoMap(int $targetYear): array
     {
-        if (!Schema::connection('sqlsrv_payroll')->hasTable('mx_nen_tyo')) {
-            return [];
-        }
-
         $rows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->select(['nen_tyo_no', 'staff_id'])
@@ -3383,7 +3341,7 @@ class YearEndAdjustmentV2Controller extends Controller
     private function staffListDetails(array $staffIds): array
     {
         $staffIds = array_values(array_unique(array_filter(array_map(static fn($value): string => trim((string) $value), $staffIds))));
-        if ($staffIds === [] || !Schema::connection('sqlsrv')->hasTable('mx_staffs')) {
+        if ($staffIds === []) {
             return [];
         }
 

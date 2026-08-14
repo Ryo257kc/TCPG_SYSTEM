@@ -27,7 +27,7 @@ class PaymentConfirmedController extends Controller
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
-            ->where('payment_staff', $staffId)
+            ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
             ->whereYear('target_month', $year)
             ->selectRaw('target_month, is_payment_confirmed, payment_confirmed_at, COUNT(patient_id) as billing_count')
             ->groupBy('target_month', 'is_payment_confirmed', 'payment_confirmed_at')
@@ -58,7 +58,7 @@ class PaymentConfirmedController extends Controller
 
         DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
-            ->where('payment_staff', $staffId)
+            ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
             ->where('target_month', '>=', $targetMonthStart)
             ->where('target_month', '<', $targetMonthNext)
             ->update([
@@ -133,7 +133,7 @@ class PaymentConfirmedController extends Controller
 
         DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
-            ->where('payment_staff', $staffId)
+            ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
             ->where('target_month', '>=', $targetMonthStart)
             ->where('target_month', '<', $targetMonthNext)
             ->update([

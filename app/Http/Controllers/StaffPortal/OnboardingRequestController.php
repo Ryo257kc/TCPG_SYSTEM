@@ -52,7 +52,7 @@ class OnboardingRequestController extends Controller
 
         $dependentRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereNotIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->orderBy('fuyo_no')
@@ -170,7 +170,7 @@ class OnboardingRequestController extends Controller
 
         $existingRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereNotIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->get()
@@ -215,7 +215,7 @@ class OnboardingRequestController extends Controller
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_fuyo')
                 ->where('fuyo_no', $fuyoNo)
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update(array_merge($validated, $certificate, [
                     'deduction_target' => !empty($row['deduction_target']) ? 1 : 0,
                     'widow' => !empty($row['widow']) ? 1 : 0,
@@ -355,7 +355,7 @@ class OnboardingRequestController extends Controller
     {
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_onboarding_requests')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->where('status', '!=', 'reflected')
             ->orderByDesc('request_id')
             ->first();

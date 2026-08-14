@@ -1,4 +1,4 @@
-﻿@php
+@php
   $rate2 = static function ($value): string {
       if ($value === null || $value === '') {
           return '---';

@@ -50,7 +50,7 @@ class ReportV2SanteiService
             ->table('dbo.mx_staffs as s')
             ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
             ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->whereIn('s.staff_id', $staffIds)
+            ->whereIn(DB::raw('LTRIM(RTRIM(s.staff_id))'), $staffIds)
             ->whereNotNull('c.company_name')
             ->whereRaw('LTRIM(RTRIM(c.company_name)) <> ?', [''])
             ->distinct()
@@ -119,7 +119,7 @@ class ReportV2SanteiService
                 'c.ceo_title',
                 'c.ceo_name',
             ])
-            ->whereIn('s.staff_id', $staffIds);
+            ->whereIn(DB::raw('LTRIM(RTRIM(s.staff_id))'), $staffIds);
 
         if ($companyName !== '') {
             $staffRowsQuery->where('c.company_name', $companyName);
@@ -165,7 +165,7 @@ class ReportV2SanteiService
                 'hourly_pay',
                 'hourly_salary',
             ])
-            ->whereIn('staff_id', $staffIds)
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_id))'), $staffIds)
             ->orderBy('staff_id')
             ->orderByDesc('decision_date')
             ->get();
@@ -200,7 +200,7 @@ class ReportV2SanteiService
                 'kenpo_toukyu',
                 'kounen_toukyu',
             ])
-            ->whereIn('staff_id', $staffIds)
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_id))'), $staffIds)
             ->orderBy('staff_id')
             ->orderByDesc('raise_year')
             ->get();

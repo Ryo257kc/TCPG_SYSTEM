@@ -53,7 +53,7 @@ trait HandlesStaffRequestReview
 
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->first();
 
         return $row === null ? [] : (array) $row;
@@ -70,7 +70,7 @@ trait HandlesStaffRequestReview
         $details = [];
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->whereIn('staff_id', $staffIds)
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_id))'), $staffIds)
             ->get(['staff_id', 'staff_name']);
 
         foreach ($rows as $row) {
@@ -93,7 +93,7 @@ trait HandlesStaffRequestReview
 
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereNotIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->orderBy('fuyo_no')
@@ -149,7 +149,7 @@ trait HandlesStaffRequestReview
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->first();
         abort_unless($row, 404);

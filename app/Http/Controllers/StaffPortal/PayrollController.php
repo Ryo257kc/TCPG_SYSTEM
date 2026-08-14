@@ -106,69 +106,25 @@ class PayrollController extends Controller
         ]);
     }
 
-    private function useMxStaffTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $cached = Schema::connection('sqlsrv')->hasTable('mx_staffs')
-            || Schema::connection('sqlsrv')->hasTable('dbo.mx_staffs');
-
-        return $cached;
-    }
-
-    private function useMxPayrollTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $cached = Schema::connection('sqlsrv_payroll')->hasTable('mx_kyuyo_shou')
-            || Schema::connection('sqlsrv_payroll')->hasTable('dbo.mx_kyuyo_shou');
-
-        return $cached;
-    }
-
-    private function useMxStoreTable(): bool
-    {
-        static $cached = null;
-
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        $cached = Schema::connection('sqlsrv')->hasTable('mx_stores')
-            || Schema::connection('sqlsrv')->hasTable('dbo.mx_stores');
-
-        return $cached;
-    }
-
     private function getStaffRow(string $staffId): ?array
     {
-        if ($this->useMxStaffTable()) {
-            $row = DB::connection('sqlsrv')
-                ->table('dbo.mx_staffs')
-                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-                ->first();
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->first();
 
-            if ($row !== null) {
-                return [
-                    'staff_id' => (string) ($row->staff_id ?? ''),
-                    'staff_name' => (string) ($row->staff_name ?? ''),
-                    'store_code' => (string) ($row->section ?? ''),
-                    'tax_category' => (string) ($row->tax_category ?? ''),
-                    'tax_amount' => (string) ($row->tax_amount ?? ''),
-                    'is_admin' => (int) ($row->is_admin ?? 0),
-                ];
-            }
+        if ($row === null) {
+            return null;
         }
 
-        return null;
+        return [
+            'staff_id' => (string) ($row->staff_id ?? ''),
+            'staff_name' => (string) ($row->staff_name ?? ''),
+            'store_code' => (string) ($row->section ?? ''),
+            'tax_category' => (string) ($row->tax_category ?? ''),
+            'tax_amount' => (string) ($row->tax_amount ?? ''),
+            'is_admin' => (int) ($row->is_admin ?? 0),
+        ];
     }
 
     private function resolveDisplayName(?array $staffRow, string $fallback): string
@@ -321,17 +277,10 @@ class PayrollController extends Controller
 
     private function buildPayrollBaseQuery($connection, bool $isBonus, string $targetStaffId)
     {
-        if ($this->useMxPayrollTable()) {
-            return $connection->table('dbo.mx_kyuyo_shou')
-                ->where('bonus', $isBonus ? 1 : 0)
-                ->where('edit_lock', 1)
-                ->whereRaw('LTRIM(RTRIM(kyuyo_staff_id)) = ?', [$targetStaffId]);
-        }
-
-        return $connection->table('dbo.t_kyuyo_shou')
+        return $connection->table('dbo.mx_kyuyo_shou')
             ->where('bonus', $isBonus ? 1 : 0)
             ->where('edit_lock', 1)
-            ->where('kyuyo_staff_id', $targetStaffId);
+            ->whereRaw('LTRIM(RTRIM(kyuyo_staff_id)) = ?', [$targetStaffId]);
     }
 
     private function resolveStaffOrganization(?array $staffRow): array
@@ -341,23 +290,21 @@ class PayrollController extends Controller
             return ['company_name' => '-', 'store_name' => '-', 'company_code' => ''];
         }
 
-        if ($this->useMxStoreTable()) {
-            $row = DB::connection('sqlsrv')
-                ->table('dbo.mx_stores as st')
-                ->leftJoin('dbo.mx_companies as c', 'st.company_id', '=', 'c.company_id')
-                ->whereRaw('LTRIM(RTRIM(st.store_code)) = ?', [$storeCode])
-                ->first();
+        $row = DB::connection('sqlsrv')
+            ->table('dbo.mx_stores as st')
+            ->leftJoin('dbo.mx_companies as c', 'st.company_id', '=', 'c.company_id')
+            ->whereRaw('LTRIM(RTRIM(st.store_code)) = ?', [$storeCode])
+            ->first();
 
-            if ($row !== null) {
-                $companyName = trim((string) ($row->company_name ?? ''));
-                $companyCode = trim((string) ($row->company_id ?? ''));
+        if ($row !== null) {
+            $companyName = trim((string) ($row->company_name ?? ''));
+            $companyCode = trim((string) ($row->company_id ?? ''));
 
-                return [
-                    'company_name' => $companyName !== '' ? $companyName : '-',
-                    'store_name' => trim((string) ($row->store_name ?? '')) !== '' ? (string) $row->store_name : $storeCode,
-                    'company_code' => $companyCode,
-                ];
-            }
+            return [
+                'company_name' => $companyName !== '' ? $companyName : '-',
+                'store_name' => trim((string) ($row->store_name ?? '')) !== '' ? (string) $row->store_name : $storeCode,
+                'company_code' => $companyCode,
+            ];
         }
 
         return ['company_name' => '-', 'store_name' => $storeCode, 'company_code' => ''];
@@ -555,8 +502,7 @@ class PayrollController extends Controller
             return $cache[$column];
         }
 
-        $cache[$column] = Schema::connection('sqlsrv_payroll')->hasColumn('mx_allowance', $column)
-            || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.mx_allowance', $column);
+        $cache[$column] = Schema::connection('sqlsrv_payroll')->hasColumn('dbo.mx_allowance', $column);
 
         return $cache[$column];
     }

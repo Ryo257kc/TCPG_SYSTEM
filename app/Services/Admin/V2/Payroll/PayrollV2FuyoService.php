@@ -25,7 +25,7 @@ class PayrollV2FuyoService
             ->modify('first day of previous month');
 
         $targetYear = (int) $targetWorkMonth->format('Y');
-        $columns = Schema::connection($connection)->getColumnListing('mx_fuyo');
+        $columns = Schema::connection($connection)->getColumnListing('dbo.mx_fuyo');
         if ($columns === []) {
             return 0;
         }
@@ -62,6 +62,78 @@ class PayrollV2FuyoService
         }
 
         return $count;
+    }
+
+    /**
+     * resolveByPaymentDate()の複数スタッフ一括版。同一支給日に対する呼び出しは
+     * 対象年・接続先・カラム構成が共通なので、まとめて1回のクエリで取得する。
+     *
+     * @param list<string> $staffIds
+     * @return array<string,int> staff_id => 扶養人数
+     */
+    public function resolveByPaymentDateBulk(array $staffIds, string $paymentDate): array
+    {
+        $staffIds = array_values(array_unique(array_filter(array_map(
+            static fn ($id): string => trim((string) $id),
+            $staffIds
+        ), static fn (string $id): bool => $id !== '')));
+
+        $paymentDate = trim($paymentDate);
+        if ($staffIds === [] || !$this->isValidPaymentDate($paymentDate)) {
+            return [];
+        }
+
+        $connection = $this->fuyoConnection();
+        if ($connection === '') {
+            return [];
+        }
+
+        $targetWorkMonth = (new \DateTimeImmutable($paymentDate))
+            ->modify('first day of previous month');
+        $targetYear = (int) $targetWorkMonth->format('Y');
+
+        $columns = Schema::connection($connection)->getColumnListing('dbo.mx_fuyo');
+        if ($columns === []) {
+            return [];
+        }
+
+        $birthdayColumn = $this->firstExistingColumn($columns, ['fuyo_birthday', 'birthday', 'birth_day']);
+        $deductionTargetColumn = $this->firstExistingColumn($columns, ['deduction_target']);
+        $registrationDateColumn = $this->firstExistingColumn($columns, ['registration_date']);
+
+        $rows = DB::connection($connection)
+            ->table('dbo.mx_fuyo')
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_id))'), $staffIds)
+            ->when(
+                $registrationDateColumn !== null,
+                fn ($query) => $query->whereRaw('YEAR([' . $registrationDateColumn . ']) = ?', [$targetYear])
+            )
+            ->get();
+
+        $targetDate = new \DateTimeImmutable(sprintf('%04d-12-31', $targetYear));
+        $counts = array_fill_keys($staffIds, 0);
+
+        foreach ($rows as $row) {
+            if ($deductionTargetColumn !== null && !$this->isTruthy($row->{$deductionTargetColumn} ?? null)) {
+                continue;
+            }
+
+            if ($birthdayColumn !== null) {
+                $birthday = $this->toDate($row->{$birthdayColumn} ?? null);
+                if ($birthday === null || $this->ageAt($birthday, $targetDate) < 16) {
+                    continue;
+                }
+            }
+
+            $staffId = trim((string) ($row->staff_id ?? ''));
+            if ($staffId === '' || !isset($counts[$staffId])) {
+                continue;
+            }
+
+            $counts[$staffId]++;
+        }
+
+        return $counts;
     }
 
     private function fuyoConnection(): string

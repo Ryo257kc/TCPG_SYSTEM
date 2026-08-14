@@ -78,7 +78,7 @@ class ReceiptController extends Controller
             ]);
 
         if ($payment_staff !== '') {
-            $salesQuery->where('payment_staff', $payment_staff);
+            $salesQuery->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$payment_staff]);
         }
 
         if ($payment_store_name !== '') {
@@ -194,7 +194,7 @@ class ReceiptController extends Controller
                     'payment_staff',
                     'payment_visit_area',
                 ])
-                ->where('payment_staff', $detail_payment_staff)
+                ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$detail_payment_staff])
                 ->where('patient_id', $selected_patient_id)
                 ->where('target_month', '>=', $targetMonthStart)
                 ->where('target_month', '<', $targetMonthNext)
@@ -228,7 +228,7 @@ class ReceiptController extends Controller
                     'k.standard_distance',
                     'staff.display_name_ja as staff_display_name_ja',
                 ])
-                ->where('n.staff_name', $detail_payment_staff)
+                ->whereRaw('LTRIM(RTRIM(n.staff_name)) = ?', [$detail_payment_staff])
                 ->where('n.patient_id', $selected_patient_id)
                 ->where('n.target_month', '>=', $targetMonthStart)
                 ->where('n.target_month', '<', $targetMonthNext)

@@ -99,7 +99,7 @@ class StaffV2Service
             ->table('dbo.mx_staffs as ms')
             ->leftJoin('dbo.mx_stores as st', 'ms.section', '=', 'st.store_code')
             ->leftJoin('dbo.mx_companies as co', 'st.company_id', '=', 'co.company_id')
-            ->where('ms.staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(ms.staff_id)) = ?', [$staffId])
             ->select([
                 'ms.*',
                 DB::raw('st.store_name as _store_name'),
@@ -296,7 +296,7 @@ class StaffV2Service
 
         DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->update($payload);
     }
 
@@ -309,7 +309,7 @@ class StaffV2Service
 
         $exists = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->exists();
 
         if ($exists) {

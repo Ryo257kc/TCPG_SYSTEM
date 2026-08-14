@@ -45,8 +45,12 @@ class PayrollV2CreateService
         $targetMonth = (int) substr($paymentDate, 5, 2);
         $supplyMonth = $paymentDate . ' 00:00:00';
 
+        $existingStaffIds = $this->existingStaffIds($staffIds, $paymentDate, $bonus);
+        $staffIdsToCreate = array_values(array_diff($staffIds, $existingStaffIds));
+        $fuyoSumByStaffId = $this->fuyoService->resolveByPaymentDateBulk($staffIdsToCreate, $paymentDate);
+
         foreach ($staffIds as $staffId) {
-            if ($this->exists($staffId, $paymentDate, $bonus)) {
+            if (in_array($staffId, $existingStaffIds, true)) {
                 $result['skipped']++;
                 $result['skipped_ids'][] = $staffId;
                 continue;
@@ -59,7 +63,7 @@ class PayrollV2CreateService
                     'supply_month' => $supplyMonth,
                     'bonus' => $bonus ? 1 : 0,
                     'edit_lock' => 0,
-                    'fuyo_sum' => $this->fuyoService->resolveByPaymentDate($staffId, $paymentDate),
+                    'fuyo_sum' => $fuyoSumByStaffId[$staffId] ?? 0,
                 ]);
 
             // if (!$bonus) {
@@ -73,14 +77,22 @@ class PayrollV2CreateService
         return $result;
     }
 
-    private function exists(string $staffId, string $paymentDate, bool $bonus = false): bool
+    /**
+     * @param list<string> $staffIds
+     * @return list<string>
+     */
+    private function existingStaffIds(array $staffIds, string $paymentDate, bool $bonus = false): array
     {
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('bonus', $bonus ? 1 : 0)
             ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
-            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
-            ->exists();
+            ->whereIn(DB::raw('LTRIM(RTRIM([kyuyo_staff_id]))'), $staffIds)
+            ->pluck('kyuyo_staff_id')
+            ->map(static fn ($id): string => trim((string) $id))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function isValidPaymentDate(string $paymentDate): bool

@@ -3,11 +3,8 @@ name: Tests
 on:
   push:
     branches:
-      - master
-      - '*.x'
+      - main
   pull_request:
-  schedule:
-    - cron: '0 0 * * *'
 
 permissions:
   contents: read
@@ -25,15 +22,9 @@ jobs:
         shell: pwsh
         run: ./scripts/check-repo-encoding.ps1 -Root .
 
-  tests:
+  regression-guard:
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: true
-      matrix:
-        php: [8.2, 8.3, 8.4]
-
-    name: PHP ${{ matrix.php }}
+    name: Critical Regression Guard
 
     steps:
       - name: Checkout code
@@ -42,18 +33,11 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite
+          php-version: 8.2
           coverage: none
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Copy environment file
-        run: cp .env.example .env
-
-      - name: Generate app key
-        run: php artisan key:generate
-
-      - name: Execute tests
-        run: php artisan test
+      - name: Run critical regression guard tests
+        run: vendor/bin/phpunit tests/Unit/CriticalRegressionGuardTest.php

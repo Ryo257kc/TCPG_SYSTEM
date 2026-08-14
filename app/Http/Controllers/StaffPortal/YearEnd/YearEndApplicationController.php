@@ -52,7 +52,7 @@ class YearEndApplicationController extends Controller
 
         $allFuyoRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->orderBy('fuyo_no')
             ->get()
@@ -552,7 +552,7 @@ class YearEndApplicationController extends Controller
 
         $currentSpouseRow = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->first();
@@ -598,7 +598,7 @@ class YearEndApplicationController extends Controller
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_fuyo')
                 ->where('fuyo_no', $currentSpouseRow->fuyo_no)
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update($fields);
         } else {
             DB::connection('sqlsrv_payroll')
@@ -639,7 +639,7 @@ class YearEndApplicationController extends Controller
 
         $nextYearSpouseRow = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $nextYear)
             ->whereIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->first();
@@ -648,7 +648,7 @@ class YearEndApplicationController extends Controller
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_fuyo')
                 ->where('fuyo_no', $nextYearSpouseRow->fuyo_no)
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update($nextYearFields);
         } else {
             DB::connection('sqlsrv_payroll')
@@ -678,7 +678,7 @@ class YearEndApplicationController extends Controller
 
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('year_end', $targetYear)
             ->orderBy('nen_tyo_no')
             ->first();
@@ -705,7 +705,7 @@ class YearEndApplicationController extends Controller
 
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('year_end', $targetYear)
             ->orderBy('nen_tyo_no')
             ->first();
@@ -937,7 +937,7 @@ class YearEndApplicationController extends Controller
 
         $existingRows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->whereNotIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->get()
@@ -982,7 +982,7 @@ class YearEndApplicationController extends Controller
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_fuyo')
                 ->where('fuyo_no', $fuyoNo)
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update(array_merge($validated, $certificate, [
                     'deduction_target' => !empty($row['deduction_target']) ? 1 : 0,
                     'widow' => !empty($row['widow']) ? 1 : 0,
@@ -1074,7 +1074,7 @@ class YearEndApplicationController extends Controller
     {
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.staff_year_end_applications')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->where('target_year', $targetYear)
             ->first();
 

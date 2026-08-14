@@ -91,6 +91,9 @@ class AttendanceV2BulkReflectService
         $locked = 0;
         $missing = 0;
 
+        // 元の実装では、未ロックの給与行が1件も無いスタッフ（対象給与行が無い／全てロック済み）は
+        // 有給同期・残日数取得の対象外だった。一括化するにあたっても同じスタッフ集合だけを対象にする。
+        $unlockedRowsByStaffId = [];
         foreach (array_keys($staffIds) as $staffId) {
             $staffPayrollRows = $payrollRowsByStaffId[$staffId] ?? [];
             if ($staffPayrollRows === []) {
@@ -108,20 +111,23 @@ class AttendanceV2BulkReflectService
                 $unlockedPayrollRows[] = $payrollRow;
             }
 
-            if ($unlockedPayrollRows === []) {
-                continue;
+            if ($unlockedPayrollRows !== []) {
+                $unlockedRowsByStaffId[$staffId] = $unlockedPayrollRows;
             }
+        }
 
-            $this->paidLeaveUsageService->sync(
-                $staffId,
-                $year,
-                $month,
-                $staffTimeCardKeys[$staffId] ?? []
-            );
+        // スタッフ単位で有給消化を都度同期・残日数取得していたのをまとめて実施する
+        // （sync()とremainingDays()の単体呼び出しと同じ結果になるよう、集計ロジックは
+        // AttendanceV2PaidLeaveUsageService::syncBulk()／PaidLeaveV2RemainingService::remainingDaysBulk()側で再現している）。
+        $eligibleStaffIds = array_keys($unlockedRowsByStaffId);
+        $eligibleTimeCardKeys = array_intersect_key($staffTimeCardKeys, $unlockedRowsByStaffId);
+        $this->paidLeaveUsageService->syncBulk($eligibleTimeCardKeys, $year, $month);
+        $remainingDaysByStaffId = $this->paidLeaveRemainingService->remainingDaysBulk($eligibleStaffIds);
 
+        foreach ($unlockedRowsByStaffId as $staffId => $unlockedPayrollRows) {
             $summary = $summaries[$staffId] ?? $this->monthlySummaryService->emptySummary();
             $payload = $this->monthlySummaryService->payrollPayload($summary);
-            $payload['horiday_true_num'] = $this->paidLeaveRemainingService->remainingDays($staffId);
+            $payload['horiday_true_num'] = $remainingDaysByStaffId[$staffId] ?? 0.0;
 
             foreach ($unlockedPayrollRows as $payrollRow) {
                 if (!isset($payrollRow->kyuyo_sho_no)) {

@@ -1,4 +1,4 @@
-﻿<script>
+<script>
     function initializeInsurersPage() {
         var LABEL_EDIT = '編集';
         var LABEL_SAVE = '保存';

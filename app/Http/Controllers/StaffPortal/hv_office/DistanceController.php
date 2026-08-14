@@ -21,6 +21,11 @@ class DistanceController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isVisitManagement($staffRow) && !$this->isViewOnly($staffRow)) {
+            abort(403);
+        }
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         if (!preg_match('/^\d{4}-\d{2}$/', $targetMonth)) {
             return redirect()->route('hv_office.distance')->withErrors(['target_month' => '月度が正しくありません。']);
@@ -50,6 +55,11 @@ class DistanceController extends Controller
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isVisitManagement($staffRow) && !$this->isViewOnly($staffRow)) {
+            abort(403);
         }
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));

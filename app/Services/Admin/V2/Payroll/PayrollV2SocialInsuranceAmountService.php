@@ -6,14 +6,37 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollV2SocialInsuranceAmountService
 {
+    /** @var array<string,int> staffId => company_id */
+    private array $companyIdCache = [];
+
+    /** @var array<string,array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float}> "companyId|paymentDate" => rates */
+    private array $ratesCache = [];
+
     /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float} */
     public function loadRatesForStaff(string $staffId, string $paymentDate): array
     {
-        return $this->loadRates($this->resolveCompanyId($staffId), $paymentDate);
+        if (!array_key_exists($staffId, $this->companyIdCache)) {
+            $this->companyIdCache[$staffId] = $this->resolveCompanyId($staffId);
+        }
+
+        return $this->loadRates($this->companyIdCache[$staffId], $paymentDate);
     }
 
     /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float} */
     public function loadRates(string|int $officeNo, string $paymentDate): array
+    {
+        $cacheKey = $officeNo . '|' . $paymentDate;
+        if (array_key_exists($cacheKey, $this->ratesCache)) {
+            return $this->ratesCache[$cacheKey];
+        }
+
+        $this->ratesCache[$cacheKey] = $this->loadRatesUncached($officeNo, $paymentDate);
+
+        return $this->ratesCache[$cacheKey];
+    }
+
+    /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float} */
+    private function loadRatesUncached(string|int $officeNo, string $paymentDate): array
     {
         $cutoffMonth = (new \DateTimeImmutable($paymentDate))
             ->modify('first day of this month')

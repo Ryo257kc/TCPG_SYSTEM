@@ -23,6 +23,11 @@ class DownloadController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isAccounting($staffRow) && !$this->isViewOnly($staffRow) && !$this->isVisitManagement($staffRow)) {
+            abort(403);
+        }
+
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $daily_report_store_name = trim((string) $request->query('daily_report_store_name', ''));
         $csv_type = $this->csvType($request);
@@ -75,6 +80,11 @@ class DownloadController extends Controller
             return $this->redirectToStaffPortalLogin();
         }
 
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isAccounting($staffRow) && !$this->isViewOnly($staffRow) && !$this->isVisitManagement($staffRow)) {
+            abort(403);
+        }
+
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $daily_report_store_name = trim((string) $request->query('daily_report_store_name', ''));
         $csv_type = $this->csvType($request);
@@ -104,12 +114,41 @@ class DownloadController extends Controller
             ob_end_clean();
         }
 
-        return response()->streamDownload(function () use ($rows, $csv_type): void {
+        if ($csv_type === 'massage') {
+            return response()->streamDownload(function () use ($rows): void {
+                echo "\xEF\xBB\xBF";
+                echo $this->utf8CsvLine(['ID', '患者名', '申請日', '施術分類', '施術', '変形徒手', '施術報告書', '店舗', '施術期間自', '施術期間至']);
+
+                foreach ($rows as $row) {
+                    $appliedAt = $row->ma_applied_at ? Carbon::parse($row->ma_applied_at) : null;
+                    $distance = trim((string) ($row->receipt_home_visit_distance_ma ?? ''));
+
+                    echo $this->utf8CsvLine([
+                        $row->massage_id ?? '',
+                        $row->patient_name ?? '',
+                        $appliedAt ? $appliedAt->format('Y/m/d') : '',
+                        $distance,
+                        $this->massageTreatmentName($distance),
+                        (int) ($row->is_deformity_manual_therapy ?? 0) === 1 ? 'あり' : '',
+                        (int) ($row->is_treatment_report_submitted ?? 0) === 1 ? '施術報告書あり' : '',
+                        $row->massage_store_name ?? '',
+                        $appliedAt ? $appliedAt->copy()->startOfMonth()->format('Y/m/d') : '',
+                        $appliedAt ? $appliedAt->copy()->endOfMonth()->format('Y-m-d') : '',
+                    ]);
+                }
+            }, $downloadNameAscii, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="' . $downloadNameAscii . '"; filename*=UTF-8\'\'' . rawurlencode($downloadNameUtf8),
+                'Content-Transfer-Encoding' => 'binary',
+            ]);
+        }
+
+        return response()->streamDownload(function () use ($rows): void {
             echo $this->sjisCsvLine(['ID', '患者名', '申請日', '施術分類', '施術', '担当', '店舗', '施術期間自', '施術期間至']);
 
             foreach ($rows as $row) {
                 $addedAt = $row->added_at ? Carbon::parse($row->added_at) : null;
-                $receipt_home_visit_distance = $this->receiptHomeVisitDistance($row, $csv_type);
+                $receipt_home_visit_distance = trim((string) ($row->receipt_home_visit_distance ?? ''));
 
                 echo $this->sjisCsvLine([
                     $row->common_id ?? '',
@@ -149,14 +188,19 @@ class DownloadController extends Controller
             ->select([
                 'n.target_month',
                 'n.added_at',
+                'n.ma_applied_at',
                 'k.patient_name',
                 'k.patient_id',
                 'k.common_id',
+                'k.massage_id',
+                'k.massage_store_name',
                 'k.facility_name',
                 'n.daily_report_store_name',
                 'n.staff_name',
                 'n.receipt_home_visit_distance',
                 'n.receipt_home_visit_distance_ma',
+                'n.is_deformity_manual_therapy',
+                'n.is_treatment_report_submitted',
                 'n.daily_report_billing_staff',
                 'billing_staff.display_name_ja as daily_report_billing_staff_display_name_ja',
                 'billing_staff.staff_name as daily_report_billing_staff_staff_name',
@@ -175,17 +219,15 @@ class DownloadController extends Controller
             });
 
         if ($csv_type === 'acupuncture') {
-            $query->where('n.daily_report_store_name', $daily_report_store_name)
-                ->whereNotNull('n.receipt_home_visit_distance')
-                ->where('n.receipt_home_visit_distance', '<>', '');
+            $query->where('n.daily_report_store_name', $daily_report_store_name);
         } else {
-            $query->whereNotNull('n.receipt_home_visit_distance_ma')
-                ->where('n.receipt_home_visit_distance_ma', '<>', '');
+            $query->where('n.is_ma_treatment', 1)
+                ->whereNotNull('n.ma_applied_at');
         }
 
-        return $query
-            ->orderBy('k.common_id')
-            ->orderBy('n.added_at');
+        return $csv_type === 'massage'
+            ? $query->orderBy('k.massage_id')->orderBy('n.ma_applied_at')
+            : $query->orderBy('k.common_id')->orderBy('n.added_at');
     }
 
     private function receiptTreatmentName(string $receipt_home_visit_distance): string
@@ -201,13 +243,18 @@ class DownloadController extends Controller
         };
     }
 
-    private function receiptHomeVisitDistance(object $row, string $csv_type): string
+    private function massageTreatmentName(string $receipt_home_visit_distance_ma): string
     {
-        if ($csv_type === 'massage') {
-            return trim((string) ($row->receipt_home_visit_distance_ma ?? ''));
-        }
-
-        return trim((string) ($row->receipt_home_visit_distance ?? ''));
+        return match ($receipt_home_visit_distance_ma) {
+            '〇' => '通所',
+            '△' => '通所(往療なし)',
+            '◎' => '通所(往療あり)',
+            '①' => '施術1',
+            '②' => '施術2',
+            '③' => '施術3',
+            '④' => '施術4',
+            default => '',
+        };
     }
 
     private function sjisCsvLine(array $values): string
@@ -217,5 +264,14 @@ class DownloadController extends Controller
         }, $values);
 
         return mb_convert_encoding(implode(',', $escaped) . "\r\n", 'SJIS-win', 'UTF-8');
+    }
+
+    private function utf8CsvLine(array $values): string
+    {
+        $escaped = array_map(function ($value): string {
+            return '"' . str_replace('"', '""', (string) $value) . '"';
+        }, $values);
+
+        return implode(',', $escaped) . "\n";
     }
 }

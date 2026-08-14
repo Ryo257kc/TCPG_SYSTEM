@@ -599,7 +599,7 @@ class PayrollV2UpdateService
             return $cached;
         }
 
-        $columns = Schema::connection('sqlsrv_payroll')->getColumnListing('mx_kyuyo_shou');
+        $columns = Schema::connection('sqlsrv_payroll')->getColumnListing('dbo.mx_kyuyo_shou');
         $deny = [
             'kyuyo_sho_no',
             'kyuyo_staff_id',

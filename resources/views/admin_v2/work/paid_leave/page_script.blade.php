@@ -1,4 +1,4 @@
-﻿<script>
+<script>
     document.addEventListener('DOMContentLoaded', () => {
         const addPanel = document.querySelector('.history-add-panel');
         const addButton = document.querySelector('.js-history-add');

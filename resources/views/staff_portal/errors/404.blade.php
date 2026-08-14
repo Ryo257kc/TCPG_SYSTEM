@@ -1,3 +1,3 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TCPG SYSTEM</title><style>body{margin:0;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;font-family:"Segoe UI","Noto Sans JP",sans-serif;background:#fff7ef;color:#6b3f1f;padding-top:48px}.card{width:min(680px,92vw);background:#fff;border:1px solid #f1c79f;border-radius:14px;padding:24px;box-shadow:0 10px 28px rgba(157,101,48,.12)}h1{margin:0 0 8px}h2{margin:0 0 12px}.btn{display:inline-block;margin-top:12px;padding:8px 12px;border:1px solid #f1c79f;border-radius:10px;background:#ffd6ad;color:#6b3f1f;text-decoration:none;font-weight:700}</style></head><body><div class="card"><h1>TCPG SYSTEM</h1><h2>ページが見つかりません</h2><p>URLが変更されたか、入力に誤りがある可能性があります。</p><p>トップページまたはログイン画面から再度お試しください。</p><p><b>エラーコード: 404</b></p><a class="btn" href="{{ url('/login-portal') }}">ログイン画面へ戻る</a></div></body></html>
 

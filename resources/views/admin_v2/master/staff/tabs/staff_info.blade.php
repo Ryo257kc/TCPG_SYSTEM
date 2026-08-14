@@ -1,4 +1,4 @@
-﻿@php
+@php
 $employmentPairs = [
     [['_company_name', '会社名'], ['_store_name', '店舗名']],
     [['staff_division', '雇用区分'], ['employment_status', '就業状況']],

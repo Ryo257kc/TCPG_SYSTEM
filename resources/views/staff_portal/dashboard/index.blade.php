@@ -174,7 +174,7 @@
 
 
     [
-    'visible' => $isAccounting || $isAdmin || $isViewOnly,
+    'visible' => $isAccounting || $isAdmin || $isViewOnly || $isVisitManagement,
     'badge' => 'OFFICE',
     'title' => '往診事務',
     'cards' => [
@@ -195,13 +195,6 @@
     'route' => 'hv_office.distance',
     'title' => '距離集計',
     'sub' => '往診距離一覧',
-    ],
-    [
-    'type' => 'link',
-    'route' => 'hv_office.payment_confirmed',
-    'title' => '入金履歴一覧',
-    'sub' => '準備中/入金確認確定',
-    'hidden' => true,
     ],
     [
     'type' => 'link',

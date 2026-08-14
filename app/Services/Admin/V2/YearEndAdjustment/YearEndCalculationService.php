@@ -3,7 +3,6 @@
 namespace App\Services\Admin\V2\YearEndAdjustment;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * 年末調整の計算ロジック（正本）。
@@ -163,7 +162,7 @@ class YearEndCalculationService
     {
         $rows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
-            ->where('kyuyo_staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(kyuyo_staff_id)) = ?', [$staffId])
             ->whereYear('supply_month', $targetYear)
             ->get(['bonus', 'taxation_sum', 'income_tax', 'syaho_sum']);
 
@@ -216,7 +215,7 @@ class YearEndCalculationService
     {
         $rows = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->get();
 
@@ -664,13 +663,9 @@ class YearEndCalculationService
 
     private function isYearEndRetired(string $staffId): bool
     {
-        if (!Schema::connection('sqlsrv')->hasTable('mx_staffs')) {
-            return false;
-        }
-
         $taiDate = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->value('tai_date');
 
         return trim((string) ($taiDate ?? '')) !== '';

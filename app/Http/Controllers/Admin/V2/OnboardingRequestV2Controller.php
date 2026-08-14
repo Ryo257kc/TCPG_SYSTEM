@@ -182,7 +182,7 @@ class OnboardingRequestV2Controller extends Controller
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->first();
         abort_unless($row, 404);
@@ -233,7 +233,7 @@ class OnboardingRequestV2Controller extends Controller
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->update($payload);
 
         return redirect()
@@ -279,7 +279,7 @@ class OnboardingRequestV2Controller extends Controller
     {
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->first(['address', 'address_furi', 'home_tel', 'mobile_tel', 'bank_name_1', 'bank_branch_1', 'account_type', 'account_num', 'car_km', 'traffic_day', 'traffic_day_tuika']);
 
         return $row === null ? [] : (array) $row;
@@ -350,7 +350,7 @@ class OnboardingRequestV2Controller extends Controller
 
         $currentEmployment = trim((string) DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->value('employment'));
 
         $staffUpdate = [];
@@ -394,7 +394,7 @@ class OnboardingRequestV2Controller extends Controller
         if ($staffUpdate !== []) {
             DB::connection('sqlsrv')
                 ->table('dbo.mx_staffs')
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update($staffUpdate);
         }
 

@@ -32,27 +32,21 @@ class AttendanceV2ShiftDeleteService
 
         [$fromDate, $toDate] = $this->monthRange($year, $month);
 
-        foreach ($staffIds as $staffId) {
-            $query = DB::connection('sqlsrv')
+        $staffIdsWithRows = $this->staffIdsWithRows($staffIds, $fromDate, $toDate);
+        $staffIdsWithActualPunch = $this->staffIdsWithActualPunch($staffIds, $fromDate, $toDate);
+        $deletableStaffIds = array_values(array_diff($staffIdsWithRows, $staffIdsWithActualPunch));
+
+        if ($deletableStaffIds !== []) {
+            DB::connection('sqlsrv')
                 ->table('dbo.mx_time_cards')
-                ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
+                ->whereIn(DB::raw('LTRIM(RTRIM(staff_name))'), $deletableStaffIds)
                 ->where('work_date', '>=', $fromDate)
-                ->where('work_date', '<', $toDate);
+                ->where('work_date', '<', $toDate)
+                ->delete();
+        }
 
-            if (!$query->exists()) {
-                $result['skipped']++;
-                $result['skipped_ids'][] = $staffId;
-                continue;
-            }
-
-            if ($this->hasActualPunch($staffId, $fromDate, $toDate)) {
-                $result['skipped']++;
-                $result['skipped_ids'][] = $staffId;
-                continue;
-            }
-
-            $deleted = (clone $query)->delete();
-            if ($deleted > 0) {
+        foreach ($staffIds as $staffId) {
+            if (in_array($staffId, $deletableStaffIds, true)) {
                 $result['deleted']++;
                 $result['deleted_ids'][] = $staffId;
             } else {
@@ -64,20 +58,33 @@ class AttendanceV2ShiftDeleteService
         return $result;
     }
 
-    /** @return array{0:string,1:string} */
-    private function monthRange(int $year, int $month): array
-    {
-        $fromDate = sprintf('%04d-%02d-01 00:00:00', $year, $month);
-        $toDate = date('Y-m-01 00:00:00', strtotime(substr($fromDate, 0, 10) . ' +1 month'));
-
-        return [$fromDate, $toDate];
-    }
-
-    private function hasActualPunch(string $staffId, string $fromDate, string $toDate): bool
+    /**
+     * @param list<string> $staffIds
+     * @return list<string>
+     */
+    private function staffIdsWithRows(array $staffIds, string $fromDate, string $toDate): array
     {
         return DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards')
-            ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_name))'), $staffIds)
+            ->where('work_date', '>=', $fromDate)
+            ->where('work_date', '<', $toDate)
+            ->selectRaw('DISTINCT LTRIM(RTRIM(staff_name)) as staff_name')
+            ->get()
+            ->pluck('staff_name')
+            ->map(static fn ($id): string => trim((string) $id))
+            ->all();
+    }
+
+    /**
+     * @param list<string> $staffIds
+     * @return list<string>
+     */
+    private function staffIdsWithActualPunch(array $staffIds, string $fromDate, string $toDate): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->whereIn(DB::raw('LTRIM(RTRIM(staff_name))'), $staffIds)
             ->whereBetween('work_date', [$fromDate, $toDate])
             ->where(function ($q) {
                 $columns = [
@@ -97,6 +104,20 @@ class AttendanceV2ShiftDeleteService
                     }
                 }
             })
-            ->exists();
+            ->selectRaw('DISTINCT LTRIM(RTRIM(staff_name)) as staff_name')
+            ->get()
+            ->pluck('staff_name')
+            ->map(static fn ($id): string => trim((string) $id))
+            ->all();
     }
+
+    /** @return array{0:string,1:string} */
+    private function monthRange(int $year, int $month): array
+    {
+        $fromDate = sprintf('%04d-%02d-01 00:00:00', $year, $month);
+        $toDate = date('Y-m-01 00:00:00', strtotime(substr($fromDate, 0, 10) . ' +1 month'));
+
+        return [$fromDate, $toDate];
+    }
+
 }

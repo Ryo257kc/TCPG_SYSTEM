@@ -1,4 +1,4 @@
-﻿<form method="post" action="{{ route('admin.master.company.update') }}" class="company-detail-form company-info-form" id="company-info-form">
+<form method="post" action="{{ route('admin.master.company.update') }}" class="company-detail-form company-info-form" id="company-info-form">
   @csrf
   <input type="hidden" name="company_id" value="{{ $selectedRow['company_id'] }}">
   <input type="hidden" name="q" value="{{ $keyword }}">

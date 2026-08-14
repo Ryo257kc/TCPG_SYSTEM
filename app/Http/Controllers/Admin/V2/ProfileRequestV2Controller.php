@@ -169,7 +169,7 @@ class ProfileRequestV2Controller extends Controller
         $row = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->whereYear('registration_date', $targetYear)
             ->first();
         abort_unless($row, 404);
@@ -220,7 +220,7 @@ class ProfileRequestV2Controller extends Controller
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_fuyo')
             ->where('fuyo_no', $fuyoNo)
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->update($payload);
 
         return redirect()
@@ -266,7 +266,7 @@ class ProfileRequestV2Controller extends Controller
     {
         $row = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->where('staff_id', $staffId)
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
             ->first(['staff_name', 'staff_name_furi', 'address', 'address_furi', 'head_house', 'relationship', 'car_km', 'traffic_day', 'traffic_day_tuika']);
 
         return $row === null ? [] : (array) $row;
@@ -367,7 +367,7 @@ class ProfileRequestV2Controller extends Controller
         if ($staffUpdate !== []) {
             DB::connection('sqlsrv')
                 ->table('dbo.mx_staffs')
-                ->where('staff_id', $staffId)
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
                 ->update($staffUpdate);
         }
 
