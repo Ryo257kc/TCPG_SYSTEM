@@ -76,12 +76,14 @@ class YearEndCalculationService
         $jyuKariKou = $this->money($nenTyo->jyu_kari_kou ?? 0);
 
         $deductionSum = $dependents['deduction_sum'];
+        $tokuteiShinzokuTokubetsuKoujo = $dependents['tokutei_shinzoku_tokubetsu_koujo'];
         $shotokuDeductionSum = $kyuSyahoFeeKou
             + $shinSyahoFeeKou
             + $shunKigyouFeeKou
             + $seimeiFeeKou
             + $jishunFeeKou
             + $deductionSum
+            + $tokuteiShinzokuTokubetsuKoujo
             + $haiguDeduction
             + $haiguTokuDeduction
             + $kisoKoujyo;
@@ -98,6 +100,7 @@ class YearEndCalculationService
             $kisoKoujyo = 0;
             $kisoBunrui = '';
             $deductionSum = 0;
+            $tokuteiShinzokuTokubetsuKoujo = 0;
             $haiguDeduction = 0;
             $haiguTokuDeduction = 0;
             $kyuSyahoFeeKou = 0;
@@ -111,6 +114,7 @@ class YearEndCalculationService
             $kisoKoujyo = 0;
             $kisoBunrui = '';
             $deductionSum = 0;
+            $tokuteiShinzokuTokubetsuKoujo = 0;
             $haiguDeduction = 0;
             $haiguTokuDeduction = 0;
             $shotokuDeduction = 0;
@@ -139,6 +143,7 @@ class YearEndCalculationService
             'shougai_ta' => $dependents['shougai_ta'],
             'dependent_under_16' => $dependents['dependent_under_16'],
             'deduction_sum' => $deductionSum,
+            'tokutei_shinzoku_tokubetsu_koujo' => $tokuteiShinzokuTokubetsuKoujo,
             'kiso_koujyo' => $kisoKoujyo,
             'kiso_bunrui' => $kisoBunrui,
             // 区分Ⅱ（配偶者控除等申告書側、①②③表記）は区分Ⅰ（基礎控除申告書側、A/B/C表記）と
@@ -210,6 +215,30 @@ class YearEndCalculationService
         ];
     }
 
+    /**
+     * 特定親族特別控除（令和7年分〜、19〜23歳未満の親族向け新控除）の控除額。
+     * 国税庁タックスアンサーNo.1177の表そのもの（合計所得58万円超123万円以下、9段階）。
+     * https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1177.htm で確認済み（2026-08-15）。
+     * 引数は合計所得金額（給与収入から給与所得控除後の額。呼び出し側でsalaryIncomeAfterDeduction()
+     * 済みのものを渡すこと）。範囲外（58万円以下・123万円超）は0を返す。
+     */
+    public function tokuteiShinzokuTokubetsuKoujoAmount(float $netIncome): float
+    {
+        return match (true) {
+            $netIncome <= 580000 => 0.0,
+            $netIncome <= 850000 => 630000.0,
+            $netIncome <= 900000 => 610000.0,
+            $netIncome <= 950000 => 510000.0,
+            $netIncome <= 1000000 => 410000.0,
+            $netIncome <= 1050000 => 310000.0,
+            $netIncome <= 1100000 => 210000.0,
+            $netIncome <= 1150000 => 110000.0,
+            $netIncome <= 1200000 => 60000.0,
+            $netIncome <= 1230000 => 30000.0,
+            default => 0.0,
+        };
+    }
+
     /** @return array<string, int|float> */
     private function yearEndDependentTotals(string $staffId, int $targetYear): array
     {
@@ -229,6 +258,7 @@ class YearEndCalculationService
             'shougai_ta' => 0,
             'dependent_under_16' => 0,
             'deduction_sum' => 0.0,
+            'tokutei_shinzoku_tokubetsu_koujo' => 0.0,
             'haigu_elderly' => false,
             'haigu_deduction_target' => false,
         ];
@@ -265,8 +295,18 @@ class YearEndCalculationService
             $rates = $this->dependentDeductionRates();
 
             if ($age >= 19 && $age < 23) {
-                $totals['toku_fu']++;
-                $totals['deduction_sum'] += $rates['toku_fu'];
+                // 特定扶養親族(toku_fu)は合計所得58万円以下が条件だが、この判定が丸ごと
+                // 抜けていて収入に関わらず63万円控除が付いていた（2026-08-15判明・要修正で
+                // ユーザー承認済み）。収入(fuyo_shunyu、給与収入額)を合計所得に変換した上で
+                // 判定する。58万円超123万円以下は特定親族特別控除（tokuteiShinzokuTokubetsuKoujoAmount）
+                // に切り替わり、toku_fuとは二重に付かない。123万円超はどちらも対象外。
+                $dependentNetIncome = $this->salaryIncomeAfterDeduction((float) ($row->fuyo_shunyu ?? 0), $targetYear);
+                if ($dependentNetIncome <= 580000) {
+                    $totals['toku_fu']++;
+                    $totals['deduction_sum'] += $rates['toku_fu'];
+                } else {
+                    $totals['tokutei_shinzoku_tokubetsu_koujo'] += $this->tokuteiShinzokuTokubetsuKoujoAmount($dependentNetIncome);
+                }
             } elseif ($age >= 70) {
                 if ($kyojyu === '同居') {
                     $totals['rou_dou']++;

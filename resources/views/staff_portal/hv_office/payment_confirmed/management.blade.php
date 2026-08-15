@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCPG SYSTEM - 入金確定履歴（管理）</title>
+    <title>TCPG SYSTEM - 入金確定履歴</title>
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
 </head>
@@ -15,7 +15,7 @@
 
         <section class="panel content-panel sales-panel staff-viewport-panel">
             <div class="content-head">
-                <h2 class="content-title">入金確定履歴一覧（管理）</h2>
+                <h2 class="content-title">入金確定履歴一覧</h2>
             </div>
 
             @if(session('status'))

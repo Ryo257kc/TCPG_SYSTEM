@@ -103,6 +103,42 @@
 
 2024年以前は未確認（`spousalDeductionAmounts()` は `targetYear < 2025` なら計算しない）。
 
+## 特定扶養親族（toku_fu）・特定親族特別控除（tokutei_shinzoku_tokubetsu_koujo）
+
+対象は19歳以上23歳未満の親族等（`mx_fuyo`の`deduction_target`が1、年齢は`fuyo_birthday`から
+`ageAtYearEnd()`で算出）。合計所得金額（`fuyo_shunyu`＝給与収入額を`salaryIncomeAfterDeduction()`で
+所得へ変換した値）で以下の3パターンに分かれる。
+
+- 58万円以下：`toku_fu`（従来の特定扶養親族、一律63万円、`dependentDeductionRates()['toku_fu']`）
+- 58万円超123万円以下：特定親族特別控除（`tokuteiShinzokuTokubetsuKoujoAmount()`、9段階、下表）
+- 123万円超：どちらも対象外（控除なし）
+
+`toku_fu`と特定親族特別控除は同時に発生しない（二重控除防止）。
+
+> **収入の所得判定が抜けていたバグ（2026-08-15修正）**： `toku_fu`の判定が年齢とチェック欄だけで、
+> 収入額の判定が一切無かった。収入がいくら高くても一律63万円控除が付いていた状態で、
+> 収入判定を追加すると同時に過去データにも影響する（ユーザー承認済み、`docs/rules/00_global.md`の
+> 通り年度ごとの表・分岐追加として記録）。
+
+特定親族特別控除は令和7年（2025年）分〜の新控除（国税庁タックスアンサーNo.1177、
+https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1177.htm で確認済み）。
+
+| 特定親族の合計所得金額 | 控除額 |
+|---|---|
+| 58万円超85万円以下 | 63万円 |
+| 85万円超90万円以下 | 61万円 |
+| 90万円超95万円以下 | 51万円 |
+| 95万円超100万円以下 | 41万円 |
+| 100万円超105万円以下 | 31万円 |
+| 105万円超110万円以下 | 21万円 |
+| 110万円超115万円以下 | 11万円 |
+| 115万円超120万円以下 | 6万円 |
+| 120万円超123万円以下 | 3万円 |
+
+保存先は`mx_nen_tyo.tokutei_shinzoku_tokubetsu_koujo`（2026-08-15、Payroll_DEVに追加。
+`database/sql/2026_08_add_tokutei_shinzoku_tokubetsu_koujo_to_mx_nen_tyo.sql`）。
+本番Payrollへの反映と、源泉徴収票等の帳票表示はまだ未実装。
+
 ## 基礎控除申告書「区分Ⅰ」（kiso_bunrui）・「区分Ⅱ」（haigu_bunrui）
 
 ### 保存する値：細かい所得区分のラベルそのもの（Access運用に合わせる）

@@ -313,8 +313,8 @@
                             <td>{{ $row['staff_id'] }}</td>
                             <td>{{ $row['staff_name'] !== '' ? $row['staff_name'] : '---' }}</td>
                             <td>
-                                <div>入 {{ $row['nyu_date'] !== '' ? $row['nyu_date'] : '---' }}</div>
-                                <div>退 {{ $row['tai_date'] !== '' ? $row['tai_date'] : '---' }}</div>
+                                <div @if($row['nyu_date_in_target_year']) style="color:#d32f2f;font-weight:bold;" @endif>入 {{ $row['nyu_date'] !== '' ? $row['nyu_date'] : '---' }}</div>
+                                <div @if($row['tai_date_in_target_year']) style="color:#d32f2f;font-weight:bold;" @endif>退 {{ $row['tai_date'] !== '' ? $row['tai_date'] : '---' }}</div>
                             </td>
                             <td>{{ $row['submitted_at'] }}</td>
                             <td>

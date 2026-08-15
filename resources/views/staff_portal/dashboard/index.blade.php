@@ -233,7 +233,7 @@
     [
     'type' => 'link',
     'route' => 'hv_office.payment_confirmed.management',
-    'title' => '入金確定履歴（管理）',
+    'title' => '入金確定履歴',
     'sub' => '全スタッフ分の入金確定状況',
     'visible' => $isVisitManagement || $isViewOnly || $isAdmin,
     ],

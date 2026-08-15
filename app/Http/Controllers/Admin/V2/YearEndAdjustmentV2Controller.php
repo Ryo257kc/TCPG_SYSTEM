@@ -99,12 +99,20 @@ class YearEndAdjustmentV2Controller extends Controller
                     $statusBadgeKey = 'draft-started';
                 }
 
+                // 今年（対象年）中の入社・退社は、状態を「退職済」等へ変更し忘れやすいため
+                // 一覧上で目立たせたい、という要望で追加。nyu_date/tai_dateはY/m/d形式の
+                // 文字列（staffListDetails側で整形済み）なので、先頭4桁の年だけ見て判定する。
+                $nyuDateInTargetYear = str_starts_with($staffDetail['nyu_date'], (string) $targetYear);
+                $taiDateInTargetYear = str_starts_with($staffDetail['tai_date'], (string) $targetYear);
+
                 $rows[] = [
                     'application_id' => (string) ($nenTyo->nen_tyo_no ?? ''),
                     'staff_id' => $staffId,
                     'staff_name' => $staffDetail['staff_name'],
                     'nyu_date' => $staffDetail['nyu_date'],
                     'tai_date' => $staffDetail['tai_date'],
+                    'nyu_date_in_target_year' => $nyuDateInTargetYear,
+                    'tai_date_in_target_year' => $taiDateInTargetYear,
                     'status' => $status,
                     'status_label' => $statusLabel,
                     'status_badge_key' => $statusBadgeKey,
@@ -144,7 +152,7 @@ class YearEndAdjustmentV2Controller extends Controller
 
         return view('admin_v2.work.year_end_adjustments.index', [
             'targetYear' => $targetYear,
-            'yearOptions' => range($earliestYear, (int) date('Y') + 1),
+            'yearOptions' => range((int) date('Y') + 1, $earliestYear),
             'tableExists' => $tableExists,
             'rows' => $rows,
             'statusCounts' => $statusCounts,
@@ -1453,40 +1461,271 @@ class YearEndAdjustmentV2Controller extends Controller
         $pdf->SetFont('kozminproregular', '', 8);
 
         // 表題「令和◯年分」（中継ぎディスパッチャ廃止、writeKisoPreview()と同じ理由でここに移動）。
-        $this->writePdfText($pdf, 27, 7, "{$targetYear}年分");
+        // テンプレートに「令和」は印字済みなので、西暦のままではなく令和の年数だけ書く
+        // （テンプレートは storage/app/templates/year_end/{年}-....pdf と年ごとに別ファイルなので、
+        // このシステムの対象年である限り令和で確定してよい）。
+        $this->writePdfTextSized($pdf, 46.3, 2.5, (string) ($targetYear - 2018), 12);
 
         $staffName = trim((string) ($staff['staff_name'] ?? ''));
+        $staffFuri = trim((string) ($staff['staff_name_furi'] ?? ''));
         $address = trim((string) ($staff['address'] ?? $staff['staff_address'] ?? $staff['add'] ?? ''));
         $companyName = trim((string) ($staff['company_name'] ?? $staff['company'] ?? ''));
+        $companyAddress = trim((string) ($staff['company_address'] ?? ''));
+        $companyTel = trim((string) ($staff['company_tel'] ?? ''));
 
-        // ✔確認済み：支払を受ける者 住所又は居所／氏名
-        $this->writePdfText($pdf, 30, 16, $address, 60);
-        $this->writePdfText($pdf, 30, 27, $staffName, 30);
+        // 要確認：支払を受ける者 住所又は居所／氏名。フリガナは元データに存在するのに
+        // このPDFだけ書き忘れていたため追加（writeGensenBoHeader()と同じ、氏名の少し上に
+        // 詰め字で書く形を踏襲）。座標は仮置き。
+        $this->writePdfWrappedTextSized($pdf, 21, 16, $address, 40, 5.5, 2, 9);
+        $this->writePdfTrackedTextSized($pdf, 110, 23, $staffFuri, 6, 1.2, 20);
+        $this->writePdfTextSized($pdf, 110, 27, $staffName, 8, 30);
+
+        // 要確認：受給者生年月日。枠が「元号｜年｜月｜日」で分かれているため、
+        // formatPdfJapaneseDate()のような結合済み文字列（例：令和7年3月25日）ではなく、
+        // 元号・年・月・日をそれぞれ別の枠に書く。元号は記号(S等)ではなく「昭和」のように
+        // 漢字で書く（要望により記号表記から変更）。
+        // 座標は仮置き（黄色は座標合わせ用、確定したら白 [255, 255, 255] に変える）。
+        $birthdayParts = $this->japaneseEraParts($staff['birthday'] ?? null);
+        // $this->fillPdfRect($pdf, 108, 190, 40, 4, [255, 255, 0]);
+        $this->writePdfTextSized($pdf, 113, 181, $birthdayParts['era'], 8, 10);
+        $this->writePdfTextRightSized($pdf, 131, 181, $birthdayParts['year'], 8, 8);
+        $this->writePdfTextRightSized($pdf, 137, 181, $birthdayParts['month'], 8, 8);
+        $this->writePdfTextRightSized($pdf, 144, 181, $birthdayParts['day'], 8, 8);
+
+        // 要確認：種別。このシステムでは給与・賞与以外（退職手当等）を扱わないため固定文字。
+        // 座標は支払金額欄のすぐ左を仮置き。
+        $this->writePdfTextSized($pdf, 12, 38, '給与・賞与', 8, 24);
 
         // ✔確認済み：支払金額｜給与所得控除後の金額（調整控除後）｜所得控除の額の合計額｜源泉徴収税額
-        $this->writePdfTextRightSized($pdf, 60, 38, (string) ($nenTyo['bonus_kyuyo_sum'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 95, 38, (string) ($nenTyo['shotoku_deduction'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 125, 38, (string) ($nenTyo['shotoku_deduction_sum'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 143, 38, (string) ($nenTyo['nentyo_nen_tax'] ?? ''), 8, 16);
+        // 要確認：この4枠は百万の位で縦線が印字されており、1つの文字列をそのまま右寄せで
+        // 書くと線と重なって見づらい（線を避けて分割配置するのは枠幅の実測が必要で手間なため、
+        // 他の帳票の生年月日欄と同じく白塗りで線ごと隠してから数字を書く方式にした。
+        // 塗り範囲・数字の位置とも仮置きなので、綺麗に消えるか実帳票で確認してください。
+        // 4枠それぞれ別々に書く（ループでまとめると、1枠だけ位置やサイズを微調整したい時に
+        // 他の枠も一緒に動いてしまうため、あえて分けている。塗り色は座標合わせ中は見やすい
+        // 黄色のままにしていて、確定後に白（[255, 255, 255]）へ変える想定）。
+        $this->fillPdfRect($pdf, 41, 36.2, 20, 6.8, [255, 255, 0]);
+        $this->writePdfTextRightSized($pdf, 57, 38, (string) ($nenTyo['bonus_kyuyo_sum'] ?? ''), 8, 16);
+
+        $this->fillPdfRect($pdf, 68, 36.2, 20, 6.8, [255, 255, 0]);
+        $this->writePdfTextRightSized($pdf, 85, 38, (string) ($nenTyo['shotoku_deduction'] ?? ''), 8, 16);
+
+        $this->fillPdfRect($pdf, 95, 36.2, 20, 6.8, [255, 255, 0]);
+        $this->writePdfTextRightSized($pdf, 112, 38, (string) ($nenTyo['shotoku_deduction_sum'] ?? ''), 8, 16);
+
+        $this->fillPdfRect($pdf, 123, 36.2, 20, 6.8, [255, 255, 0]);
+        $this->writePdfTextRightSized($pdf, 138, 38, (string) ($nenTyo['nentyo_nen_tax'] ?? ''), 8, 16);
 
         // ✔確認済み：社会保険料等の金額｜生命保険料の控除額｜地震保険料の控除額｜住宅借入金等特別控除の額
-        $this->writePdfTextRightSized($pdf, 68, 68, (string) ($nenTyo['kyu_syaho_fee_kou'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 93, 68, (string) ($nenTyo['seimei_fee_kou'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 118, 68, (string) ($nenTyo['jishun_fee_kou'] ?? ''), 8, 16);
-        $this->writePdfTextRightSized($pdf, 145, 68, (string) ($nenTyo['jyu_kari_kou'] ?? ''), 8, 16);
+        // 要確認：社会保険料等の金額は給与天引き分（kyu_syaho_fee_kou）だけでなく、国保等の
+        // 自己申告分（shin_syaho_fee_kou、YearEndCalculationServiceのshotokuDeductionSum計算で
+        // 両方が加算されている）も含めた合計にする必要があったが、天引き分のみ表示していた。
+        $this->fillPdfRect($pdf, 10, 66.4, 20, 6.9, [255, 255, 0]);
+        $syahoTotalForGensen = $this->money($nenTyo['kyu_syaho_fee_kou'] ?? 0) + $this->money($nenTyo['shin_syaho_fee_kou'] ?? 0);
+        $this->writePdfTextRightSized($pdf, 54.5, 68, $this->pdfNumber($syahoTotalForGensen), 8, 16);
+        $this->writePdfTextRightSized($pdf, 82.7, 68, (string) ($nenTyo['seimei_fee_kou'] ?? ''), 8, 16);
+        $this->writePdfTextRightSized($pdf, 109.8, 68, (string) ($nenTyo['jishun_fee_kou'] ?? ''), 8, 16);
+        $this->writePdfTextRightSized($pdf, 138, 68, (string) ($nenTyo['jyu_kari_kou'] ?? ''), 8, 16);
+
+        // 要確認：基礎控除の額｜所得金額調整控除額｜国民年金保険料等の金額。
+        // テンプレートは148.5mm幅の単票のため、社会保険料等の行(x=10〜138)の右側には
+        // 続けて置けない。別行(y=80)に分けて配置する。
+        // 基礎控除申告書・源泉徴収簿では既に表示している列(kiso_koujyo/tyosei_koujyo)が
+        // 源泉徴収票側に無かったため追加。
+        $this->writePdfTextRightSized($pdf, 118, 117, $this->pdfNumberOrBlank($nenTyo['kiso_koujyo'] ?? 0), 7, 16);
+        $this->writePdfTextRightSized($pdf, 142, 117, $this->pdfNumberOrBlank($nenTyo['tyosei_koujyo'] ?? 0), 7, 16);
+
+        // 国民年金保険料等の金額：shin_syaho_fee_kou（申告社会保険料控除）は国保等も
+        // 含めた社会保険料の合計で、国民年金だけの内訳列がmx_nen_tyoに無いため、
+        // mx_hoken（保険料控除申告書の生データ）からinsurance_type/categoryに「国民年金」を
+        // 含む行だけ抽出して合算する（groupHokenRowsのsocial_insurance区分と同じ絞り込み方）。
+        $kokuminNenkinSum = 0.0;
+        foreach ($this->hokenRows((string) ($staff['staff_id'] ?? ''), $targetYear) as $hokenRow) {
+            $category = trim((string) ($hokenRow['category'] ?? ''));
+            $insuranceType = trim((string) ($hokenRow['insurance_type'] ?? ''));
+            if (str_contains($category, '社会保険') && str_contains($insuranceType, '国民年金')) {
+                $kokuminNenkinSum += $this->money($hokenRow['declared_amount'] ?? 0);
+            }
+        }
+        $this->writePdfTextRightSized($pdf, 118, 111, $this->pdfNumberOrBlank($kokuminNenkinSum), 7, 16);
+
+        // 要確認：生命保険料の金額の内訳（新生命・旧生命・介護医療・新個人年金・旧個人年金）。
+        // 保険料控除申告書（writeHokenLifeInsuranceRow）で使っている生の申告額と同じ列を、
+        // ここでは再計算せずそのまま表示する。座標は仮置き。0円は空欄にする
+        // （pdfNumberOrBlank、未申告で常に0になる人と実際に0円申告の人を区別できないため）。
+        $this->writePdfTextRightSized($pdf, 39, 93, $this->pdfNumberOrBlank($nenTyo['shin_seimei_fee'] ?? 0), 7, 14);
+        $this->writePdfTextRightSized($pdf, 65, 93, $this->pdfNumberOrBlank($nenTyo['kyu_seimei_fee'] ?? 0), 7, 14);
+        $this->writePdfTextRightSized($pdf, 89, 93, $this->pdfNumberOrBlank($nenTyo['kaigo_fee'] ?? 0), 7, 14);
+        $this->writePdfTextRightSized($pdf, 115, 93, $this->pdfNumberOrBlank($nenTyo['shin_nenkin_fee'] ?? 0), 7, 14);
+        $this->writePdfTextRightSized($pdf, 145, 93, $this->pdfNumberOrBlank($nenTyo['kyu_nenkin_fee'] ?? 0), 7, 14);
+
+        // 要確認：地震保険料の内訳（うち旧長期損害保険料）。0円は空欄。
+        $this->writePdfTextRightSized($pdf, 130, 74, $this->pdfNumberOrBlank($nenTyo['kyu_songai_fee'] ?? 0), 7, 14);
 
         // 要確認：控除対象扶養親族等の数（老人・特定・その他・障害者など）のサブ列。
         // 行はy≈50に修正したが、各サブ列の幅は概算のため実帳票で列を確認してください。
-        $this->writePdfTextRightSized($pdf, 22, 50, (string) ($nenTyo['haigu_umu'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 38, 50, (string) ($nenTyo['toku_fu'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 46, 50, (string) ($nenTyo['rou_dou'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 58, 50, (string) ($nenTyo['rou_dou_gai'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 76, 50, (string) ($nenTyo['fuyo_ta'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 136, 50, (string) ($nenTyo['dependent_under_16'] ?? ''), 8, 6);
-        $this->writePdfTextRightSized($pdf, 112, 50, (string) ($nenTyo['shougai_ta'] ?? ''), 8, 6);
+        // まだ一部のサブ列しか実装できていないため、0と未実装（空欄）が混在して見分けが
+        // つかない状態になっていた。全サブ列が揃うまでの暫定措置として、0はpdfCount()で
+        // 空欄扱いにする（本当に0件なのか未実装なのか区別できないより、揃って見える方を優先）。
+        // 要確認：この枠は「配偶者の有無」ではなく「配偶者控除（通常）の有無」。マークが付くのは
+        // haigu_deduction（配偶者控除）が発生している時だけで、haigu_toku_deduction（配偶者特別
+        // 控除）だけの場合は付かない、とのユーザー確認（2026-08-15）。haigu_kou_umu列は両方の
+        // どちらかが有れば「有り」になる列で、この区別ができないため使わない。
+        $this->writePdfTextRightSized($pdf, 9, 57, $this->money($nenTyo['haigu_deduction'] ?? 0) > 0 ? '〇' : '', 8, 6);
+        $this->writePdfTextRightSized($pdf, 58, 57, $this->pdfCount($nenTyo['toku_fu'] ?? null), 8, 6);
+        $this->writePdfTextRightSized($pdf, 64, 57, $this->pdfCount($nenTyo['rou_dou'] ?? null), 8, 6);
+        $this->writePdfTextRightSized($pdf, 71, 57, $this->pdfCount($nenTyo['rou_dou_gai'] ?? null), 8, 6);
+        $this->writePdfTextRightSized($pdf, 84, 57, $this->pdfCount($nenTyo['fuyo_ta'] ?? null), 8, 6);
+        $this->writePdfTextRightSized($pdf, 112, 57, $this->pdfCount($nenTyo['dependent_under_16'] ?? null), 8, 6);
+        $this->writePdfTextRightSized($pdf, 134, 57, $this->pdfCount($nenTyo['shougai_ta'] ?? null), 8, 6);
 
-        // ✔確認済み：支払者（会社）欄 氏名又は名称
-        $this->writePdfText($pdf, 45, 200, $companyName, 55);
+        // 要確認：配偶者(特別)控除の額。haigu_deduction（配偶者控除）とhaigu_toku_deduction
+        // （配偶者特別控除）は同時に両方付くことはない前提で合算して1枠に書く
+        // （docs/rules/year_end_adjustment/03_calculation.md参照）。座標は仮置き。
+        $haiguKojoGaku = $this->money($nenTyo['haigu_deduction'] ?? 0) + $this->money($nenTyo['haigu_toku_deduction'] ?? 0);
+        $this->writePdfTextRightSized($pdf, 40.5, 57, $this->pdfNumberOrBlank($haiguKojoGaku), 8, 16);
+
+        // 要確認：配偶者の合計所得金額（haigu_shotoku）。摘要欄あたりの仮置きブロックから
+        // 正式な枠に昇格（ラベル無し・赤固定も解除。関数冒頭のSetTextColorに従う）。
+        $this->writePdfTextRightSized($pdf, 91.5, 114, $this->pdfNumberOrBlank($nenTyo['haigu_shotoku'] ?? 0), 7, 16);
+
+        // 要確認：特定親族特別控除の額（tokutei_shinzoku_tokubetsu_koujo、令和7年分〜の新控除。
+        // docs/rules/year_end_adjustment/03_calculation.md参照）。座標は仮置き。
+        $this->writePdfTextRightSized($pdf, 40.5, 70, $this->pdfNumberOrBlank($nenTyo['tokutei_shinzoku_tokubetsu_koujo'] ?? 0), 8, 16);
+
+        // 要確認：配偶者・控除対象扶養親族等・16歳未満の扶養親族の氏名／フリガナ。
+        // 分類（配偶者／扶養親族／16歳未満）は扶養控除申告書(writeFuyoPreview)と同じ
+        // ロジックを流用する。座標は仮置き（3ブロックとも縦に並べる想定）。
+        $staffIdForFuyo = (string) ($staff['staff_id'] ?? '');
+        $gensenSpouseRows = [];
+        $gensenDependentRows = [];
+        $gensenUnder16Rows = [];
+        foreach ($this->fuyoRows($staffIdForFuyo, $targetYear) as $fuyoRow) {
+            $relationship = trim((string) ($fuyoRow['fuyo_relationship'] ?? ''));
+            if (in_array($relationship, ['夫', '妻', '配偶者'], true)) {
+                $gensenSpouseRows[] = $fuyoRow;
+                continue;
+            }
+            if (((string) ($fuyoRow['deduction_target'] ?? '')) !== '1') {
+                continue;
+            }
+            if ($this->calculationService->ageAtYearEnd($fuyoRow['fuyo_birthday'] ?? null, $targetYear) < 16) {
+                $gensenUnder16Rows[] = $fuyoRow;
+            } else {
+                $gensenDependentRows[] = $fuyoRow;
+            }
+        }
+
+        foreach (array_slice($gensenSpouseRows, 0, 1) as $row) {
+            $this->writePdfTrackedTextSized($pdf, 30.0, 109.0, (string) ($row['fuyo_name_furi'] ?? ''), 6, 1.2, 20);
+            $this->writePdfTextSized($pdf, 30.0, 112.0, (string) ($row['fuyo_name'] ?? ''), 8, 24);
+        }
+        foreach (array_slice($gensenDependentRows, 0, 4) as $index => $row) {
+            $rowOffset = $index * 11.5;
+            $this->writePdfTrackedTextSized($pdf, 30.0, 121.0 + $rowOffset, (string) ($row['fuyo_name_furi'] ?? ''), 6, 1.2, 20);
+            $this->writePdfTextSized($pdf, 30.0, 124.0 + $rowOffset, (string) ($row['fuyo_name'] ?? ''), 8, 24);
+        }
+        foreach (array_slice($gensenUnder16Rows, 0, 4) as $index => $row) {
+            $rowOffset = $index * 5.0;
+            $this->writePdfTrackedTextSized($pdf, 90.0, 121.0 + $rowOffset, (string) ($row['fuyo_name_furi'] ?? ''), 6, 1.2, 20);
+            $this->writePdfTextSized($pdf, 90.0, 124.0 + $rowOffset, (string) ($row['fuyo_name'] ?? ''), 8, 24);
+        }
+
+        // 要確認：乙欄。生年月日欄と同じく背景マスクは不要（枠は素の空欄）。〇を書くだけ。
+        $taxAmountLabel = trim((string) ($nenTyo['tax_amount'] ?? ''));
+        if (str_contains($taxAmountLabel, '乙')) {
+            $this->writePdfTextSized($pdf, 32.5, 181, '〇', 10, 4);
+        }
+
+        // 要確認：中途就・退職。就職・退職とも「今年」に発生した場合のみ〇と年月日を書く
+        // （mx_staffs.nyu_date/tai_dateの年がtargetYearと一致する時だけ）。背景マスクは不要。
+        // 生年月日欄と同じく「元号｜年｜月｜日」を別々の枠に書く（japaneseEraParts()を共用）。
+        $nyuDate = trim((string) ($staff['nyu_date'] ?? ''));
+        if ($nyuDate !== '') {
+            try {
+                if ((int) (new \DateTimeImmutable($nyuDate))->format('Y') === $targetYear) {
+                    $nyuParts = $this->japaneseEraParts($nyuDate);
+                    $this->writePdfTextSized($pdf, 78, 181, '〇', 10, 4);
+                    // $this->writePdfTextSized($pdf, 22, 181, $nyuParts['era'], 8, 10);
+                    $this->writePdfTextRightSized($pdf, 91, 180, $nyuParts['year'], 7, 8);
+                    $this->writePdfTextRightSized($pdf, 98, 180, $nyuParts['month'], 7, 8);
+                    $this->writePdfTextRightSized($pdf, 104, 180, $nyuParts['day'], 7, 8);
+                }
+            } catch (\Throwable) {
+                // 不正な日付は書かない
+            }
+        }
+        $taiDate = trim((string) ($staff['tai_date'] ?? ''));
+        if ($taiDate !== '') {
+            try {
+                if ((int) (new \DateTimeImmutable($taiDate))->format('Y') === $targetYear) {
+                    $taiParts = $this->japaneseEraParts($taiDate);
+                    $this->writePdfTextSized($pdf, 82, 181, '〇', 10, 4);
+                    // $this->writePdfTextSized($pdf, 67, 181, $taiParts['era'], 8, 10);
+                    $this->writePdfTextRightSized($pdf, 91, 183, $taiParts['year'], 7, 8);
+                    $this->writePdfTextRightSized($pdf, 98, 183, $taiParts['month'], 7, 8);
+                    $this->writePdfTextRightSized($pdf, 104, 183, $taiParts['day'], 7, 8);
+                }
+            } catch (\Throwable) {
+                // 不正な日付は書かない
+            }
+        }
+
+        // 要確認：支払者（会社）欄 住所（居所）又は所在地／氏名又は名称／電話番号。
+        // company_address・company_tel（mx_companies由来）は取得済みなのに書き忘れて
+        // いたため追加。「支払を受ける者」欄が住所→氏名の順（16→27、11mm差）だったのに
+        // 揃えて、会社名の上に住所を置く。テンプレートは148.5mm幅の単票（クラス冒頭の
+        // コメント参照）なので、x=150のような右寄せはページ外になる。電話番号は会社名の
+        // すぐ下に仮置き。座標はいずれも仮置きなので実帳票で確認してください。
+        $this->writePdfWrappedTextSized($pdf, 45, 194, $companyAddress, 90, 3.5, 2, 8);
+        $this->writePdfTextSized($pdf, 45, 201, $companyName, 8, 55);
+        $this->writePdfTextSized($pdf, 112, 201, $companyTel, 7, 40);
+
+        // 要確認：以下はまだ実枠の位置を確認していない項目をまとめて摘要欄あたりに仮置きする。
+        // 該当者が出た時にその項目だけ実枠へ移す想定（ラベル付きなので何の値か分かる）。
+        // 色はここだけ赤を明示的に固定する（関数冒頭のSetTextColorは帳票確定後に黒等へ
+        // 変える想定だが、この仮置きブロックは正式な位置に移すまでずっと赤のままにしたい
+        // という要望のため、あえて共有の色変数を使わずベタ書きする）。
+        // ページ高は約210mmしかなく、以前はy=210〜218と余白を超えたページ外に書いていて
+        // 何も表示されていなかった（2026-08-15判明）。y=205〜209の3行に収める。
+        $pdf->SetTextColor(255, 0, 0);
+
+        // 摘要欄：ステータスが対象外／退職済の場合は「年調未済」と書く。
+        // application_statusが空の既存行はresolveApplicationStatus()と同じくedit_lockで補う。
+        // 定額減税・前職情報の文言はAccessの実物で確認中のため、摘要欄の実枠位置が
+        // 確定するまでこのブロックにまとめて仮置きする。
+        $applicationStatusForGensen = trim((string) ($nenTyo['application_status'] ?? ''));
+        if ($applicationStatusForGensen === '') {
+            $applicationStatusForGensen = ((int) ($nenTyo['edit_lock'] ?? 0)) === 1 ? 'confirmed' : 'draft';
+        }
+        if (in_array($applicationStatusForGensen, ['excluded', 'retired'], true)) {
+            $this->writePdfTextSized($pdf, 15, 75, '年調未済', 8, 60);
+        }
+
+        // チェック欄9項目（乙欄はtax_amountで別途対応済みなのでここには含めない）。
+        // 値は他の年調フラグ列と同じく'1'で該当とみなす。縦に並べる余白が無いため1行に詰める。
+        $gensenFlagLabels = [
+            'minor' => '未成年者',
+            'foreigner' => '外国人',
+            'death_retire' => '死亡退職',
+            'disaster' => '災害者',
+            'hon_shougai_toku' => '本人特別障害者',
+            'hon_shougai_ta' => '本人一般障害者',
+            'hitori_oya' => 'ひとり親',
+            'kafu' => '寡婦',
+            'student' => '勤労学生',
+        ];
+        $gensenFlagTexts = [];
+        foreach ($gensenFlagLabels as $flagColumn => $flagLabel) {
+            if (((string) ($nenTyo[$flagColumn] ?? '')) === '1') {
+                $gensenFlagTexts[] = '〇' . $flagLabel;
+            }
+        }
+        if ($gensenFlagTexts !== []) {
+            // 該当フラグが多く2行に折り返した場合、209+2.5=211.5でページ高210mmを超えるため
+            // y=206開始・行間2.0に詰めて2行目でも208まで(ページ内)に収める。
+            $this->writePdfWrappedTextSized($pdf, 15, 206, implode(' ', $gensenFlagTexts), 130, 2.0, 2, 6);
+        }
     }
 
     // ==========================================================================
@@ -1641,8 +1880,10 @@ class YearEndAdjustmentV2Controller extends Controller
      * 座標はテンプレートに実測グリッド（10mm刻み）を重ねて確認したが、①③④⑥⑦⑧の4箇所は
      * マーカーを実際に置いて着地を確認済み（✔確認済み）。それ以外はグリッドの目視で
      * 行位置を合わせただけなので、実帳票で最終確認してください（要確認）。
-     * ⑪（給与所得控除後の給与等の金額・調整控除後）と㉗〜㉝（還付・徴収の内訳）は
-     * 対応する mx_nen_tyo の保存列が見当たらなかったため未実装。
+     * ⑪（給与所得控除後の給与等の金額・調整控除後）は⑨-⑩の計算値として実装済み
+     * （2026-08-15確認、このコメントは古いまま残っていた）。㉗〜㉝（還付・徴収の内訳）は
+     * 対応する mx_nen_tyo の保存列が見当たらず、税務書類の欄の定義を憶測で実装したくないため
+     * 未実装のまま（要確認・要相談）。
      */
     private function writeGensenBoNenTyoPanel(Fpdi $pdf, array $nenTyo): void
     {
@@ -1652,7 +1893,9 @@ class YearEndAdjustmentV2Controller extends Controller
 
         // 要確認：控除対象扶養親族の数等（右上）。gensenHyouの同じ欄と同じmx_nen_tyo列を使う。
         // 座標は仮置き。
-        $this->writePdfTextRightSized($pdf, 289, 53, (string) ($nenTyo['haigu_umu'] ?? ''), 8, 6); //配偶者有無
+        // 「配偶者控除（通常）の有無」。gensenHyouと同じ理由でhaigu_deduction>0で判定
+        // （配偶者特別控除だけの場合はマークしない）。
+        $this->writePdfTextRightSized($pdf, 289, 53, $this->money($nenTyo['haigu_deduction'] ?? 0) > 0 ? '〇' : '', 8, 6); //配偶者控除有無
         $this->writePdfTextRightSized($pdf, 206.5, 51, (string) ($nenTyo['toku_fu'] ?? ''), 6, 6); //特定扶養
         $this->writePdfTextRightSized($pdf, 214, 51, (string) ($nenTyo['rou_dou'] ?? ''), 6, 6); //老人同居
         $this->writePdfTextRightSized($pdf, 222, 51, (string) ($nenTyo['rou_dou_gai'] ?? ''), 6, 6); //老人別居
@@ -1829,6 +2072,21 @@ class YearEndAdjustmentV2Controller extends Controller
         return number_format($number, 0);
     }
 
+    /**
+     * まだ全項目が揃っていない内訳欄（生命保険料の内訳・地震保険料の内訳・基礎控除・
+     * 所得金額調整控除・国民年金等）で使う。0のときは空欄にする（未実装で常に0になる列と、
+     * 本当に0円の列が見分けられなくなるのを避けるための暫定措置）。
+     */
+    private function pdfNumberOrBlank(mixed $value): string
+    {
+        $number = $this->money($value);
+        if (abs($number) < 0.00001) {
+            return '';
+        }
+
+        return number_format($number, 0);
+    }
+
     /** 円の値を万円単位の数字だけで表示する（630000円→「63」）。0のときは空欄。 */
     private function pdfManNumber(mixed $value): string
     {
@@ -1838,6 +2096,20 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         return number_format($number / 10000, 0);
+    }
+
+    /**
+     * 扶養親族等の数など、0件と未実装（他の列が空欄）が混ざって見分けづらい欄で使う。
+     * 0のときは空欄にする（人数系サブ列を全部揃えるまでの暫定措置）。
+     */
+    private function pdfCount(mixed $value): string
+    {
+        $number = $this->money($value);
+        if (abs($number) < 0.00001) {
+            return '';
+        }
+
+        return number_format($number, 0);
     }
 
     /**
@@ -1876,6 +2148,47 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         return number_format($this->money($value), 0);
+    }
+
+    /**
+     * 「元号｜年｜月｜日」のように枠が分かれている欄用。formatPdfJapaneseDate()と違い、
+     * 結合済み文字列ではなく4つの値を別々に返す。元号は漢字（令和/平成/昭和/大正/明治）。
+     *
+     * @return array{era:string,year:string,month:string,day:string}
+     */
+    private function japaneseEraParts(mixed $value): array
+    {
+        $empty = ['era' => '', 'year' => '', 'month' => '', 'day' => ''];
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return $empty;
+        }
+
+        try {
+            $date = new \DateTimeImmutable($raw);
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        $year = (int) $date->format('Y');
+        if ($date >= new \DateTimeImmutable('2019-05-01')) {
+            [$era, $eraYear] = ['令和', $year - 2018];
+        } elseif ($date >= new \DateTimeImmutable('1989-01-08')) {
+            [$era, $eraYear] = ['平成', $year - 1988];
+        } elseif ($date >= new \DateTimeImmutable('1926-12-25')) {
+            [$era, $eraYear] = ['昭和', $year - 1925];
+        } elseif ($date >= new \DateTimeImmutable('1912-07-30')) {
+            [$era, $eraYear] = ['大正', $year - 1911];
+        } else {
+            [$era, $eraYear] = ['明治', $year - 1867];
+        }
+
+        return [
+            'era' => $era,
+            'year' => (string) $eraYear,
+            'month' => (string) (int) $date->format('n'),
+            'day' => (string) (int) $date->format('j'),
+        ];
     }
 
     private function formatPdfJapaneseDate(mixed $value): string
@@ -3104,6 +3417,7 @@ class YearEndAdjustmentV2Controller extends Controller
                     'c.company_name',
                     'c.company_address',
                     'c.corporate_number',
+                    'c.tel',
                 ]);
 
             if ($company) {
@@ -3112,6 +3426,7 @@ class YearEndAdjustmentV2Controller extends Controller
                 $detail['company_name'] = trim((string) ($company->company_name ?? ''));
                 $detail['company_address'] = trim((string) ($company->company_address ?? ''));
                 $detail['corporate_number'] = trim((string) ($company->corporate_number ?? ''));
+                $detail['company_tel'] = trim((string) ($company->tel ?? ''));
             }
         }
 
@@ -3241,6 +3556,7 @@ class YearEndAdjustmentV2Controller extends Controller
             ],
             '扶養関係' => [
                 'toku_fu' => '特定扶養親族',
+                'tokutei_shinzoku_tokubetsu_koujo' => '特定親族特別控除',
                 'rou_dou' => '老人 同居',
                 'rou_dou_gai' => '老人 同居以外',
                 'fuyo_ta' => 'その他扶養親族',
