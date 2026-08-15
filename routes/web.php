@@ -96,6 +96,8 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/work/journal-entries', [AccountingV2Controller::class, 'journalEntries'])->name('admin.work.journal_entries');
         Route::get('/work/journal-entries/sakura-reward-print', [AccountingV2Controller::class, 'sakuraRewardPrint'])->name('admin.work.journal_entries.sakura_reward_print');
         Route::post('/work/journal-entries/import', [AccountingV2Controller::class, 'importJournalEntries'])->name('admin.work.journal_entries.import');
+        Route::get('/work/journal-entries/import/review/{token}', [AccountingV2Controller::class, 'importJournalEntriesReview'])->name('admin.work.journal_entries.import_review');
+        Route::post('/work/journal-entries/import/apply', [AccountingV2Controller::class, 'applyJournalEntriesReview'])->name('admin.work.journal_entries.import_apply');
         Route::post('/work/journal-entries/update', [AccountingV2Controller::class, 'updateJournalEntry'])->name('admin.work.journal_entries.update');
         Route::post('/work/journal-entries/group-update', [AccountingV2Controller::class, 'updateJournalEntryGroup'])->name('admin.work.journal_entries.group_update');
         Route::post('/work/journal-entries/delete', [AccountingV2Controller::class, 'deleteJournalEntry'])->name('admin.work.journal_entries.delete');
@@ -193,6 +195,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/staff/submission', [StaffV2Controller::class, 'updateSubmission'])->name('admin.master.staff.submission.update');
         Route::post('/master/staff/insurance', [StaffV2Controller::class, 'updateInsurance'])->name('admin.master.staff.insurance.update');
         Route::post('/master/staff/basic-shift', [StaffV2Controller::class, 'storeBasicShift'])->name('admin.master.staff.basic_shift.store');
+        Route::post('/master/staff/basic-shift/create-week', [StaffV2Controller::class, 'storeBasicShiftWeek'])->name('admin.master.staff.basic_shift.create_week');
         Route::post('/master/staff/basic-shift/update', [StaffV2Controller::class, 'updateBasicShift'])->name('admin.master.staff.basic_shift.update');
         Route::post('/master/staff/kihon', [StaffV2Controller::class, 'storeKihon'])->name('admin.master.staff.kihon.store');
         Route::post('/master/staff/kihon/update', [StaffV2Controller::class, 'updateKihon'])->name('admin.master.staff.kihon.update');

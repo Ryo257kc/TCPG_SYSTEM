@@ -148,6 +148,10 @@ class PayrollV2Controller extends Controller
         foreach ($rows as $row) {
             $summary = (array) ($row['summary'] ?? []);
             $staffMaster = (array) ($row['staff_master'] ?? []);
+            // 住民税の提出先(submission)はmx_staffsではなく、対象年度のmx_residentレコードが
+            // 正（PayrollV2ResidentService::map()が支給年月から正しい年度のレコードを解決済み）。
+            // mx_staffs.submissionはこの機能移設後は更新されなくなるため使わない。
+            $resident = (array) ($row['resident'] ?? []);
 
             $bankName = trim((string) ($staffMaster['bank_name_1'] ?? ''));
             $bankBranch = trim((string) ($staffMaster['bank_branch_1'] ?? ''));
@@ -173,15 +177,15 @@ class PayrollV2Controller extends Controller
                 'account_no' => $accountNo,
                 'transfer_amount' => $transferAmount,
                 'city' => $this->resolveMunicipalityLabel(
-                    trim((string) ($staffMaster['submission'] ?? '')),
+                    trim((string) ($resident['submission'] ?? '')),
                     trim((string) ($staffMaster['city'] ?? '')),
                     $mayorMetaMap
                 ),
                 'specified_num' => $this->resolveSpecifiedNum(
-                    trim((string) ($staffMaster['submission'] ?? '')),
+                    trim((string) ($resident['submission'] ?? '')),
                     $mayorMetaMap
                 ),
-                'submission' => trim((string) ($staffMaster['submission'] ?? '')),
+                'submission' => trim((string) ($resident['submission'] ?? '')),
                 'resident_tax' => $this->num($summary['resident_tax'] ?? 0),
                 'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
                 'income_tax' => $this->num($summary['income_tax'] ?? 0),

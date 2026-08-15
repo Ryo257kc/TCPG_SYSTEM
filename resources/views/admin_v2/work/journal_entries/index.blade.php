@@ -34,7 +34,7 @@
 
         .journal-entries-date-range {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
             gap: 8px;
             align-items: center;
         }
@@ -447,14 +447,16 @@
             </form>
             <div class="journal-import-status" id="journal-import-status" hidden>仕訳データを取込中です。画面を閉じずにお待ちください。</div>
 
-            <form method="get" action="{{ route('admin.work.journal_entries') }}">
+            <form method="get" action="{{ route('admin.work.journal_entries') }}" id="journal-entries-filter-form">
                 <div class="journal-entries-filter-row">
                     <div class="journal-entries-filter-group journal-entries-filter-group-wide">
                         <label class="journal-entries-filter-label">期間</label>
                         <div class="journal-entries-date-range">
+                            <button type="button" class="btn_small" id="journal-period-prev" title="1ヶ月前へ">◀</button>
                             <input type="date" name="date_from" value="{{ $dateFrom }}">
                             <span>〜</span>
                             <input type="date" name="date_to" value="{{ $dateTo }}">
+                            <button type="button" class="btn_small" id="journal-period-next" title="1ヶ月先へ">▶</button>
                         </div>
                     </div>
 
@@ -785,6 +787,15 @@
             <div>
                 <a href="{{ route('admin.dashboard') }}" class="btn btn_back">戻る</a>
             </div>
+
+            @if (!empty($journalImportedThrough))
+            <p class="f_size12">
+                仕訳取込済み：
+                @foreach ($journalImportedThrough as $imported)
+                {{ $imported['company_name_short'] }} {{ $imported['latest_occurred_at'] }}まで@if (!$loop->last)　/@endif
+                @endforeach
+            </p>
+            @endif
         </section>
     </div>
     <script>
@@ -795,8 +806,9 @@
             var statusBox = document.getElementById('journal-import-status');
 
             function syncImportFields() {
-                var dateFrom = document.querySelector('input[name="date_from"]');
-                var dateTo = document.querySelector('input[name="date_to"]');
+                var filterForm = document.getElementById('journal-entries-filter-form');
+                var dateFrom = filterForm ? filterForm.querySelector('input[name="date_from"]') : null;
+                var dateTo = filterForm ? filterForm.querySelector('input[name="date_to"]') : null;
                 var company = document.getElementById('journal-company-name-short');
 
                 document.getElementById('journal-import-date-from').value = dateFrom ? dateFrom.value : '';
@@ -843,6 +855,65 @@
                     syncImportFields();
                     fileInput.value = '';
                     fileInput.click();
+                });
+            }
+
+            function shiftMonth(dateStr, delta) {
+                var parts = dateStr.split('-');
+                if (parts.length !== 3) {
+                    return dateStr;
+                }
+
+                var year = parseInt(parts[0], 10);
+                var month = parseInt(parts[1], 10) - 1;
+                var day = parseInt(parts[2], 10);
+
+                // 2/28（月末）から前月に戻ると単純なmin()では1/28になってしまう。
+                // 月末の日付は移動先の月の月末に合わせることで、月初〜月末の期間指定が
+                // 前後の月でもずれないようにする。
+                var lastDayOfCurrentMonth = new Date(year, month + 1, 0).getDate();
+                var wasLastDayOfMonth = day === lastDayOfCurrentMonth;
+
+                var targetMonthIndex = month + delta;
+                var targetYear = year + Math.floor(targetMonthIndex / 12);
+                var targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+                var lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+                var targetDay = wasLastDayOfMonth ? lastDayOfTargetMonth : Math.min(day, lastDayOfTargetMonth);
+
+                var mm = String(targetMonth + 1).padStart(2, '0');
+                var dd = String(targetDay).padStart(2, '0');
+
+                return targetYear + '-' + mm + '-' + dd;
+            }
+
+            function shiftPeriod(delta) {
+                var filterForm = document.getElementById('journal-entries-filter-form');
+                if (!filterForm) {
+                    return;
+                }
+
+                var dateFromInput = filterForm.querySelector('input[name="date_from"]');
+                var dateToInput = filterForm.querySelector('input[name="date_to"]');
+                if (!dateFromInput || !dateFromInput.value) {
+                    return;
+                }
+
+                dateFromInput.value = shiftMonth(dateFromInput.value, delta);
+                if (dateToInput && dateToInput.value) {
+                    dateToInput.value = shiftMonth(dateToInput.value, delta);
+                }
+            }
+
+            var periodPrevButton = document.getElementById('journal-period-prev');
+            var periodNextButton = document.getElementById('journal-period-next');
+            if (periodPrevButton) {
+                periodPrevButton.addEventListener('click', function() {
+                    shiftPeriod(-1);
+                });
+            }
+            if (periodNextButton) {
+                periodNextButton.addEventListener('click', function() {
+                    shiftPeriod(1);
                 });
             }
 

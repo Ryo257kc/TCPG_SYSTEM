@@ -466,7 +466,12 @@ class StaffV2Service
             return ['columns' => [], 'rows' => []];
         }
 
-        $columns = Schema::connection('sqlsrv')->getColumnListing($table);
+        // getColumnListing()にスキーマ無しでテーブル名だけ渡すと、内部でSQL Serverの
+        // schema_name()（接続アカウントの既定スキーマ）に暗黙的に頼ってしまう。既定スキーマが
+        // 正しくdboを返さないアカウントだと常に空配列になる（sqlsrv_payroll接続で実際に発生し、
+        // tableRows()経由のkihonRows/shahoRows/residentRows/fuyoRowsが常に空だった）。
+        // dbo.を明示して回避する。
+        $columns = Schema::connection('sqlsrv')->getColumnListing('dbo.' . $table);
         if (!in_array('staff_id', $columns, true)) {
             return ['columns' => $columns, 'rows' => []];
         }
@@ -491,7 +496,66 @@ class StaffV2Service
 
     public function basicShiftRows(string $staffId): array
     {
-        return $this->tableRows('mx_kihon_shifts', $staffId, ['shift_no'], 'sqlsrv', 'staff_name');
+        // tableRows()共通処理（normalizeValue()）は日付列を和暦表示する前提のため、
+        // shift_in等の「時刻だけを1899-12-30/1900-01-01のような無意味な日付とセットで
+        // 保存している」列を通すと、<input type="time">に無効な値（和暦の日付文字列）が
+        // 入り、ブラウザ側で空欄表示になっていた。ここでは時刻列だけHH:MM形式で個別に
+        // 抽出し、画面側が期待するキー名（shift_start/shift_in_out/shift_end/shop_code）
+        // に合わせて返す。
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_kihon_shifts')
+            ->where('staff_name', $staffId)
+            ->orderBy('shift_no')
+            ->get()
+            ->map(fn ($row): array => [
+                'shift_no' => (string) ($row->shift_no ?? ''),
+                'week' => trim((string) ($row->week ?? '')),
+                'shift_start' => $this->extractTime($row->shift_in ?? null),
+                'shift_exit' => $this->extractTime($row->shift_exit ?? null),
+                'shift_in_out' => $this->extractTime($row->shift_entry ?? null),
+                'shift_end' => $this->extractTime($row->shift_out ?? null),
+                'shop_code' => trim((string) ($row->section ?? '')),
+            ])
+            ->all();
+    }
+
+    // 基本シフトは実務上1名につき必ず7日（月〜日）分セットで運用されており、1曜日だけ
+    // 追加するという使い方がない。既存行が無い場合だけ、空の状態で7日分をまとめて作成する。
+    public function createBasicShiftWeek(string $staffId): void
+    {
+        $exists = DB::connection('sqlsrv')
+            ->table('dbo.mx_kihon_shifts')
+            ->where('staff_name', $staffId)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $rows = array_map(fn (string $week): array => [
+            'staff_name' => $staffId,
+            'week' => $week,
+        ], $this->weekOptions());
+
+        DB::connection('sqlsrv')->table('dbo.mx_kihon_shifts')->insert($rows);
+    }
+
+    private function extractTime(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('H:i');
+        }
+
+        $normalized = trim((string) $value);
+        if (preg_match('/(\d{2}):(\d{2}):\d{2}/', $normalized, $matches) === 1) {
+            return $matches[1] . ':' . $matches[2];
+        }
+
+        return '';
     }
 
     public function kihonRows(string $staffId): array
@@ -793,7 +857,7 @@ class StaffV2Service
     /** @return list<string> */
     private function residentColumns(): array
     {
-        return ['staff_id', 'target_month', 'resident_tax1', 'resident_tax2', 'resident_tax3', 'resident_tax4', 'resident_tax5', 'resident_tax6', 'resident_tax7', 'resident_tax8', 'resident_tax9', 'resident_tax10', 'resident_tax11', 'resident_tax12', 'memo'];
+        return ['staff_id', 'target_month', 'addressee_no', 'submission', 'resident_tax1', 'resident_tax2', 'resident_tax3', 'resident_tax4', 'resident_tax5', 'resident_tax6', 'resident_tax7', 'resident_tax8', 'resident_tax9', 'resident_tax10', 'resident_tax11', 'resident_tax12', 'memo'];
     }
 
     /** @return list<string> */

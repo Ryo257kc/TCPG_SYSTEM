@@ -51,6 +51,18 @@ return $raw;
 }
 return '履歴 ' . $fallback;
 };
+
+$submissionLabel = function (string $value) use ($residentSubmissionOptions): string {
+if ($value === '') {
+return '';
+}
+foreach (($residentSubmissionOptions ?? []) as $option) {
+if ((string) ($option['value'] ?? '') === $value) {
+return (string) ($option['label'] ?? $value);
+}
+}
+return $value;
+};
 @endphp
 
 <style>
@@ -122,49 +134,6 @@ return '履歴 ' . $fallback;
     <div class="status">{{ session('status') }}</div>
     @endif
 
-    <form method="post" action="{{ route('admin.master.staff.submission.update') }}" class="info-block resident-tax-block">
-      @csrf
-      <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
-      <input type="hidden" name="q" value="{{ $keyword }}">
-      <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
-      <input type="hidden" name="company_filter" value="{{ $companyFilter }}">
-
-      <div class="info-block-title">住民税提出先</div>
-      <div class="info-block-grid">
-        <label class="detail-field detail-field-compact">
-          <span>宛名番号　</span>
-          <input type="text" name="addressee_no" value="{{ $selectedRow['addressee_no'] ?? '' }}">
-        </label>
-        @php
-        $selectedSubmission = trim((string) ($selectedRow['_raw_submission'] ?? ($selectedRow['submission'] ?? '')));
-        $selectedSubmissionKey = is_numeric($selectedSubmission) ? (string) ((int) $selectedSubmission) : $selectedSubmission;
-        $hasSelectedSubmissionOption = false;
-        @endphp
-        <label class="detail-field detail-field-compact resident-tax-submission-field">
-          <span>住民税提出先</span>
-          <select name="submission">
-            <option value=""></option>
-            @foreach(($residentSubmissionOptions ?? []) as $option)
-            @php
-            $optionValue = (string) ($option['value'] ?? '');
-            $optionKey = (string) ($option['key'] ?? $optionValue);
-            $isSelectedSubmission = $selectedSubmission !== '' && ($selectedSubmission === $optionValue || $selectedSubmissionKey === $optionKey);
-            if ($isSelectedSubmission) {
-            $hasSelectedSubmissionOption = true;
-            }
-            @endphp
-            <option value="{{ $optionValue }}" @selected($isSelectedSubmission)>{{ $option['label'] ?? $optionValue }}</option>
-            @endforeach
-            @if($selectedSubmission !== '' && !$hasSelectedSubmissionOption)
-            <option value="{{ $selectedSubmission }}" selected>{{ $selectedRow['submission'] ?? $selectedSubmission }}</option>
-            @endif
-          </select>
-        </label>
-      </div>
-      <div class="detail-actions">
-        <button type="submit" class="btn-primary">保存</button>
-      </div>
-    </form>
     <form method="post" action="{{ route('admin.master.staff.resident.store') }}" class="info-block resident-tax-block">
       @csrf
       <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
@@ -177,6 +146,19 @@ return '履歴 ' . $fallback;
         <label class="detail-field detail-field-compact">
           <span>住民税対象月</span>
           <input type="month" name="target_month" required>
+        </label>
+        <label class="detail-field detail-field-compact">
+          <span>宛名番号　</span>
+          <input type="text" name="addressee_no">
+        </label>
+        <label class="detail-field detail-field-compact resident-tax-submission-field">
+          <span>住民税提出先</span>
+          <select name="submission">
+            <option value=""></option>
+            @foreach(($residentSubmissionOptions ?? []) as $option)
+            <option value="{{ $option['value'] ?? '' }}">{{ $option['label'] ?? ($option['value'] ?? '') }}</option>
+            @endforeach
+          </select>
         </label>
         <div class="resident-tax-month-box">
           <div class="resident-tax-month-title">月別住民税</div>
@@ -229,6 +211,22 @@ return '履歴 ' . $fallback;
           <span>年間合計</span>
           <div class="resident-tax-value">{{ number_format($annualTotal) }}</div>
         </label>
+        <label class="detail-field detail-field-compact">
+          <span>宛名番号　</span>
+          <input type="text" name="addressee_no" value="{{ $row['addressee_no'] ?? '' }}">
+        </label>
+        @php
+        $rowSubmission = trim((string) ($row['submission'] ?? ''));
+        @endphp
+        <label class="detail-field detail-field-compact resident-tax-submission-field">
+          <span>住民税提出先</span>
+          <select name="submission">
+            <option value=""></option>
+            @foreach(($residentSubmissionOptions ?? []) as $option)
+            <option value="{{ $option['value'] ?? '' }}" @selected($rowSubmission !== '' && $rowSubmission === (string) ($option['value'] ?? ''))>{{ $option['label'] ?? ($option['value'] ?? '') }}</option>
+            @endforeach
+          </select>
+        </label>
         <div class="resident-tax-month-box">
           <div class="resident-tax-month-title">月別住民税</div>
           <div class="resident-tax-month-blocks">
@@ -258,6 +256,14 @@ return '履歴 ' . $fallback;
         <label class="detail-field detail-field-compact">
           <span>年間合計</span>
           <div class="resident-tax-value">{{ number_format($annualTotal) }}</div>
+        </label>
+        <label class="detail-field detail-field-compact">
+          <span>宛名番号</span>
+          <div class="resident-tax-value">{{ ($row['addressee_no'] ?? '') !== '' ? $row['addressee_no'] : '---' }}</div>
+        </label>
+        <label class="detail-field detail-field-compact">
+          <span>住民税提出先</span>
+          <div class="resident-tax-value">{{ $submissionLabel(trim((string) ($row['submission'] ?? ''))) !== '' ? $submissionLabel(trim((string) ($row['submission'] ?? ''))) : '---' }}</div>
         </label>
         <div class="resident-tax-month-box">
           <div class="resident-tax-month-title">月別住民税</div>

@@ -198,6 +198,20 @@ class StaffV2Controller extends Controller
         return $this->redirectToBasicShift($v);
     }
 
+    public function storeBasicShiftWeek(Request $request): RedirectResponse
+    {
+        $v = $request->validate([
+            'staff_id' => ['required', 'string', 'max:50'],
+            'q' => ['nullable', 'string', 'max:255'],
+            'employment_filter' => ['nullable', 'in:active,all,retired'],
+            'company_filter' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $this->service->createBasicShiftWeek(trim((string) $v['staff_id']));
+
+        return $this->redirectToBasicShift($v);
+    }
+
     public function updateBasicShift(Request $request): RedirectResponse
     {
         $v = $request->validate([
@@ -499,6 +513,8 @@ class StaffV2Controller extends Controller
             'employment_filter' => ['nullable', 'in:active,all,retired'],
             'company_filter' => ['nullable', 'string', 'max:50'],
             'target_month' => ['required', 'date_format:Y-m'],
+            'addressee_no' => ['nullable', 'string', 'max:100'],
+            'submission' => ['nullable', Rule::in(array_column($this->service->residentSubmissionOptions(), 'value'))],
             'resident_tax1' => ['nullable', 'string', 'max:100'],
             'resident_tax2' => ['nullable', 'string', 'max:100'],
             'resident_tax3' => ['nullable', 'string', 'max:100'],

@@ -258,6 +258,14 @@
             data-payment-journal-entry-id="{{ $selectedPaymentRow['journal_entry_id'] ?? '' }}">
             <div class="content-head" id="payment-confirmation-top">
                 <h2 class="content-title">入金確認一覧</h2>
+                @if (!empty($journalImportedThrough))
+                <p class="f_size12">
+                    仕訳取込済み：
+                    @foreach ($journalImportedThrough as $imported)
+                    {{ $imported['company_name_short'] }} {{ $imported['latest_occurred_at'] }}まで@if (!$loop->last)　/@endif
+                    @endforeach
+                </p>
+                @endif
             </div>
 
             <form method="get" action="{{ route('office.receipt.payment_confirmation') }}" class="toolbar">

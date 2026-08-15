@@ -7,8 +7,10 @@ use App\Services\Admin\V2\Sales\SalesV2Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AccountingV2Controller extends Controller
@@ -30,7 +32,7 @@ class AccountingV2Controller extends Controller
         $departmentName = trim((string) $request->query('department_name', ''));
         $managementNumber = trim((string) $request->query('management_number', ''));
         $journalBreakdown = trim((string) $request->query('journal_breakdown', ''));
-        $parsedAmount = $this->parseAmountValue($amount);
+        $parsedAmount = $this->parseMoneyValue($amount);
 
         $companyOptions = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
@@ -45,15 +47,15 @@ class AccountingV2Controller extends Controller
             ->values()
             ->all();
 
-        $counterpartyOptions = $this->fetchDistinctUnionOptions('debit_counterparty', 'credit_counterparty');
-        $amountOptions = $this->fetchDistinctUnionOptions('debit_amount', 'credit_amount', true);
-        $summaryTextOptions = $this->fetchDistinctOptions('summary_text');
-        $accountTitleOptions = $this->fetchDistinctUnionOptions('debit_account_title', 'credit_account_title');
-        $itemNameOptions = $this->fetchDistinctUnionOptions('debit_item_name', 'credit_item_name');
-        $departmentOptions = $this->fetchDistinctUnionOptions('debit_department_name', 'credit_department_name');
+        $counterpartyOptions = $this->fetchDistinctUnionOptions('debit_counterparty', 'credit_counterparty', false, $dateFrom, $dateTo);
+        $amountOptions = $this->fetchDistinctUnionOptions('debit_amount', 'credit_amount', true, $dateFrom, $dateTo);
+        $summaryTextOptions = $this->fetchDistinctOptions('summary_text', false, $dateFrom, $dateTo);
+        $accountTitleOptions = $this->fetchDistinctUnionOptions('debit_account_title', 'credit_account_title', false, $dateFrom, $dateTo);
+        $itemNameOptions = $this->fetchDistinctUnionOptions('debit_item_name', 'credit_item_name', false, $dateFrom, $dateTo);
+        $departmentOptions = $this->fetchDistinctUnionOptions('debit_department_name', 'credit_department_name', false, $dateFrom, $dateTo);
         $departmentSelectOptions = $this->fetchDepartmentSelectOptions();
-        $managementNumberOptions = $this->fetchDistinctOptions('management_number');
-        $journalBreakdownOptions = $this->fetchDistinctOptions('journal_breakdown');
+        $managementNumberOptions = $this->fetchDistinctOptions('management_number', false, $dateFrom, $dateTo);
+        $journalBreakdownOptions = $this->fetchDistinctOptions('journal_breakdown', false, $dateFrom, $dateTo);
 
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries as entry')
@@ -202,7 +204,29 @@ class AccountingV2Controller extends Controller
             'departmentName' => $departmentName,
             'managementNumber' => $managementNumber,
             'journalBreakdown' => $journalBreakdown,
+            'journalImportedThrough' => $this->journalImportedThroughByCompany(),
         ]);
+    }
+
+    // 事務側（PaymentConfirmationController）と同じ表示。取込担当がここまで入れたか確認できるように、
+    // こちら（取込側）にも同じものを出す。
+    private function journalImportedThroughByCompany(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->select('company_name_short', DB::raw('MAX(occurred_at) as latest_occurred_at'))
+            ->where('credit_account_title', '医療未収入金')
+            ->whereNull('vault_name')
+            ->whereNotNull('company_name_short')
+            ->where('company_name_short', '<>', '')
+            ->groupBy('company_name_short')
+            ->orderBy('company_name_short')
+            ->get()
+            ->map(fn($row): array => [
+                'company_name_short' => trim((string) ($row->company_name_short ?? '')),
+                'latest_occurred_at' => $this->formatDateValue($row->latest_occurred_at, 'Y/n'),
+            ])
+            ->all();
     }
 
     // さくら報酬計算
@@ -408,6 +432,19 @@ class AccountingV2Controller extends Controller
             ])->with('errorMessage', 'CSVに取り込める行がありませんでした。');
         }
 
+        // 取込判定・金額に使う列は、ヘッダー名が変わると空欄扱いで静かに素通りしてしまう
+        // （対象外行として弾かれるどころか、金額が全行nullで取り込まれることもある）ため、
+        // 行の処理に入る前にヘッダーの存在だけ先に確認し、欠けていれば取込自体を止める。
+        $requiredHeaders = ['取引日', '仕訳番号', '借方勘定科目', '貸方勘定科目', '借方金額', '貸方金額'];
+        $missingHeaders = array_diff($requiredHeaders, array_keys($csvRows[0]));
+        if ($missingHeaders !== []) {
+            return redirect()->route('admin.work.journal_entries', [
+                'date_from' => $data['date_from'],
+                'date_to' => $data['date_to'],
+                'company_name_short' => $companyNameShort,
+            ])->with('errorMessage', 'CSVに必要な列が見つかりません（' . implode('、', $missingHeaders) . '）。会計システム側の出力列名をご確認のうえ、取込形式が変わっていないか確認してください。');
+        }
+
         $departmentMap = DB::connection('sqlsrv')
             ->table('dbo.mx_departments')
             ->select(['store_category', 'store_short_name'])
@@ -420,115 +457,341 @@ class AccountingV2Controller extends Controller
             ->all();
 
         $journalColumns = array_flip(Schema::connection('sqlsrv')->getColumnListing('mx_journal_entries'));
-        $importedCount = 0;
-        $updatedCount = 0;
         $skippedCount = 0;
         $invalidAmountCount = 0;
+        $groupedPayloads = [];
+        $csvDebitTotals = [];
+        $csvCreditTotals = [];
 
-        DB::connection('sqlsrv')->transaction(function () use ($csvRows, $dateFrom, $dateTo, $companyNameShort, $departmentMap, $journalColumns, &$importedCount, &$updatedCount, &$skippedCount, &$invalidAmountCount): void {
-            foreach ($csvRows as $csvRow) {
-                $occurredAt = $this->parseCsvDate($this->csvValue($csvRow, '取引日'));
-                if ($occurredAt === null || $occurredAt->lt($dateFrom) || $occurredAt->gt($dateTo)) {
-                    $skippedCount++;
+        foreach ($csvRows as $csvRow) {
+            $occurredAt = $this->parseCsvDate($this->csvValue($csvRow, '取引日'));
+            if ($occurredAt === null || $occurredAt->lt($dateFrom) || $occurredAt->gt($dateTo)) {
+                $skippedCount++;
+                continue;
+            }
+
+            $creditAccountTitle = $this->csvValue($csvRow, '貸方勘定科目');
+            if (in_array($creditAccountTitle, ['保険収入', '自費収入', '窓口収入'], true)) {
+                $skippedCount++;
+                continue;
+            }
+
+            $journalBreakdown = $this->journalBreakdownValue($this->csvValue($csvRow, '仕訳番号'));
+            if ($journalBreakdown === '') {
+                $skippedCount++;
+                continue;
+            }
+
+            // 手動編集（updateJournalEntry/updateJournalEntryGroup）は金額が数値でないと
+            // エラーで弾くのに対し、CSV取込だけは非数値をnullで黙って取り込んでいた。
+            // 空欄（貸借どちらかしか使わない行）は許容し、非空かつ非数値の場合のみ弾く。
+            $debitAmountRaw = $this->csvValue($csvRow, '借方金額');
+            $creditAmountRaw = $this->csvValue($csvRow, '貸方金額');
+            if (($debitAmountRaw !== '' && $this->parseMoneyValue($debitAmountRaw) === null)
+                || ($creditAmountRaw !== '' && $this->parseMoneyValue($creditAmountRaw) === null)) {
+                $invalidAmountCount++;
+                continue;
+            }
+
+            $payload = [
+                'journal_breakdown' => $journalBreakdown,
+                'month_date' => $occurredAt->copy()->startOfMonth()->format('Y-m-d'),
+                'occurred_at' => $occurredAt->format('Y-m-d'),
+                'deposit_name' => $this->depositNameFromCsv($csvRow),
+                'debit_account_title' => $this->csvValue($csvRow, '借方勘定科目'),
+                'debit_amount' => $this->parseMoneyValue($debitAmountRaw),
+                'debit_tax_category' => $this->csvValue($csvRow, '借方税区分'),
+                'debit_item_name' => $this->csvValue($csvRow, '借方品目'),
+                'debit_department_name' => $departmentMap[$this->csvValue($csvRow, '借方部門')] ?? null,
+                'debit_memo_tag' => $this->csvValue($csvRow, '借方メモ', '借方メモタグ'),
+                'credit_account_title' => $creditAccountTitle,
+                'credit_amount' => $this->parseMoneyValue($creditAmountRaw),
+                'credit_tax_category' => $this->csvValue($csvRow, '貸方税区分'),
+                'credit_item_name' => $this->csvValue($csvRow, '貸方品目'),
+                'credit_department_name' => $departmentMap[$this->csvValue($csvRow, '貸方部門')] ?? null,
+                'credit_memo_tag' => $this->csvValue($csvRow, '貸方メモ', '貸方メモタグ'),
+                'debit_counterparty' => $this->csvValue($csvRow, '借方取引先名', '借方取引先'),
+                'credit_counterparty' => $this->csvValue($csvRow, '貸方取引先名', '貸方取引先'),
+                'summary_text' => $this->csvValue($csvRow, '取引内容'),
+                'management_number' => $this->csvValue($csvRow, '管理番号'),
+                'company_name_short' => $companyNameShort,
+                'closing_journal_entry' => $this->csvValue($csvRow, '決算整理仕訳'),
+                'journal_note' => $this->csvValue($csvRow, '借方備考') . $this->csvValue($csvRow, '貸方備考'),
+                'updated_at' => now(),
+            ];
+            $payload = array_intersect_key($payload, $journalColumns);
+
+            // 決算時の税理士修正など、こちらの突合ロジックが拾いきれない変更にも気づけるように、
+            // CSV側の科目別合計を集計しておき、後でDB側の科目別合計と突き合わせて表示する。
+            $debitTitle = trim((string) ($payload['debit_account_title'] ?? ''));
+            if ($debitTitle !== '') {
+                $csvDebitTotals[$debitTitle] = ($csvDebitTotals[$debitTitle] ?? 0) + (float) ($payload['debit_amount'] ?? 0);
+            }
+            $creditTitle = trim((string) ($payload['credit_account_title'] ?? ''));
+            if ($creditTitle !== '') {
+                $csvCreditTotals[$creditTitle] = ($csvCreditTotals[$creditTitle] ?? 0) + (float) ($payload['credit_amount'] ?? 0);
+            }
+
+            $groupKey = $companyNameShort . "\x1f" . $payload['occurred_at'] . "\x1f" . $journalBreakdown;
+            $groupedPayloads[$groupKey][] = $payload;
+        }
+
+        // 仕訳No単位（会社＋取引日＋仕訳No）でグループ化する。DBに同じグループがまだ無ければ
+        // 純粋な新規なのでそのまま取り込む。既にある場合は、会計システム側の再分類（不明→確定 等）や
+        // 単仕訳→複合仕訳の変化で内容が変わっている可能性があるため自動上書きせず、
+        // 確認画面で既存内容とCSVの内容を並べて見せ、人が選んだものだけ適用する。
+        $importedCount = 0;
+        $reviewGroups = [];
+
+        foreach ($groupedPayloads as $groupKey => $payloads) {
+            [$groupCompany, $groupOccurredAt, $groupJournalBreakdown] = explode("\x1f", $groupKey);
+
+            $existingRows = DB::connection('sqlsrv')
+                ->table('dbo.mx_journal_entries')
+                ->where('company_name_short', $groupCompany)
+                ->where('occurred_at', $groupOccurredAt)
+                ->where('journal_breakdown', $groupJournalBreakdown)
+                ->orderBy('journal_entry_id')
+                ->get();
+
+            if ($existingRows->isEmpty()) {
+                DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($payloads);
+                $importedCount += count($payloads);
+                continue;
+            }
+
+            $reviewGroups[$groupKey] = [
+                'company_name_short' => $groupCompany,
+                'occurred_at' => $groupOccurredAt,
+                'journal_breakdown' => $groupJournalBreakdown,
+                'existing' => $existingRows->map(fn($row): array => (array) $row)->all(),
+                'new' => $payloads,
+            ];
+        }
+
+        $summaryMessage = 'CSV取込が完了しました。追加: ' . $importedCount . '件 / 対象外: ' . $skippedCount . '件'
+            . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : '');
+
+        // 仕訳No単位の突合だけでは、決算時に税理士がこちらの知らない形で仕訳を直接修正した場合などに
+        // 気づけない。そこで科目ごとにCSVの合計とDBの合計（同じ会社・期間）を突き合わせて表示し、
+        // 差があれば一目で分かるようにする。取込むものが無いCSVでも照合だけしたい、という用途にも使える。
+        $dbDebitTotals = DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->select('debit_account_title', DB::raw('SUM(debit_amount) as total'))
+            ->where('company_name_short', $companyNameShort)
+            ->whereDate('occurred_at', '>=', $dateFrom)
+            ->whereDate('occurred_at', '<=', $dateTo)
+            ->groupBy('debit_account_title')
+            ->pluck('total', 'debit_account_title');
+
+        $dbCreditTotals = DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->select('credit_account_title', DB::raw('SUM(credit_amount) as total'))
+            ->where('company_name_short', $companyNameShort)
+            ->whereDate('occurred_at', '>=', $dateFrom)
+            ->whereDate('occurred_at', '<=', $dateTo)
+            ->groupBy('credit_account_title')
+            ->pluck('total', 'credit_account_title');
+
+        $reconciliation = [];
+        foreach (['借方' => [$csvDebitTotals, $dbDebitTotals], '貸方' => [$csvCreditTotals, $dbCreditTotals]] as $sideLabel => $totalsPair) {
+            [$csvTotals, $dbTotals] = $totalsPair;
+            $accountTitles = array_unique(array_merge(array_keys($csvTotals), $dbTotals->keys()->all()));
+            foreach ($accountTitles as $accountTitle) {
+                $accountTitle = trim((string) $accountTitle);
+                if ($accountTitle === '') {
                     continue;
                 }
-
-                $creditAccountTitle = $this->csvValue($csvRow, '貸方勘定科目');
-                if (in_array($creditAccountTitle, ['保険収入', '自費収入', '窓口収入'], true)) {
-                    $skippedCount++;
-                    continue;
-                }
-
-                $journalBreakdown = $this->journalBreakdownValue($this->csvValue($csvRow, '仕訳番号'));
-                if ($journalBreakdown === '') {
-                    $skippedCount++;
-                    continue;
-                }
-
-                // 手動編集（updateJournalEntry/updateJournalEntryGroup）は金額が数値でないと
-                // エラーで弾くのに対し、CSV取込だけは非数値をnullで黙って取り込んでいた。
-                // 空欄（貸借どちらかしか使わない行）は許容し、非空かつ非数値の場合のみ弾く。
-                $debitAmountRaw = $this->csvValue($csvRow, '借方金額');
-                $creditAmountRaw = $this->csvValue($csvRow, '貸方金額');
-                if (($debitAmountRaw !== '' && $this->parseCsvMoney($debitAmountRaw) === null)
-                    || ($creditAmountRaw !== '' && $this->parseCsvMoney($creditAmountRaw) === null)) {
-                    $invalidAmountCount++;
-                    continue;
-                }
-
-                $payload = [
-                    'journal_breakdown' => $journalBreakdown,
-                    'month_date' => $occurredAt->copy()->startOfMonth()->format('Y-m-d'),
-                    'occurred_at' => $occurredAt->format('Y-m-d'),
-                    'deposit_name' => $this->depositNameFromCsv($csvRow),
-                    'debit_account_title' => $this->csvValue($csvRow, '借方勘定科目'),
-                    'debit_amount' => $this->parseCsvMoney($debitAmountRaw),
-                    'debit_tax_category' => $this->csvValue($csvRow, '借方税区分'),
-                    'debit_item_name' => $this->csvValue($csvRow, '借方品目'),
-                    'debit_department_name' => $departmentMap[$this->csvValue($csvRow, '借方部門')] ?? null,
-                    'debit_memo_tag' => $this->csvValue($csvRow, '借方メモ', '借方メモタグ'),
-                    'credit_account_title' => $creditAccountTitle,
-                    'credit_amount' => $this->parseCsvMoney($creditAmountRaw),
-                    'credit_tax_category' => $this->csvValue($csvRow, '貸方税区分'),
-                    'credit_item_name' => $this->csvValue($csvRow, '貸方品目'),
-                    'credit_department_name' => $departmentMap[$this->csvValue($csvRow, '貸方部門')] ?? null,
-                    'credit_memo_tag' => $this->csvValue($csvRow, '貸方メモ', '貸方メモタグ'),
-                    'debit_counterparty' => $this->csvValue($csvRow, '借方取引先名', '借方取引先'),
-                    'credit_counterparty' => $this->csvValue($csvRow, '貸方取引先名', '貸方取引先'),
-                    'summary_text' => $this->csvValue($csvRow, '取引内容'),
-                    'management_number' => $this->csvValue($csvRow, '管理番号'),
-                    'company_name_short' => $companyNameShort,
-                    'allocation_ratio' => $this->csvValue($csvRow, '分割割合'),
-                    'closing_journal_entry' => $this->csvValue($csvRow, '決算整理仕訳'),
-                    'journal_note' => $this->csvValue($csvRow, '借方備考') . $this->csvValue($csvRow, '貸方備考'),
-                    'updated_at' => now(),
+                $csvTotal = (float) ($csvTotals[$accountTitle] ?? 0);
+                $dbTotal = (float) ($dbTotals[$accountTitle] ?? 0);
+                $reconciliation[] = [
+                    'side' => $sideLabel,
+                    'account_title' => $accountTitle,
+                    'csv_total' => $csvTotal,
+                    'db_total' => $dbTotal,
+                    'diff' => $csvTotal - $dbTotal,
                 ];
+            }
+        }
+        usort(
+            $reconciliation,
+            fn(array $a, array $b): int => (abs($b['diff']) <=> abs($a['diff']))
+                ?: ($a['side'] <=> $b['side'])
+                ?: ($a['account_title'] <=> $b['account_title'])
+        );
 
-                $payload = array_intersect_key($payload, $journalColumns);
-                $importKey = array_intersect_key([
-                    'company_name_short' => $companyNameShort,
-                    'journal_breakdown' => $journalBreakdown,
-                    'occurred_at' => $payload['occurred_at'] ?? null,
-                    'management_number' => $payload['management_number'] ?? null,
-                    'debit_account_title' => $payload['debit_account_title'] ?? null,
-                    'debit_amount' => $payload['debit_amount'] ?? null,
-                    'debit_item_name' => $payload['debit_item_name'] ?? null,
-                    'debit_department_name' => $payload['debit_department_name'] ?? null,
-                    'debit_counterparty' => $payload['debit_counterparty'] ?? null,
-                    'credit_account_title' => $payload['credit_account_title'] ?? null,
-                    'credit_amount' => $payload['credit_amount'] ?? null,
-                    'credit_item_name' => $payload['credit_item_name'] ?? null,
-                    'credit_department_name' => $payload['credit_department_name'] ?? null,
-                    'credit_counterparty' => $payload['credit_counterparty'] ?? null,
-                    'summary_text' => $payload['summary_text'] ?? null,
-                ], $journalColumns);
+        $token = (string) Str::uuid();
+        Cache::put('journal_import_review:' . $token, [
+            'date_from' => $data['date_from'],
+            'date_to' => $data['date_to'],
+            'company_name_short' => $companyNameShort,
+            'summary_message' => $summaryMessage,
+            'groups' => $reviewGroups,
+            'reconciliation' => $reconciliation,
+        ], now()->addMinutes(60));
 
-                $matchQuery = DB::connection('sqlsrv')
-                    ->table('dbo.mx_journal_entries');
-                foreach ($importKey as $column => $value) {
-                    $matchQuery->where($column, $value);
+        return redirect()->route('admin.work.journal_entries.import_review', ['token' => $token]);
+    }
+
+    public function importJournalEntriesReview(string $token): View|RedirectResponse
+    {
+        $staged = Cache::get('journal_import_review:' . $token);
+        if ($staged === null) {
+            return redirect()->route('admin.work.journal_entries')
+                ->with('errorMessage', '確認内容の有効期限が切れました。CSVを取込みし直してください。');
+        }
+
+        $groups = [];
+        foreach ($staged['groups'] as $groupKey => $group) {
+            $groups[] = [
+                'group_key' => $groupKey,
+                'company_name_short' => $group['company_name_short'],
+                'occurred_at' => $this->formatDateValue($group['occurred_at'], 'Y/m/d'),
+                'journal_breakdown' => $group['journal_breakdown'],
+                'existing_lines' => array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['existing']),
+                'new_lines' => array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['new']),
+            ];
+        }
+
+        $reconciliation = array_map(fn(array $row): array => [
+            'side' => $row['side'],
+            'account_title' => $row['account_title'],
+            'csv_total' => $this->formatMoneyValue($row['csv_total']),
+            'db_total' => $this->formatMoneyValue($row['db_total']),
+            'diff' => $this->formatMoneyValue($row['diff']),
+            'has_diff' => $row['diff'] != 0.0,
+        ], $staged['reconciliation'] ?? []);
+
+        return view('admin_v2.work.journal_entries.import_review', [
+            'token' => $token,
+            'groups' => $groups,
+            'summaryMessage' => $staged['summary_message'],
+            'reconciliation' => $reconciliation,
+        ]);
+    }
+
+    public function applyJournalEntriesReview(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string'],
+            'group_keys' => ['array'],
+            'group_keys.*' => ['string'],
+        ]);
+
+        $cacheKey = 'journal_import_review:' . $data['token'];
+        $staged = Cache::get($cacheKey);
+        if ($staged === null) {
+            return redirect()->route('admin.work.journal_entries')
+                ->with('errorMessage', '確認内容の有効期限が切れました。CSVを取込みし直してください。');
+        }
+
+        $selectedKeys = array_flip($data['group_keys'] ?? []);
+        $updatedCount = 0;
+        $importedCount = 0;
+        $deletedCount = 0;
+        $skippedGroupCount = 0;
+        $reviewNotes = [];
+
+        DB::connection('sqlsrv')->transaction(function () use ($staged, $selectedKeys, &$updatedCount, &$importedCount, &$deletedCount, &$skippedGroupCount, &$reviewNotes): void {
+            foreach ($staged['groups'] as $groupKey => $group) {
+                if (!isset($selectedKeys[$groupKey])) {
+                    $skippedGroupCount++;
+                    continue;
                 }
 
-                // updateOrInsert()は内部でも同じ条件のexists判定を行うため、
-                // 件数集計に使うexists判定と合わせて二重に問い合わせていた。
-                // ここで判定した結果をそのままupdate/insertの分岐に使い、1回にまとめる。
-                if ((clone $matchQuery)->exists()) {
-                    $matchQuery->update($payload);
-                    $updatedCount++;
-                } else {
+                $existingRows = array_values($group['existing']);
+                $payloads = $group['new'];
+                $pairCount = min(count($existingRows), count($payloads));
+
+                // journal_entry_idを維持したままUPDATEすることで、入金確認（PaymentConfirmationController等）
+                // や分割割合などCSVに無い列がこのIDに紐づいたまま残るようにする。
+                for ($i = 0; $i < $pairCount; $i++) {
                     DB::connection('sqlsrv')
                         ->table('dbo.mx_journal_entries')
-                        ->insert(array_merge($importKey, $payload));
+                        ->where('journal_entry_id', (int) $existingRows[$i]['journal_entry_id'])
+                        ->update($payloads[$i]);
+                    $updatedCount++;
+                }
+
+                for ($i = $pairCount; $i < count($payloads); $i++) {
+                    DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($payloads[$i]);
                     $importedCount++;
+                }
+
+                for ($i = $pairCount; $i < count($existingRows); $i++) {
+                    $leftoverRow = $existingRows[$i];
+                    $manualLabels = $this->manualOnlyColumnLabels($leftoverRow);
+                    if ($manualLabels === []) {
+                        DB::connection('sqlsrv')
+                            ->table('dbo.mx_journal_entries')
+                            ->where('journal_entry_id', (int) $leftoverRow['journal_entry_id'])
+                            ->delete();
+                        $deletedCount++;
+                    } else {
+                        $reviewNotes[] = $group['company_name_short'] . ' ' . $group['occurred_at'] . ' No.' . $group['journal_breakdown']
+                            . '（ID:' . $leftoverRow['journal_entry_id'] . ' / ' . implode('・', $manualLabels) . '）';
+                    }
                 }
             }
         });
 
+        Cache::forget($cacheKey);
+
+        $message = '確認分の取込が完了しました。更新: ' . $updatedCount . '件 / 追加: ' . $importedCount . '件 / 削除: ' . $deletedCount . '件'
+            . ($skippedGroupCount > 0 ? ' / 見送り（未チェック）: ' . $skippedGroupCount . '件' : '')
+            . ($reviewNotes !== [] ? ' / 手動入力値が残っているため削除せず保持した仕訳: ' . implode('、', $reviewNotes) : '');
+
         return redirect()->route('admin.work.journal_entries', [
-            'date_from' => $data['date_from'],
-            'date_to' => $data['date_to'],
-            'company_name_short' => $companyNameShort,
-        ])->with('statusMessage', 'CSV取込が完了しました。追加: ' . $importedCount . '件 / 更新: ' . $updatedCount . '件 / 対象外: ' . $skippedCount . '件' . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : ''));
+            'date_from' => $staged['date_from'],
+            'date_to' => $staged['date_to'],
+            'company_name_short' => $staged['company_name_short'],
+        ])->with('statusMessage', $message);
+    }
+
+    private function reviewLineDisplay(array $row): array
+    {
+        return [
+            'journal_entry_id' => $row['journal_entry_id'] ?? null,
+            'debit_account_title' => trim((string) ($row['debit_account_title'] ?? '')),
+            'debit_amount' => $this->formatMoneyValue($row['debit_amount'] ?? null),
+            'debit_item_name' => trim((string) ($row['debit_item_name'] ?? '')),
+            'credit_account_title' => trim((string) ($row['credit_account_title'] ?? '')),
+            'credit_amount' => $this->formatMoneyValue($row['credit_amount'] ?? null),
+            'credit_item_name' => trim((string) ($row['credit_item_name'] ?? '')),
+            'summary_text' => trim((string) ($row['summary_text'] ?? '')),
+            'management_number' => trim((string) ($row['management_number'] ?? '')),
+        ];
+    }
+
+    private function manualOnlyColumnLabels(array $row): array
+    {
+        $labels = [];
+        if (trim((string) ($row['allocation_ratio'] ?? '')) !== '') {
+            $labels[] = '分割割合';
+        }
+        if (trim((string) ($row['vault_name'] ?? '')) !== '') {
+            $labels[] = '金庫名';
+        }
+        if ((int) ($row['is_trial_balance_excluded'] ?? 0) !== 0) {
+            $labels[] = '試算表除外';
+        }
+        if ((int) ($row['is_upload_unnecessary'] ?? 0) !== 0) {
+            $labels[] = 'アップロード不要';
+        }
+        if ((int) ($row['is_reward_excluded'] ?? 0) !== 0) {
+            $labels[] = '報酬除外';
+        }
+        if ((int) ($row['is_confirmation_checked'] ?? 0) !== 0) {
+            $labels[] = '確認チェック';
+        }
+        if ((float) ($row['received_amount'] ?? 0) != 0.0) {
+            $labels[] = '入金確認済み金額';
+        }
+        if (trim((string) ($row['deposit_confirmation_note'] ?? '')) !== '') {
+            $labels[] = '入金確認メモ';
+        }
+
+        return $labels;
     }
 
     public function updateJournalEntry(Request $request): RedirectResponse
@@ -785,14 +1048,14 @@ class AccountingV2Controller extends Controller
         }
     }
 
-    // TODO(共通化保留): parseCsvMoney/parseAmountValue/parseEditableMoneyは金額を
-    // 数値へ変換する処理が3箇所に分かれている。ただし呼び出し元ごとに戻り値の意味が
-    // 微妙に違う（parseEditableMoneyだけ「空」nullと「不正値」falseを区別して
-    // \InvalidArgumentExceptionの発火に使っている等）ため、機械的に1つへ統合すると
-    // 挙動が変わる恐れがある。各呼び出し箇所の挙動差を洗い出してから安全に一本化すること。
-    private function parseCsvMoney(string $value): ?float
+    // 検索フィルター・CSV取込どちらも「空欄/不正値は黙ってnull」という同じ契約だったため統合。
+    // parseEditableMoneyだけは「空」nullと「不正値」falseを区別してエラー判定に使っており、
+    // 挙動を変えると保存時のバリデーションに影響するため、意図的に分けたまま残している。
+    private function parseMoneyValue(string $value): ?float
     {
-        $value = trim(str_replace([',', '￥', '\\'], '', $value));
+        // PHPのtrim()は半角空白しか除去しないため、全角スペースが混ざったCSV・手入力値は
+        // is_numeric()がfalseを返し不正値扱いになっていた。カンマ等と同様に先に除去する。
+        $value = trim(str_replace([',', '￥', '\\', '　'], '', $value));
         if ($value === '') {
             return null;
         }
@@ -849,12 +1112,17 @@ class AccountingV2Controller extends Controller
             ->values()
             ->all();
     }
-    private function fetchDistinctOptions(string $column, bool $formatMoney = false): array
+    // 日付で絞らずテーブル全体をGROUP BYすると、蓄積年数が長いほど毎回のページ表示が
+    // 重くなる（特に金額・摘要は値の種類が多い）。オートコンプリート候補は今表示している
+    // 期間に関係する値だけで十分なので、date_from/date_toが渡された時はそこで絞り込む。
+    private function fetchDistinctOptions(string $column, bool $formatMoney = false, ?string $dateFrom = null, ?string $dateTo = null): array
     {
         return DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
             ->select($column)
             ->whereNotNull($column)
+            ->when($dateFrom !== null && $dateFrom !== '', fn($query) => $query->whereDate('occurred_at', '>=', $dateFrom))
+            ->when($dateTo !== null && $dateTo !== '', fn($query) => $query->whereDate('occurred_at', '<=', $dateTo))
             ->groupBy($column)
             ->orderBy($column)
             ->pluck($column)
@@ -870,11 +1138,11 @@ class AccountingV2Controller extends Controller
             ->all();
     }
 
-    private function fetchDistinctUnionOptions(string $leftColumn, string $rightColumn, bool $formatMoney = false): array
+    private function fetchDistinctUnionOptions(string $leftColumn, string $rightColumn, bool $formatMoney = false, ?string $dateFrom = null, ?string $dateTo = null): array
     {
         $mergedValues = array_values(array_unique(array_merge(
-            $this->fetchDistinctOptions($leftColumn, $formatMoney),
-            $this->fetchDistinctOptions($rightColumn, $formatMoney),
+            $this->fetchDistinctOptions($leftColumn, $formatMoney, $dateFrom, $dateTo),
+            $this->fetchDistinctOptions($rightColumn, $formatMoney, $dateFrom, $dateTo),
         )));
 
         natcasesort($mergedValues);
@@ -882,24 +1150,11 @@ class AccountingV2Controller extends Controller
         return array_values($mergedValues);
     }
 
-    private function parseAmountValue(string $value): ?float
-    {
-        if ($value === '') {
-            return null;
-        }
-
-        $normalizedValue = str_replace(',', '', $value);
-
-        if (!is_numeric($normalizedValue)) {
-            return null;
-        }
-
-        return (float) $normalizedValue;
-    }
-
     private function parseEditableMoney(mixed $value): float|int|null|false
     {
-        $value = trim(str_replace(',', '', (string) ($value ?? '')));
+        // parseMoneyValue()と同じ理由（全角スペースはtrim()で除去されない）で、手入力欄でも
+        // 全角スペースが混ざっただけで「金額は数値で入力してください」と弾かれていた。
+        $value = trim(str_replace([',', '　'], '', (string) ($value ?? '')));
         if ($value === '') {
             return null;
         }

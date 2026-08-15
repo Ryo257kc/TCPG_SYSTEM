@@ -319,7 +319,30 @@ class PaymentConfirmationController extends Controller
             'paymentRows' => $paymentRows->all(),
             'selectedPaymentRow' => $selectedPaymentRow,
             'candidateReceiptRows' => $candidateReceiptRows,
+            'journalImportedThrough' => $this->journalImportedThroughByCompany(),
         ]));
+    }
+
+    // 事務側は「仕訳がどこまで取り込まれているか」が分からないと入金確認に着手できるか判断できない
+    // ため、実際にこの画面が対象にしている条件（貸方=医療未収入金、かつ金庫名が無い＝CSV取込由来で
+    // このシステム内で直接作成したものではない）に絞って、会社ごとの最新取引日を表示する。
+    private function journalImportedThroughByCompany(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->select('company_name_short', DB::raw('MAX(occurred_at) as latest_occurred_at'))
+            ->where('credit_account_title', '医療未収入金')
+            ->whereNull('vault_name')
+            ->whereNotNull('company_name_short')
+            ->where('company_name_short', '<>', '')
+            ->groupBy('company_name_short')
+            ->orderBy('company_name_short')
+            ->get()
+            ->map(fn($row): array => [
+                'company_name_short' => trim((string) ($row->company_name_short ?? '')),
+                'latest_occurred_at' => $this->formatDateValue($row->latest_occurred_at, 'Y/n'),
+            ])
+            ->all();
     }
 
     public function save(Request $request): RedirectResponse|JsonResponse

@@ -2256,8 +2256,18 @@ class YearEndAdjustmentV2Controller extends Controller
             if ($application->new_birthday !== null) {
                 $staffUpdate['birthday'] = $application->new_birthday;
             }
-            $staffUpdate['head_house'] = trim((string) ($application->setai_nushi ?? ''));
-            $staffUpdate['relationship'] = trim((string) ($application->setai_zoku_gara ?? ''));
+            // setai_nushi/setai_zoku_garaは申請フォーム上nullable（任意項目）で、氏名・住所のみの
+            // 変更申請では未入力のことがある。無条件で上書きすると、その場合に既存の世帯主・続柄が
+            // 空文字で消えてしまう（実際に発生済み: 054長坂楓、address_furi/head_house/relationshipが
+            // 空になった事故を参照）。未入力の時は既存値をそのまま残す。
+            $newHeadHouse = trim((string) ($application->setai_nushi ?? ''));
+            if ($newHeadHouse !== '') {
+                $staffUpdate['head_house'] = $newHeadHouse;
+            }
+            $newRelationship = trim((string) ($application->setai_zoku_gara ?? ''));
+            if ($newRelationship !== '') {
+                $staffUpdate['relationship'] = $newRelationship;
+            }
 
             DB::connection('sqlsrv')
                 ->table('dbo.mx_staffs')
