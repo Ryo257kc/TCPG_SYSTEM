@@ -118,6 +118,12 @@ class PayrollV2BonusSocialInsuranceService
      * 賞与一覧画面の表示（PayrollV2Controller::attachBonusCalc()）もここを呼ぶ
      * （以前は表示側が独自に同じような式を持っていて、同月境界の扱いが少しズレていた）。
      *
+     * 要確認（2026-08-15）：この573万円/150万円は年度で分岐しておらず固定値。法定の上限額で
+     * 変更頻度は低い認識のため、変更が確認されるまでは分岐を追加せず保留する
+     * （[[feedback_year_end_calc_needs_year_gating]]の対象だが、旧Access側にも参照できる
+     * 過去の変更履歴が見当たらなかったため）。もし将来この上限額が変わったら、
+     * PayrollV2IncomeTaxService::salaryDeduction()と同じ「$year引数で分岐」パターンで対応する。
+     *
      * @param list<array{supply_month:string,bonus_amo:mixed}> $historyRows 自分自身の行は含めない、他の賞与履歴
      * @return array{kenpo_target_standard:float,kounen_target_standard:float}
      */

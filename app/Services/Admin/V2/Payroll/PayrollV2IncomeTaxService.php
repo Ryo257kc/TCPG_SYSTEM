@@ -91,12 +91,12 @@ class PayrollV2IncomeTaxService
         $incomeTax = 0;
         if (!str_contains($division, '業務委託')) {
             if (mb_strpos($taxAmount, '乙欄') !== false) {
-                $calc = $this->calcOtsu($syahoDeductionSum);
+                $calc = $this->calcOtsu($syahoDeductionSum, $year);
                 $incomeTax = (int) ($calc['tax'] ?? 0);
                 $trace['mode'] = 'otsu';
                 $trace['detail'] = $calc['detail'] ?? [];
             } else {
-                $calc = $this->calcKou($syahoDeductionSum, $fuyoNum);
+                $calc = $this->calcKou($syahoDeductionSum, $fuyoNum, $year);
                 $incomeTax = (int) ($calc['tax'] ?? 0);
                 $trace['mode'] = 'kou';
                 $trace['detail'] = $calc['detail'] ?? [];
@@ -121,16 +121,19 @@ class PayrollV2IncomeTaxService
 
     /**
      * 月額表(甲欄)による所得税計算。賞与の月割換算(PayrollV2BonusIncomeTaxCalcService)からも呼ぶため public。
+     * $year は給与所得控除・基礎控除逓減の年度分岐に使う（年調のYearEndCalculationServiceと同じ
+     * パターン。2026-08-15、旧Access VBAで古い表がコメントアウトされているのを見つけて追加。
+     * 2025年の法改正で最低控除額が55万円→65万円に上がった前後で表が変わっている）。
      */
-    public function calcKou(float $syahoDeductionSum, int $fuyoNum): array
+    public function calcKou(float $syahoDeductionSum, int $fuyoNum, int $year): array
     {
         if ($syahoDeductionSum < 88000) {
             return ['tax' => 0, 'detail' => ['rule' => '< 88000']];
         }
 
         $a = $syahoDeductionSum;
-        $shokoujyo = $this->salaryDeduction($a);
-        $kiso = $this->kisoKoujo($a);
+        $shokoujyo = $this->salaryDeduction($a, $year);
+        $kiso = $this->kisoKoujo($a, $year);
         $fuyo = max(0, $fuyoNum) * 31667 + $kiso;
 
         $taxable = $a - $shokoujyo - $fuyo;
@@ -192,8 +195,11 @@ class PayrollV2IncomeTaxService
 
     /**
      * 月額表(乙欄)による所得税計算。賞与の月割換算(PayrollV2BonusIncomeTaxCalcService)からも呼ぶため public。
+     * $year引数は将来この関数内の表を年度分岐させる時のために追加したが、現状ここでは未使用
+     * （kisoは元々固定値48334で、kisoKoujo()のブランケットとは別物として扱われていたため、
+     * 挙動を変えないよう手を付けていない。要確認）。
      */
-    public function calcOtsu(float $syahoDeductionSum): array
+    public function calcOtsu(float $syahoDeductionSum, int $year): array
     {
         $a = max(0.0, $syahoDeductionSum);
         if ($a < 88000) {
@@ -261,10 +267,37 @@ class PayrollV2IncomeTaxService
         ];
     }
 
-    private function salaryDeduction(float $a): float
+    /**
+     * 給与所得控除（月額）。2026-08-15、旧Access VBA（本番の元ネタ）で古い表が
+     * コメントアウトされて残っているのを見つけ、年度分岐を追加した
+     * （最低控除額が2025年の法改正で55万円→65万円相当に上がった前後で表が変わっている）。
+     * 2025年より前の値はVBAのコメントアウト分から復元。年調のYearEndCalculationServiceと
+     * 同じ「年度で分岐、新ルールは過去年分に遡って適用しない」パターン。
+     */
+    private function salaryDeduction(float $a, int $year): float
     {
-        if ($a <= 158333) {
-            return 54167;
+        if ($year >= 2025) {
+            if ($a <= 158333) {
+                return 54167;
+            }
+            if ($a <= 299999) {
+                return floor($a * 0.3 + 6667);
+            }
+            if ($a <= 549999) {
+                return floor($a * 0.2 + 36667);
+            }
+            if ($a <= 708330) {
+                return floor($a * 0.1 + 91667);
+            }
+            return 162500;
+        }
+
+        // 2024年以前（旧Access VBAより復元）。
+        if ($a <= 135416) {
+            return 45834;
+        }
+        if ($a <= 149999) {
+            return floor($a * 0.4) - 8333;
         }
         if ($a <= 299999) {
             return floor($a * 0.3 + 6667);
@@ -278,7 +311,13 @@ class PayrollV2IncomeTaxService
         return 162500;
     }
 
-    private function kisoKoujo(float $a): float
+    /**
+     * 基礎控除逓減（月額換算・甲欄用）。要確認：旧Access VBAのコメントアウト分は
+     * 「Case 2245834 To 2245833」のように範囲が壊れており、2025年より前の正確な閾値が
+     * 復元できなかった。年度分岐の枠だけ用意し、2024年以前は暫定的に現行表のまま使う
+     * （実データで過去年分の是正が必要になったら、正しい閾値をユーザーに確認してから直す）。
+     */
+    private function kisoKoujo(float $a, int $year): float
     {
         if ($a <= 2120833) {
             return 48334;

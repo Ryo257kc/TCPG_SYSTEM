@@ -85,7 +85,6 @@ class PayrollV2EmploymentInsuranceService
 
         $division = trim((string) ($staff->staff_division ?? ''));
         $hasKoyou = ((int) ($staff->koyou ?? 0)) === 1;
-        $storeCode = trim((string) ($staff->section ?? ''));
         if (str_contains($division, '業務委託')) {
             return $conn->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
@@ -97,9 +96,11 @@ class PayrollV2EmploymentInsuranceService
                 ]);
         }
 
+        // 要確認：以前はstaffId==='001'も決め打ちで除外していたが、koyouフラグで
+        // 既に正しく除外されている（001は役員でkoyou=0）ため冗長と判明し、
+        // ユーザー承認済みで削除（2026-08-15）。
         $isExcluded =
-            $staffId === '001'
-            || mb_strpos($division, '保育事業部') !== false
+            mb_strpos($division, '保育事業部') !== false
             || mb_strpos($division, '鍼灸整骨院') !== false
             || !$hasKoyou;
 
@@ -123,7 +124,10 @@ class PayrollV2EmploymentInsuranceService
             : 0;
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;
-        $rousaiRate = $storeCode === '003' ? 3.5 : $rousaiRitu;
+        // 要確認：以前は店舗コード003だけ労災料率を3.5固定で上書きしていたが、根拠不明の
+        // ハードコードだったためユーザー承認済みで削除（2026-08-15）。他店舗と同じく
+        // mx_rouhoから適用日ベースで引いた$rousaiRituをそのまま使う。
+        $rousaiRate = $rousaiRitu;
         $rousaiOffice = ($rousaiRate > 0 && $rousaiBase > 0)
             ? (int) floor($rousaiBase * ($rousaiRate / 1000.0))
             : 0;
@@ -218,7 +222,6 @@ class PayrollV2EmploymentInsuranceService
 
         $division = trim((string) ($staff->staff_division ?? ''));
         $hasKoyou = ((int) ($staff->koyou ?? 0)) === 1;
-        $storeCode = trim((string) ($staff->section ?? ''));
         if (str_contains($division, '業務委託')) {
             return $conn->table('dbo.mx_kyuyo_shou')
                 ->where('kyuyo_sho_no', (int) $current->kyuyo_sho_no)
@@ -233,9 +236,10 @@ class PayrollV2EmploymentInsuranceService
         // 元は文字化けした文字列リテラルで判定しており「保育事業部」「鍼灸整骨院」に
         // 一度も一致していなかった（recalculate()と同じ判定のはずが、賞与側だけ化けていた）。
         // recalculate()と同じくhex2binで安全にエンコードする。
+        // 要確認：ここもstaffId==='001'の決め打ちがあったが、recalculate()と同じ理由
+        // （koyouフラグで既に正しく除外されるため冗長）でユーザー承認済みで削除（2026-08-15）。
         $isExcluded =
-            $staffId === '001'
-            || mb_strpos($division, hex2bin('e4bf9de882b2e4ba8be6a5ade983a8')) !== false // 保育事業部
+            mb_strpos($division, hex2bin('e4bf9de882b2e4ba8be6a5ade983a8')) !== false // 保育事業部
             || mb_strpos($division, hex2bin('e98dbce781b8e695b4e9aaa8e999a2')) !== false // 鍼灸整骨院
             || !$hasKoyou;
 
@@ -255,7 +259,10 @@ class PayrollV2EmploymentInsuranceService
             : 0;
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;
-        $rousaiRate = $storeCode === '003' ? 3.5 : $rousaiRitu;
+        // 要確認：以前は店舗コード003だけ労災料率を3.5固定で上書きしていたが、根拠不明の
+        // ハードコードだったためユーザー承認済みで削除（2026-08-15）。他店舗と同じく
+        // mx_rouhoから適用日ベースで引いた$rousaiRituをそのまま使う。
+        $rousaiRate = $rousaiRitu;
         $rousaiOffice = ($rousaiRate > 0 && $rousaiBase > 0)
             ? (int) floor($rousaiBase * ($rousaiRate / 1000.0))
             : 0;

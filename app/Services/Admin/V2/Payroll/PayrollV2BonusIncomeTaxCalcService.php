@@ -75,10 +75,11 @@ class PayrollV2BonusIncomeTaxCalcService
         $fuyoNum = (int) ($bonusRow->fuyo_sum ?? 0);
         $previousNet = $this->num($this->loadPreviousPayrollRow($staffId, $paymentDate)?->syaho_deduction_sum ?? 0);
 
+        $year = (int) substr($paymentDate, 0, 4);
         if (mb_strpos($taxAmount, '乙欄') !== false) {
-            $calc = $this->calcBonusOtsu($bonusTaxableBase, $previousNet);
+            $calc = $this->calcBonusOtsu($bonusTaxableBase, $previousNet, $year);
         } else {
-            $calc = $this->calcBonusKou($bonusTaxableBase, $previousNet, $fuyoNum);
+            $calc = $this->calcBonusKou($bonusTaxableBase, $previousNet, $fuyoNum, $year);
         }
 
         return (int) DB::connection('sqlsrv_payroll')
@@ -113,7 +114,7 @@ class PayrollV2BonusIncomeTaxCalcService
     }
 
     /** @return array{tax:int,rate:float} */
-    private function calcBonusKou(float $bonusTaxableBase, float $previousNet, int $fuyoNum): array
+    private function calcBonusKou(float $bonusTaxableBase, float $previousNet, int $fuyoNum, int $year): array
     {
         if ($bonusTaxableBase <= 0) {
             return ['tax' => 0, 'rate' => 0.0];
@@ -121,17 +122,17 @@ class PayrollV2BonusIncomeTaxCalcService
 
         if ($previousNet <= 0 || $bonusTaxableBase > ($previousNet * 10)) {
             $monthly = $bonusTaxableBase / 6;
-            $monthlyTax = (int) ($this->incomeTaxService->calcKou($monthly, $fuyoNum)['tax'] ?? 0);
+            $monthlyTax = (int) ($this->incomeTaxService->calcKou($monthly, $fuyoNum, $year)['tax'] ?? 0);
             $tax = max(0, (int) floor($monthlyTax * 6));
             return ['tax' => $tax, 'rate' => $this->effectiveRate($tax, $bonusTaxableBase)];
         }
 
-        $rate = $this->bonusRateKou($previousNet, $fuyoNum);
+        $rate = $this->bonusRateKou($previousNet, $fuyoNum, $year);
         return ['tax' => max(0, (int) floor($bonusTaxableBase * ($rate / 100))), 'rate' => $rate];
     }
 
     /** @return array{tax:int,rate:float} */
-    private function calcBonusOtsu(float $bonusTaxableBase, float $previousNet): array
+    private function calcBonusOtsu(float $bonusTaxableBase, float $previousNet, int $year): array
     {
         if ($bonusTaxableBase <= 0) {
             return ['tax' => 0, 'rate' => 0.0];
@@ -139,12 +140,12 @@ class PayrollV2BonusIncomeTaxCalcService
 
         if ($previousNet <= 0 || $bonusTaxableBase > ($previousNet * 10)) {
             $monthly = $bonusTaxableBase / 6;
-            $monthlyTax = (int) ($this->incomeTaxService->calcOtsu($monthly)['tax'] ?? 0);
+            $monthlyTax = (int) ($this->incomeTaxService->calcOtsu($monthly, $year)['tax'] ?? 0);
             $tax = max(0, (int) floor($monthlyTax * 6));
             return ['tax' => $tax, 'rate' => $this->effectiveRate($tax, $bonusTaxableBase)];
         }
 
-        $monthlyTax = (int) ($this->incomeTaxService->calcOtsu($previousNet)['tax'] ?? 0);
+        $monthlyTax = (int) ($this->incomeTaxService->calcOtsu($previousNet, $year)['tax'] ?? 0);
         $rate = $previousNet > 0 ? ($monthlyTax / $previousNet) * 100 : 0.0;
         return ['tax' => max(0, (int) floor($bonusTaxableBase * ($rate / 100))), 'rate' => $rate];
     }
@@ -154,9 +155,18 @@ class PayrollV2BonusIncomeTaxCalcService
         return $base > 0 ? ($tax / $base) * 100 : 0.0;
     }
 
-    private function bonusRateKou(float $previousNet, int $fuyoNum): float
+    /**
+     * 賞与に対する源泉徴収税額の算出率の表。2026-08-15、旧Access VBA
+     * （shouyo_kei、扶養0〜3人分のみ現存）から2024年以前の閾値を復元し、年度分岐を追加した。
+     * 5〜7人（扶養4人以上）分はVBA側に対応するコードが残っておらず、旧版の閾値が復元できな
+     * かったため、要確認のまま現行表を使う（過去年分の是正で実際に必要になったら要相談）。
+     * 税率（$rates）自体は新旧で変わっていない。
+     */
+    private function bonusRateKou(float $previousNet, int $fuyoNum, int $year): float
     {
         $bucket = max(0, min(7, $fuyoNum));
+
+        // 現行表（2025年〜）。5〜7人分は旧版の資料が無いため常にこれを使う。
         $thresholds = [
             0 => [82000, 94000, 260000, 309000, 342000, 372000, 402000, 433000, 520000, 605000, 684000, 715000, 752000, 795000, 854000, 922000, 1318000, 1521000, 2621000, 3495000],
             1 => [107000, 250000, 289000, 346000, 373000, 401000, 430000, 463000, 520000, 621000, 705000, 739000, 778000, 821000, 882000, 952000, 1342000, 1526000, 2645000, 3527000],
@@ -167,9 +177,22 @@ class PayrollV2BonusIncomeTaxCalcService
             6 => [284000, 343000, 438000, 483000, 505000, 527000, 553000, 589000, 630000, 697000, 821000, 862000, 907000, 957000, 1022000, 1104000, 1464000, 1555000, 2764000, 3685000],
             7 => [317000, 383000, 463000, 508000, 529000, 552000, 578000, 614000, 657000, 708000, 845000, 887000, 933000, 985000, 1051000, 1135000, 1489000, 1583000, 2788000, 3717000],
         ];
+
+        // 2024年以前は扶養0〜3人分だけ旧Access VBAから復元した閾値に差し替える
+        // （4人以上は旧版の資料が無いため、要確認のまま現行表を使い続ける）。
+        if ($year < 2025 && $bucket <= 3) {
+            $thresholdsOld = [
+                0 => [68000, 79000, 252000, 300000, 334000, 363000, 395000, 426000, 550000, 668000, 714000, 750000, 791000, 847000, 910000, 997000, 1337000, 1551000, 2676000, 3569000],
+                1 => [94000, 243000, 282000, 338000, 365000, 394000, 422000, 455000, 550000, 689000, 738000, 775000, 817000, 876000, 936000, 1003000, 1362000, 1579000, 2700000, 3600000],
+                2 => [133000, 269000, 312000, 369000, 393000, 420000, 450000, 484000, 550000, 710000, 762000, 801000, 844000, 901000, 962000, 1031000, 1386000, 1607000, 2724000, 3632000],
+                3 => [171000, 295000, 345000, 398000, 417000, 445000, 477000, 513000, 557000, 730000, 786000, 826000, 872000, 925000, 987000, 1058000, 1410000, 1636000, 2748000, 3664000],
+            ];
+            $thresholds[$bucket] = $thresholdsOld[$bucket];
+        }
+
         $rates = [0.000, 2.042, 4.084, 6.126, 8.168, 10.210, 12.252, 14.294, 16.336, 18.378, 20.420, 22.462, 24.504, 26.546, 28.588, 30.630, 32.672, 35.735, 38.798, 41.861, 45.945];
 
-        foreach (($thresholds[$bucket] ?? $thresholds[7]) as $index => $maxExclusive) {
+        foreach ($thresholds[$bucket] as $index => $maxExclusive) {
             if ($previousNet < $maxExclusive) {
                 return $rates[$index];
             }

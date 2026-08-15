@@ -300,12 +300,24 @@ class YearEndCalculationService
                 // ユーザー承認済み）。収入(fuyo_shunyu、給与収入額)を合計所得に変換した上で
                 // 判定する。58万円超123万円以下は特定親族特別控除（tokuteiShinzokuTokubetsuKoujoAmount）
                 // に切り替わり、toku_fuとは二重に付かない。123万円超はどちらも対象外。
-                $dependentNetIncome = $this->salaryIncomeAfterDeduction((float) ($row->fuyo_shunyu ?? 0), $targetYear);
-                if ($dependentNetIncome <= 580000) {
+                //
+                // 要確認：58万円のしきい値・特定親族特別控除とも令和7年(2025年)分からの制度。
+                // このシステムの他の年度依存ロジック（spousalDeductionAmounts等）と同じく
+                // targetYear<2025では新ルールを適用しない。2025年より前の正しいしきい値
+                // （改正前は合計所得48万円以下）は未確認・未実装のため、旧仕様のまま
+                // （収入判定なしで年齢のみでtoku_fuに加算）にしている。年調是正で過去年分を
+                // 再計算する時に古い年の数字が動いてしまわないための暫定対応。
+                if ($targetYear < 2025) {
                     $totals['toku_fu']++;
                     $totals['deduction_sum'] += $rates['toku_fu'];
                 } else {
-                    $totals['tokutei_shinzoku_tokubetsu_koujo'] += $this->tokuteiShinzokuTokubetsuKoujoAmount($dependentNetIncome);
+                    $dependentNetIncome = $this->salaryIncomeAfterDeduction((float) ($row->fuyo_shunyu ?? 0), $targetYear);
+                    if ($dependentNetIncome <= 580000) {
+                        $totals['toku_fu']++;
+                        $totals['deduction_sum'] += $rates['toku_fu'];
+                    } else {
+                        $totals['tokutei_shinzoku_tokubetsu_koujo'] += $this->tokuteiShinzokuTokubetsuKoujoAmount($dependentNetIncome);
+                    }
                 }
             } elseif ($age >= 70) {
                 if ($kyojyu === '同居') {
