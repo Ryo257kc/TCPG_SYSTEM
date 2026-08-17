@@ -27,16 +27,6 @@
             font-weight: bold;
         }
 
-        .import-review-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .import-review-columns h4 {
-            margin: 0 0 6px;
-        }
-
         .import-review-actions {
             display: flex;
             gap: 10px;
@@ -47,18 +37,64 @@
             font-weight: bold;
             color: #c0392b;
         }
+
+        .import-review-table-wrap {
+            overflow-x: auto;
+        }
+
+        .import-review-pair-table {
+            table-layout: fixed;
+            min-width: 900px;
+        }
+
+        .import-review-sub-existing {
+            background: #fbfbfb;
+        }
+
+        .import-review-sub-new {
+            background: #fff;
+            border-right: 2px solid #ddd;
+        }
+
+        .import-review-diff-cell {
+            background: #fdecea !important;
+            color: #b3261e;
+            font-weight: bold;
+        }
     </style>
 </head>
 
 <body>
-    <section class="panel admin-viewport-panel">
-        <h2>仕訳帳CSV取込の確認</h2>
+    @include('admin_v2.shared.global_nav')
+
+    <div class="wrap">
+        <div class="top">
+            <h1 class="title">TCPG SYSTEM 仕訳帳CSV取込の確認</h1>
+        </div>
+
+        {{-- 要確認：admin-viewport-panelはビューポート高さ固定＋内部スクロール前提のクラスで、
+        この画面のように縦に長く伸びる内容（要確認の仕訳が多いと特に）には合わず、枠の高さを
+        超えて中身がはみ出して見えていた。ページ全体で普通にスクロールする単純なpanelに
+        変更（2026-08-17）。 --}}
+        <section class="panel">
         <p>{{ $summaryMessage }}</p>
 
+        @if ($pendingNewCount > 0)
+        <h3>新規追加</h3>
+        <p>
+            DBにまだ無い新規の仕訳が {{ $pendingNewCount }} 件あります。まだ何も書き込んでいません。
+            内容に問題なければ下のボタンで取り込んでください。
+        </p>
+        <form method="post" action="{{ route('admin.work.journal_entries.import_apply_new') }}">
+            @csrf
+            <input type="hidden" name="token" value="{{ $token }}">
+            <button type="submit" class="btn btn-primary">この新規分（{{ $pendingNewCount }}件）を取り込む</button>
+        </form>
+        @else
         <h3>科目別照合（CSV合計 と DB合計）</h3>
         <p>
             同じ会社・取引日の範囲で、科目ごとにCSVの合計金額とDB上の合計金額を突き合わせています。
-            差額がある行は赤字で表示しています。取込むものが無いCSVでも、この照合結果だけを確認する用途で使えます。
+            差額がある行は赤字で表示しています。
         </p>
         <table class="data-table">
             <thead>
@@ -82,6 +118,7 @@
                 @endforeach
             </tbody>
         </table>
+        @endif
 
         @if (count($groups) > 0)
         <h3>要確認の仕訳</h3>
@@ -95,66 +132,51 @@
             @csrf
             <input type="hidden" name="token" value="{{ $token }}">
 
+            @php
+            $reviewFieldGroups = [
+                ['field' => 'debit_account_title', 'label' => '借方科目', 'num' => false],
+                ['field' => 'debit_amount', 'label' => '借方金額', 'num' => true],
+                ['field' => 'credit_account_title', 'label' => '貸方科目', 'num' => false],
+                ['field' => 'credit_amount', 'label' => '貸方金額', 'num' => true],
+                ['field' => 'summary_text', 'label' => '摘要', 'num' => false],
+            ];
+            @endphp
             @foreach ($groups as $group)
             <div class="import-review-group">
                 <div class="import-review-group-header">
                     <label>
                         <input type="checkbox" name="group_keys[]" value="{{ $group['group_key'] }}" checked>
                         {{ $group['company_name_short'] }}｜{{ $group['occurred_at'] }}｜仕訳No {{ $group['journal_breakdown'] }}
-                        （既存{{ count($group['existing_lines']) }}件 → CSV{{ count($group['new_lines']) }}件）
+                        （{{ count($group['line_pairs']) }}行、色が付いてる項目が既存とCSVで違います）
                     </label>
                 </div>
-                <div class="import-review-columns">
-                    <div>
-                        <h4>既存（DB）</h4>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>借方科目</th>
-                                    <th class="num">借方金額</th>
-                                    <th>貸方科目</th>
-                                    <th class="num">貸方金額</th>
-                                    <th>摘要</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($group['existing_lines'] as $line)
-                                <tr>
-                                    <td>{{ $line['debit_account_title'] }}</td>
-                                    <td class="num">{{ $line['debit_amount'] }}</td>
-                                    <td>{{ $line['credit_account_title'] }}</td>
-                                    <td class="num">{{ $line['credit_amount'] }}</td>
-                                    <td>{{ $line['summary_text'] }}</td>
-                                </tr>
+                <div class="table-wrap import-review-table-wrap">
+                    <table class="data-table import-review-pair-table">
+                        <thead>
+                            <tr>
+                                @foreach ($reviewFieldGroups as $fieldGroup)
+                                <th colspan="2">{{ $fieldGroup['label'] }}</th>
                                 @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                    <div>
-                        <h4>CSV（新）</h4>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>借方科目</th>
-                                    <th class="num">借方金額</th>
-                                    <th>貸方科目</th>
-                                    <th class="num">貸方金額</th>
-                                    <th>摘要</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($group['new_lines'] as $line)
-                                <tr>
-                                    <td>{{ $line['debit_account_title'] }}</td>
-                                    <td class="num">{{ $line['debit_amount'] }}</td>
-                                    <td>{{ $line['credit_account_title'] }}</td>
-                                    <td class="num">{{ $line['credit_amount'] }}</td>
-                                    <td>{{ $line['summary_text'] }}</td>
-                                </tr>
+                            </tr>
+                            <tr>
+                                @foreach ($reviewFieldGroups as $fieldGroup)
+                                <th class="{{ $fieldGroup['num'] ? 'num' : '' }} import-review-sub-existing">既存</th>
+                                <th class="{{ $fieldGroup['num'] ? 'num' : '' }} import-review-sub-new">CSV</th>
                                 @endforeach
-                            </tbody>
-                        </table>
-                    </div>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($group['line_pairs'] as $pair)
+                            <tr>
+                                @foreach ($reviewFieldGroups as $fieldGroup)
+                                @php $field = $fieldGroup['field']; $isDiff = $pair['diff'][$field] ?? false; @endphp
+                                <td class="import-review-sub-existing {{ $fieldGroup['num'] ? 'num' : '' }} {{ $isDiff ? 'import-review-diff-cell' : '' }}">{{ $pair['existing'][$field] ?? '（対応なし）' }}</td>
+                                <td class="import-review-sub-new {{ $fieldGroup['num'] ? 'num' : '' }} {{ $isDiff ? 'import-review-diff-cell' : '' }}">{{ $pair['new'][$field] ?? '（対応なし）' }}</td>
+                                @endforeach
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
             </div>
             @endforeach
@@ -169,7 +191,8 @@
             <a class="btn btn-primary" href="{{ route('admin.work.journal_entries') }}">戻る</a>
         </div>
         @endif
-    </section>
+        </section>
+    </div>
 </body>
 
 </html>

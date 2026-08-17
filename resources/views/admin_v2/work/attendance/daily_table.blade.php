@@ -158,7 +158,17 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 <tr @class(['attendance-daily-row', 'row-holiday'=> ($row['is_holiday'] ?? '0') === '1'])>
                     <td class="">
                         <div class="daily-actions daily-view">
-                            <button class="btn btn-small daily-btn-muted" type="button" data-action="edit">{{ $row['date_label'] }}</button>
+                            {{-- 要確認：ここが常にクリックできて、保存はサーバー側（勤怠確定済みなら
+                            AttendanceV2Controller::updateDaily()で弾く）でしか止まらず、上に出るメッセージに
+                            気づかないと何度も保存を押してしまう不具合があった。ボタン自体を確定済みなら
+                            無効化する（2026-08-17） --}}
+                            <button
+                                class="btn btn-small daily-btn-muted"
+                                type="button"
+                                data-action="edit"
+                                {{ $isAttendanceChecked ? 'disabled' : '' }}
+                                title="{{ $isAttendanceChecked ? '勤怠確定済のため編集できません。先に確定を解除してください。' : '' }}"
+                                >{{ $row['date_label'] }}</button>
                         </div>
                         <div class="daily-actions daily-edit">
                             <button class="btn btn-small" type="submit" form="{{ $formId }}">保存</button>
@@ -327,6 +337,20 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                     noteCells.forEach((cell) => cell.classList.remove('note-editing'));
                     row.classList.remove('is-editing');
                 });
+            }
+
+            // 要確認：休出/法出は実働時間をchange_scheduled（シフト変更側）から計算するため、
+            // ここの時間欄(category_time/work_type_time)は使われない。入れても計算に
+            // 反映されず紛らわしいので、休出/法出を選んでいる間はグレーアウトする（2026-08-17）。
+            const categorySelect = row.querySelector('.daily-edit-input-category');
+            const categoryTimeInput = row.querySelector('.daily-edit-input-num[name="category_time"]');
+            if (categorySelect && categoryTimeInput) {
+                const unusedCategories = ["休出", "法出"];
+                const syncCategoryTimeLock = () => {
+                    categoryTimeInput.disabled = unusedCategories.includes(categorySelect.value);
+                };
+                categorySelect.addEventListener('change', syncCategoryTimeLock);
+                syncCategoryTimeLock();
             }
         });
     </script>

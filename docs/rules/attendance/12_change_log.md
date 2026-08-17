@@ -8,6 +8,8 @@
 - `holiday_work_time`(work_time_num、休日出勤時間)は元々`work_type_time`という手入力欄（空のことが多い）から取っていたため、`change_scheduled`ベースの実働時間と食い違うことがあった。総実働時間から所定時間を引いた値と必ず一致するよう`changeScheduled`ベースに統一。
 - 勤怠一覧に検算アラートを追加（`AttendanceV2MonthlySummaryService::reconciliationDiff()`）。シフト予定−休みの日の予定時間−遅早+残業+休日出勤の実働時間が、実働時間(change_scheduled_total)と一致するかを見る。業務委託は対象外。
 - ラベルを明細(`shared/payroll/payslip_item.blade.php`)・legacy側と同じ「出勤」（日数）「出勤」（時間、旧「実働」から統一）に揃えた。総出勤日数／平日出勤日数／休日出勤日数、総出勤時間／所定時間／休日出勤時間。
+- 日別詳細(`daily_table.blade.php`)の日付編集ボタンが、勤怠確定済みでも常にクリックできてしまい、保存を押してもサーバー側(`AttendanceV2Controller::updateDaily()`)で弾かれるだけで気づきにくかった。ボタン自体を`$isAttendanceChecked`で無効化するよう修正。あわせて`.btn:disabled`の見た目（グレーアウト）をapp-ui.cssに追加（今まで未定義だったため、他の無効化ボタンにも共通で効く）。
+- 休出/法出は実働時間をchange_scheduled（シフト変更側の実績値）から計算する方式になったため、区分の横の時間欄(`category_time`/`work_type_time`)は休出/法出では使われなくなっている。それを知らずこの欄に時間を入力しても計算に反映されず、`work_horiday_num`（休出日数）だけカウントされて`work_in_num`等に実働時間が乗らない不一致が起きる（staff069・2026年7月で実例：change_scheduledが0のまま保存され、旧欄のwork_type_timeだけ7.5が残っていた）。紛らわしいので休出/法出を選んでいる間はこの時間欄をグレーアウトするJSを追加。
 
 ## 2026-08-01 初版作成
 

@@ -504,6 +504,12 @@
             font-size: 12px;
         }
 
+        .daily-edit-input:disabled {
+            background: #eef0f3;
+            color: #9aa3af;
+            cursor: not-allowed;
+        }
+
         .row-holiday {
             background-color: #f2f2f2;
             /* 薄いグレー */

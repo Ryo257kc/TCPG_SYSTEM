@@ -15,6 +15,18 @@ use Illuminate\View\View;
 
 class AccountingV2Controller extends Controller
 {
+    // 仕訳帳CSV取込の要確認判定・ハイライトで比較する項目。金額・科目が本質的に重要なため
+    // ここだけに絞る。摘要は表示はするが一致しなくても確認対象にしない（自由記述で表記ゆれが
+    // 普通にあるため）。部門名・税区分・メモ・管理番号等も、CSVの中身が同じでもマッピング元
+    // マスタ（mx_departments等）が後から変わると再取込のたびに「違う」判定になり、確認しようが
+    // ない差分で埋もれるため比較対象に含めない（2026-08-17）。
+    private const REVIEW_COMPARE_FIELDS = [
+        'debit_account_title' => true,
+        'debit_amount' => true,
+        'credit_account_title' => true,
+        'credit_amount' => true,
+    ];
+
     public function __construct(
         private readonly SalesV2Service $salesService,
     ) {}
@@ -180,9 +192,23 @@ class AccountingV2Controller extends Controller
             ->values()
             ->all();
 
+        // 要確認：期間を数ヶ月に広げると仕訳グループが1000件を超え、1グループごとに編集フォームを
+        // 描画するため、ブラウザが固まる（ぐるぐるしたまま止まらない）レベルまで重くなっていた。
+        // クエリ自体は速い（インデックス済み）ので、グループ化した後の表示件数をページングで
+        // 区切る（会計システム側も同じ考え方、2026-08-18）。
+        $journalGroupsPerPage = 50;
+        $journalGroupsPage = max(1, (int) $request->query('page', 1));
+        $journalGroupsTotal = count($journalGroups);
+        $journalGroupsLastPage = max(1, (int) ceil($journalGroupsTotal / $journalGroupsPerPage));
+        $journalGroupsPage = min($journalGroupsPage, $journalGroupsLastPage);
+        $journalGroupsPaged = array_slice($journalGroups, ($journalGroupsPage - 1) * $journalGroupsPerPage, $journalGroupsPerPage);
+
         return view('admin_v2.work.journal_entries.index', [
             'rows' => $rows,
             'journalGroups' => $journalGroups,
+            'journalGroupsPaged' => $journalGroupsPaged,
+            'journalGroupsPage' => $journalGroupsPage,
+            'journalGroupsLastPage' => $journalGroupsLastPage,
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'companyOptions' => $companyOptions,
@@ -537,26 +563,77 @@ class AccountingV2Controller extends Controller
         }
 
         // 仕訳No単位（会社＋取引日＋仕訳No）でグループ化する。DBに同じグループがまだ無ければ
-        // 純粋な新規なのでそのまま取り込む。既にある場合は、会計システム側の再分類（不明→確定 等）や
-        // 単仕訳→複合仕訳の変化で内容が変わっている可能性があるため自動上書きせず、
-        // 確認画面で既存内容とCSVの内容を並べて見せ、人が選んだものだけ適用する。
-        $importedCount = 0;
+        // 純粋な新規（後述の通りここではまだ書き込まない）。既にある場合は、会計システム側の
+        // 再分類（不明→確定 等）や単仕訳→複合仕訳の変化で内容が変わっている可能性があるため
+        // 自動上書きせず、確認画面で既存内容とCSVの内容を並べて見せ、人が選んだものだけ適用する。
+        // 要確認：ただし「既存グループがある」というだけで無条件に確認対象にすると、内容が
+        // 一字一句同じ再取込（＝実質変更なし）まで大量に「要確認」へ積み上がり、本当に内容が
+        // 違う行が埋もれて見つからなくなる。判定はREVIEW_COMPARE_FIELDS（借方/貸方科目・金額）
+        // だけで行う。摘要は表記ゆれが普通にあるため対象外。部門名・税区分・メモ・管理番号等も、
+        // CSVの中身が同じでもマッピング元マスタ（mx_departments等）が後から変わると再取込の
+        // たびに「違う」判定になり、確認しようがない差分で埋もれるため比較対象に含めない
+        // （2026-08-17）。
+        $identicalCount = 0;
         $reviewGroups = [];
+        $rowSignature = function (array $row): string {
+            $row = array_intersect_key($row, self::REVIEW_COMPARE_FIELDS);
+            ksort($row);
+            foreach ($row as $key => $value) {
+                $row[$key] = is_numeric($value) ? (string) round((float) $value, 4) : trim((string) ($value ?? ''));
+            }
+
+            return json_encode($row);
+        };
+
+        // 要確認：取込ボタンを押した瞬間に新規分を問答無用でINSERTしていたのを、確認してから
+        // 別ボタンで反映する2段階に変更（2026-08-17）。新規分もここでは書き込まず$newGroupsに
+        // 貯めておき、確認画面の「新規追加」ボタンを押した時だけ実際にINSERTする
+        // （applyNewJournalEntries()）。
+        $newGroups = [];
+        $pendingNewCount = 0;
+
+        // 要確認：以前はグループ（仕訳No）ごとに毎回DBへ問い合わせていたため、月をまたいで
+        // グループ数が数百〜数千になるとクエリ回数もそれだけ増え、実行時間60秒を超えて
+        // Fatal Errorになっていた（N+1問題）。対象期間・会社のデータを最初に1回だけまとめて
+        // 取得し、以降はメモリ上のマップから引くだけにする（2026-08-18）。
+        $existingRowsByGroupKey = [];
+        foreach (
+            DB::connection('sqlsrv')
+                ->table('dbo.mx_journal_entries')
+                ->where('company_name_short', $companyNameShort)
+                ->whereDate('occurred_at', '>=', $dateFrom)
+                ->whereDate('occurred_at', '<=', $dateTo)
+                ->orderBy('journal_entry_id')
+                ->get() as $existingRow
+        ) {
+            $existingOccurredAt = $this->formatDateValue($existingRow->occurred_at, 'Y-m-d');
+            $existingKey = $companyNameShort . "\x1f" . $existingOccurredAt . "\x1f" . trim((string) ($existingRow->journal_breakdown ?? ''));
+            $existingRowsByGroupKey[$existingKey][] = (array) $existingRow;
+        }
 
         foreach ($groupedPayloads as $groupKey => $payloads) {
             [$groupCompany, $groupOccurredAt, $groupJournalBreakdown] = explode("\x1f", $groupKey);
 
-            $existingRows = DB::connection('sqlsrv')
-                ->table('dbo.mx_journal_entries')
-                ->where('company_name_short', $groupCompany)
-                ->where('occurred_at', $groupOccurredAt)
-                ->where('journal_breakdown', $groupJournalBreakdown)
-                ->orderBy('journal_entry_id')
-                ->get();
+            $existingArrays = $existingRowsByGroupKey[$groupKey] ?? [];
 
-            if ($existingRows->isEmpty()) {
-                DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($payloads);
-                $importedCount += count($payloads);
+            if ($existingArrays === []) {
+                $newGroups[$groupKey] = [
+                    'company_name_short' => $groupCompany,
+                    'occurred_at' => $groupOccurredAt,
+                    'journal_breakdown' => $groupJournalBreakdown,
+                    'payloads' => $payloads,
+                ];
+                $pendingNewCount += count($payloads);
+                continue;
+            }
+
+            $existingSignatures = array_map($rowSignature, $existingArrays);
+            $newSignatures = array_map($rowSignature, $payloads);
+            sort($existingSignatures);
+            sort($newSignatures);
+
+            if ($existingSignatures === $newSignatures) {
+                $identicalCount += count($payloads);
                 continue;
             }
 
@@ -564,23 +641,98 @@ class AccountingV2Controller extends Controller
                 'company_name_short' => $groupCompany,
                 'occurred_at' => $groupOccurredAt,
                 'journal_breakdown' => $groupJournalBreakdown,
-                'existing' => $existingRows->map(fn($row): array => (array) $row)->all(),
+                'existing' => $existingArrays,
                 'new' => $payloads,
             ];
         }
 
-        $summaryMessage = 'CSV取込が完了しました。追加: ' . $importedCount . '件 / 対象外: ' . $skippedCount . '件'
-            . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : '');
+        // 要確認：以前は「対象外」に$skippedCount（対象期間外・保険収入等の除外科目・仕訳No空欄）
+        // しか含めておらず、内容が完全一致していて確認不要だった件数($identicalCount)が
+        // 表示から漏れていた。件数の内訳が全部見えるよう分けて表示する（2026-08-18）。
+        $reviewLineCount = array_sum(array_map(fn(array $group): int => count($group['new']), $reviewGroups));
+        $summaryMessage = 'CSVを確認しました。新規追加候補: ' . $pendingNewCount . '件'
+            . ' / 要確認: ' . $reviewLineCount . '件'
+            . ' / 既存と完全一致（対応不要）: ' . $identicalCount . '件'
+            . ' / 対象期間外・除外科目等: ' . $skippedCount . '件'
+            . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : '')
+            . '（まだ何も書き込んでいません。内容を確認してから反映してください）';
 
-        // 仕訳No単位の突合だけでは、決算時に税理士がこちらの知らない形で仕訳を直接修正した場合などに
-        // 気づけない。そこで科目ごとにCSVの合計とDBの合計（同じ会社・期間）を突き合わせて表示し、
-        // 差があれば一目で分かるようにする。取込むものが無いCSVでも照合だけしたい、という用途にも使える。
+        // 要確認：科目ごとのCSV合計とDB合計の突き合わせ（決算時に税理士が直接修正した場合等に
+        // 気づくための保険）は、新規分をまだ書き込んでいないこの時点では正しく計算できない
+        // （新規分がDB側にまだ無いので必ず不一致に見える）。この画面では計算せず、
+        // 「新規追加」ボタンを押してDBへ実際に書き込んだ後、確認画面を再表示する時に
+        // buildJournalReconciliation()で毎回そのDBの現在値から計算し直す（2026-08-17）。
+        $token = (string) Str::uuid();
+        Cache::put('journal_import_review:' . $token, [
+            'date_from' => $data['date_from'],
+            'date_to' => $data['date_to'],
+            'company_name_short' => $companyNameShort,
+            'summary_message' => $summaryMessage,
+            'groups' => $reviewGroups,
+            'new_groups' => $newGroups,
+            'csv_debit_totals' => $csvDebitTotals,
+            'csv_credit_totals' => $csvCreditTotals,
+        ], now()->addMinutes(60));
+
+        return redirect()->route('admin.work.journal_entries.import_review', ['token' => $token]);
+    }
+
+    /**
+     * 仕訳No単位の突合だけでは、決算時に税理士がこちらの知らない形で仕訳を直接修正した場合などに
+     * 気づけない。そこで科目ごとにCSVの合計とDBの合計（同じ会社・期間）を突き合わせて表示し、
+     * 差があれば一目で分かるようにする。
+     *
+     * 要確認：この突き合わせはCSV側に元々含まれない仕訳を除外しないと常に赤字（差額あり）になり、
+     * 本当に確認すべき差額が埋もれてしまう。除外は2種類。
+     * (1) 保険収入・自費収入・窓口収入は、CSV取込処理自体が貸方勘定科目でこの3科目を弾いている
+     *     （importJournalEntries()内、旧AccessのfreeeCSV取込クエリと同じ除外条件）。売上は
+     *     店舗日報月次で別途mx_journal_entriesへ作成されるため、CSV側と二重計上しないよう
+     *     最初から取り込まない。ペアになる医療未収入金（借方）もこの行ごと除外されCSV合計に
+     *     乗らないため、DB側も同じ条件（貸方勘定科目が3科目）で除外する。
+     * (2) 店舗日報月次の経費仕訳（消耗品費/現金など、journal_breakdownが「年月+経費〜」）と、
+     *     現金出納帳（vault_nameが入っている）も同様にCSVに含まれない別経路のため除外する
+     *     （2026-08-17、店舗日報の経費仕訳が消耗品費/現金の差額に丸ごと乗っていた実例で発覚）。
+     *
+     * @param array<string,float> $csvDebitTotals
+     * @param array<string,float> $csvCreditTotals
+     * @return list<array{side:string,account_title:string,csv_total:float,db_total:float,diff:float}>
+     */
+    private function buildJournalReconciliation(
+        string $companyNameShort,
+        Carbon $dateFrom,
+        Carbon $dateTo,
+        array $csvDebitTotals,
+        array $csvCreditTotals
+    ): array {
+        $internalJournalBreakdownPrefixes = [];
+        $monthCursor = $dateFrom->copy()->startOfMonth();
+        while ($monthCursor->lte($dateTo)) {
+            $internalJournalBreakdownPrefixes[] = $monthCursor->format('Ym') . '経費';
+            $monthCursor->addMonthNoOverflow();
+        }
+
+        $excludeInternalEntries = function ($query) use ($internalJournalBreakdownPrefixes): void {
+            $query->whereRaw("ISNULL(vault_name, '') = ''");
+            // 要確認：whereNotInはcredit_account_titleがNULLの行（借方だけの片側仕訳など、
+            // 銀行利息のように多い）を、SQLの三値論理でまるごと除外してしまうバグがあった
+            // （NULL NOT IN (...)はNULL＝不明になりWHEREを満たさない）。NULLは明示的に許可する
+            // （2026-08-17、播州信金の利息19円が丸ごとDB合計から消えていた実例で発覚）。
+            $query->where(function ($subQuery): void {
+                $subQuery->whereNull('credit_account_title')
+                    ->orWhereNotIn('credit_account_title', ['保険収入', '自費収入', '窓口収入']);
+            });
+            foreach ($internalJournalBreakdownPrefixes as $prefix) {
+                $query->where('journal_breakdown', 'not like', $prefix . '%');
+            }
+        };
+
         $dbDebitTotals = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
             ->select('debit_account_title', DB::raw('SUM(debit_amount) as total'))
             ->where('company_name_short', $companyNameShort)
             ->whereDate('occurred_at', '>=', $dateFrom)
             ->whereDate('occurred_at', '<=', $dateTo)
+            ->where($excludeInternalEntries)
             ->groupBy('debit_account_title')
             ->pluck('total', 'debit_account_title');
 
@@ -590,6 +742,7 @@ class AccountingV2Controller extends Controller
             ->where('company_name_short', $companyNameShort)
             ->whereDate('occurred_at', '>=', $dateFrom)
             ->whereDate('occurred_at', '<=', $dateTo)
+            ->where($excludeInternalEntries)
             ->groupBy('credit_account_title')
             ->pluck('total', 'credit_account_title');
 
@@ -613,6 +766,7 @@ class AccountingV2Controller extends Controller
                 ];
             }
         }
+
         usort(
             $reconciliation,
             fn(array $a, array $b): int => (abs($b['diff']) <=> abs($a['diff']))
@@ -620,17 +774,7 @@ class AccountingV2Controller extends Controller
                 ?: ($a['account_title'] <=> $b['account_title'])
         );
 
-        $token = (string) Str::uuid();
-        Cache::put('journal_import_review:' . $token, [
-            'date_from' => $data['date_from'],
-            'date_to' => $data['date_to'],
-            'company_name_short' => $companyNameShort,
-            'summary_message' => $summaryMessage,
-            'groups' => $reviewGroups,
-            'reconciliation' => $reconciliation,
-        ], now()->addMinutes(60));
-
-        return redirect()->route('admin.work.journal_entries.import_review', ['token' => $token]);
+        return $reconciliation;
     }
 
     public function importJournalEntriesReview(string $token): View|RedirectResponse
@@ -643,31 +787,84 @@ class AccountingV2Controller extends Controller
 
         $groups = [];
         foreach ($staged['groups'] as $groupKey => $group) {
+            $existingLines = array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['existing']);
+            $newLines = array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['new']);
+
             $groups[] = [
                 'group_key' => $groupKey,
                 'company_name_short' => $group['company_name_short'],
                 'occurred_at' => $this->formatDateValue($group['occurred_at'], 'Y/m/d'),
                 'journal_breakdown' => $group['journal_breakdown'],
-                'existing_lines' => array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['existing']),
-                'new_lines' => array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['new']),
+                // 要確認：既存とCSVを別々の表で左右に並べると行がズレて比較しづらいという指摘のため、
+                // 同じ行番号の既存・CSVを1行にまとめ、項目ごとに既存値/CSV値を隣り合わせで
+                // 出す形にした（2026-08-17）。
+                'line_pairs' => $this->buildReviewLinePairs($existingLines, $newLines),
             ];
         }
 
-        $reconciliation = array_map(fn(array $row): array => [
-            'side' => $row['side'],
-            'account_title' => $row['account_title'],
-            'csv_total' => $this->formatMoneyValue($row['csv_total']),
-            'db_total' => $this->formatMoneyValue($row['db_total']),
-            'diff' => $this->formatMoneyValue($row['diff']),
-            'has_diff' => $row['diff'] != 0.0,
-        ], $staged['reconciliation'] ?? []);
+        $newGroups = $staged['new_groups'] ?? [];
+        $pendingNewCount = array_sum(array_map(fn(array $group): int => count($group['payloads']), $newGroups));
+
+        // 要確認：新規分がまだ書き込まれていない間は一致確認を計算しない（新規追加ボタンを
+        // 押してDBへ書き込んだ後、この画面を再表示した時だけ計算する。2026-08-17）。
+        $reconciliation = [];
+        if ($pendingNewCount === 0) {
+            $rawReconciliation = $this->buildJournalReconciliation(
+                $staged['company_name_short'],
+                Carbon::parse($staged['date_from'])->startOfDay(),
+                Carbon::parse($staged['date_to'])->endOfDay(),
+                $staged['csv_debit_totals'] ?? [],
+                $staged['csv_credit_totals'] ?? []
+            );
+            $reconciliation = array_map(fn(array $row): array => [
+                'side' => $row['side'],
+                'account_title' => $row['account_title'],
+                'csv_total' => $this->formatMoneyValue($row['csv_total']),
+                'db_total' => $this->formatMoneyValue($row['db_total']),
+                'diff' => $this->formatMoneyValue($row['diff']),
+                'has_diff' => $row['diff'] != 0.0,
+            ], $rawReconciliation);
+        }
 
         return view('admin_v2.work.journal_entries.import_review', [
             'token' => $token,
             'groups' => $groups,
             'summaryMessage' => $staged['summary_message'],
             'reconciliation' => $reconciliation,
+            'pendingNewCount' => $pendingNewCount,
         ]);
+    }
+
+    /**
+     * CSV取込確認画面の「新規追加」ボタン。要確認扱いになっていない、DBにまだ無い純粋な
+     * 新規分だけをここで実際にINSERTする。要確認の仕訳（applyJournalEntriesReview）とは
+     * 別ボタン・別処理にして、既存とぶつかる分は必ず人の選択を経由するようにする（2026-08-17）。
+     */
+    public function applyNewJournalEntries(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['token' => ['required', 'string']]);
+
+        $cacheKey = 'journal_import_review:' . $data['token'];
+        $staged = Cache::get($cacheKey);
+        if ($staged === null) {
+            return redirect()->route('admin.work.journal_entries')
+                ->with('errorMessage', '確認内容の有効期限が切れました。CSVを取込みし直してください。');
+        }
+
+        $newGroups = $staged['new_groups'] ?? [];
+        $insertedCount = 0;
+        foreach ($newGroups as $group) {
+            DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($group['payloads']);
+            $insertedCount += count($group['payloads']);
+        }
+
+        $staged['new_groups'] = [];
+        $staged['summary_message'] = $insertedCount > 0
+            ? '新規分を' . $insertedCount . '件取り込みました。'
+            : '新規追加候補はありませんでした。';
+        Cache::put($cacheKey, $staged, now()->addMinutes(60));
+
+        return redirect()->route('admin.work.journal_entries.import_review', ['token' => $data['token']]);
     }
 
     public function applyJournalEntriesReview(Request $request): RedirectResponse
@@ -746,6 +943,71 @@ class AccountingV2Controller extends Controller
             'date_to' => $staged['date_to'],
             'company_name_short' => $staged['company_name_short'],
         ])->with('statusMessage', $message);
+    }
+
+    /**
+     * 要確認の仕訳で、既存とCSVを別々の表で左右に並べると行がズレて比較しづらいという
+     * 指摘のため、既存・CSVを1行にまとめ、項目ごとに既存値/CSV値を隣り合わせで出せる形に
+     * 変換する（2026-08-17）。
+     *
+     * 要確認：複合仕訳（1つの仕訳Noに複数行）は、DB保存順とCSV内の行順が一致するとは
+     * 限らない。単純に行番号（0番目同士、1番目同士…）で対応づけると、中身は全く同じでも
+     * 並び順が違うだけで全行「差分あり」に見えてしまう（実例：6042016、給料手当の
+     * 複合仕訳で発覚）。そこで先に中身（REVIEW_COMPARE_FIELDS）が完全一致する行同士を
+     * 1対1で対応づけて除外し、余った行（＝本当に中身が違う行）だけを残りの数で
+     * 突き合わせる（2026-08-17）。
+     *
+     * @param list<array<string,mixed>> $existingLines
+     * @param list<array<string,mixed>> $newLines
+     * @return list<array{existing:array<string,mixed>,new:array<string,mixed>,diff:array<string,bool>}>
+     */
+    private function buildReviewLinePairs(array $existingLines, array $newLines): array
+    {
+        $compareFields = array_keys(self::REVIEW_COMPARE_FIELDS);
+        $lineSignature = function (array $line) use ($compareFields): string {
+            $parts = [];
+            foreach ($compareFields as $field) {
+                $parts[] = (string) ($line[$field] ?? '');
+            }
+
+            return implode("\x1f", $parts);
+        };
+
+        $matchedPairs = [];
+        $remainingExisting = [];
+        foreach ($existingLines as $existing) {
+            $remainingExisting[$lineSignature($existing)][] = $existing;
+        }
+
+        $remainingNew = [];
+        foreach ($newLines as $new) {
+            $signature = $lineSignature($new);
+            if (!empty($remainingExisting[$signature])) {
+                $matchedPairs[] = ['existing' => array_shift($remainingExisting[$signature]), 'new' => $new];
+                continue;
+            }
+            $remainingNew[] = $new;
+        }
+
+        $leftoverExisting = array_merge(...array_values($remainingExisting ?: [[]]));
+        $rowCount = max(count($leftoverExisting), count($remainingNew));
+        for ($i = 0; $i < $rowCount; $i++) {
+            $matchedPairs[] = ['existing' => $leftoverExisting[$i] ?? null, 'new' => $remainingNew[$i] ?? null];
+        }
+
+        $pairs = [];
+        foreach ($matchedPairs as $pair) {
+            $existing = $pair['existing'];
+            $new = $pair['new'];
+            $diff = [];
+            foreach ($compareFields as $field) {
+                $diff[$field] = ($existing === null || $new === null)
+                    || (($existing[$field] ?? '') !== ($new[$field] ?? ''));
+            }
+            $pairs[] = ['existing' => $existing, 'new' => $new, 'diff' => $diff];
+        }
+
+        return $pairs;
     }
 
     private function reviewLineDisplay(array $row): array

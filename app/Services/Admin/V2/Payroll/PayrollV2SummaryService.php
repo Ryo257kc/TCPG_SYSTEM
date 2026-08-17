@@ -166,7 +166,12 @@ class PayrollV2SummaryService
 
     /**
      * 振込額（差引支給額）の正本計算。保存処理（PayrollV2UpdateService）だけが呼ぶ。
-     * 支給合計 - 控除合計 - 年末調整 + 立替経費精算 + 会社立替費用 - 振込残額。
+     * 支給合計 - 控除合計 - 年末調整 + 立替経費精算 + 会社立替費用。
+     * 要確認：振込残額(transfer_balance)は第2口座へ振り込む分の金額であり、1人の総支給額を
+     * 2口座に分けて振り込むだけで総額が変わるわけではないため、差引支給額の計算からは
+     * 除外する。2026年8月の「差引支給額の保存を復活」対応でこの式に誤って
+     * `- 振込残額`を入れてしまい、それ以前（6月・7月分の保存値）と食い違っていたのを
+     * 2026-08-17に修正。
      * `docs/rules/payroll_bonus/03_wage_ledger.md` の規定式と一致させること。
      * 表示側（Controller・帳票・スタッフポータル）はこれを直接呼ばず、保存済みの
      * supply_deduction_sumを読むこと（「帳票側で再計算しない」というルールのため）。
@@ -178,8 +183,7 @@ class PayrollV2SummaryService
             - $this->toFloat($summary['deduction_sum'] ?? 0)
             - $this->toFloat($summary['adjustment_year_end'] ?? 0)
             + $this->toFloat($summary['cost_liquidation'] ?? 0)
-            + $this->toFloat($summary['company_advance_cost'] ?? 0)
-            - $this->toFloat($summary['transfer_balance'] ?? 0);
+            + $this->toFloat($summary['company_advance_cost'] ?? 0);
     }
 
     private function toFloat(mixed $value): float

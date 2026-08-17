@@ -220,11 +220,11 @@
             </section>
             <section class="card">
               <div class="k">支給日</div>
-              <div class="v">{{ $cardPaymentDate }}</div>
+              <div class="v name-value">{{ $cardPaymentDate }}</div>
             </section>
             <section class="card">
               <div class="k">雇用区分</div>
-              <div class="v">{{ $selectedRow['division'] !== '' ? $selectedRow['division'] : 'N/A' }}</div>
+              <div class="v name-value">{{ $selectedRow['division'] !== '' ? $selectedRow['division'] : 'N/A' }}</div>
             </section>
             <section class="card">
               <div class="k">給与確定状態</div>

@@ -98,6 +98,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/work/journal-entries/import', [AccountingV2Controller::class, 'importJournalEntries'])->name('admin.work.journal_entries.import');
         Route::get('/work/journal-entries/import/review/{token}', [AccountingV2Controller::class, 'importJournalEntriesReview'])->name('admin.work.journal_entries.import_review');
         Route::post('/work/journal-entries/import/apply', [AccountingV2Controller::class, 'applyJournalEntriesReview'])->name('admin.work.journal_entries.import_apply');
+        Route::post('/work/journal-entries/import/apply-new', [AccountingV2Controller::class, 'applyNewJournalEntries'])->name('admin.work.journal_entries.import_apply_new');
         Route::post('/work/journal-entries/update', [AccountingV2Controller::class, 'updateJournalEntry'])->name('admin.work.journal_entries.update');
         Route::post('/work/journal-entries/group-update', [AccountingV2Controller::class, 'updateJournalEntryGroup'])->name('admin.work.journal_entries.group_update');
         Route::post('/work/journal-entries/delete', [AccountingV2Controller::class, 'deleteJournalEntry'])->name('admin.work.journal_entries.delete');

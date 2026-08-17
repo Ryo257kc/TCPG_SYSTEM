@@ -31,6 +31,25 @@ input[type="button"]:hover {
     color: #183b67;
 }
 
+.btn:disabled,
+button:disabled,
+input[type="submit"]:disabled,
+input[type="button"]:disabled {
+    background: #eef0f3;
+    border-color: #d7dce3;
+    color: #9aa3af;
+    cursor: not-allowed;
+}
+
+.btn:disabled:hover,
+button:disabled:hover,
+input[type="submit"]:disabled:hover,
+input[type="button"]:disabled:hover {
+    background: #eef0f3;
+    border-color: #d7dce3;
+    color: #9aa3af;
+}
+
 .btn-primary,
 .button-primary {
     background: #1f4f8f;

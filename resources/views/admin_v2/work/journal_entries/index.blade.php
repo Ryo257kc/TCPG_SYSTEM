@@ -28,6 +28,23 @@
             align-items: end;
         }
 
+        .journal-entries-pager {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .journal-entries-pager .btn.is-disabled {
+            pointer-events: none;
+            opacity: .45;
+        }
+
+        .journal-entries-pager-label {
+            font-weight: 700;
+            color: var(--muted);
+        }
+
         .journal-entries-filter-group-wide {
             grid-column: span 2;
         }
@@ -511,6 +528,10 @@
                     </div>
                     <div class="journal-entries-filter-actions">
                         <button type="submit" class="btn btn-primary">表示</button>
+                        {{-- 要確認：期間・会社選択だけ残す部分クリアだと「期間を今月に戻したい」時に
+                        結局手で両方打ち直す必要があり紛らわしいという指摘のため、期間・会社を含む
+                        全項目をデフォルト（当月・全社）に戻す全クリアに変更（2026-08-18）。 --}}
+                        <a class="btn" href="{{ route('admin.work.journal_entries') }}">全クリア</a>
                         <a class="btn" href="{{ route('admin.work.journal_entries.sakura_reward_print', ['date_from' => $dateFrom, 'date_to' => $dateTo]) }}" target="_blank" rel="noopener">報酬計算印刷</a>
                         <button type="button" class="btn btn-primary" id="journal-import-select-btn">取込</button>
                     </div>
@@ -585,7 +606,7 @@
 
             <div class="journal-entries-table-wrap">
                 <div class="journal-group-list">
-                    @forelse ($journalGroups as $group)
+                    @forelse ($journalGroupsPaged as $group)
                     <details class="journal-group">
                         <summary class="journal-group-summary">
                             <div>
@@ -783,6 +804,31 @@
                     @endforelse
                 </div>
             </div>
+
+            @if ($journalGroupsLastPage > 1)
+            @php
+            $journalListParams = [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'company_name_short' => $selectedCompanyName,
+                'counterparty' => $counterparty,
+                'amount' => $amount,
+                'summary_text' => $summaryText,
+                'account_title' => $accountTitle,
+                'item_name' => $itemName,
+                'department_name' => $departmentName,
+                'management_number' => $managementNumber,
+                'journal_breakdown' => $journalBreakdown,
+            ];
+            @endphp
+            <div class="journal-entries-pager">
+                <a href="{{ route('admin.work.journal_entries', $journalListParams + ['page' => max(1, $journalGroupsPage - 1)]) }}"
+                    class="btn {{ $journalGroupsPage <= 1 ? 'is-disabled' : '' }}">前へ</a>
+                <span class="journal-entries-pager-label">{{ $journalGroupsPage }} / {{ $journalGroupsLastPage }}</span>
+                <a href="{{ route('admin.work.journal_entries', $journalListParams + ['page' => min($journalGroupsLastPage, $journalGroupsPage + 1)]) }}"
+                    class="btn {{ $journalGroupsPage >= $journalGroupsLastPage ? 'is-disabled' : '' }}">次へ</a>
+            </div>
+            @endif
 
             <div>
                 <a href="{{ route('admin.dashboard') }}" class="btn btn_back">戻る</a>
