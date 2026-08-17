@@ -61,6 +61,7 @@
                         <col style="width: 60px;">
                         <col style="width: 60px;">
                         <col style="width: 60px;">
+                        <col style="width: 60px;">
                         <col style="width: 80px;">
                         @if ($canManageBasicShift)
                         <col style="width: 100px;">
@@ -73,6 +74,7 @@
                             <th>退出</th>
                             <th>入出</th>
                             <th>終業</th>
+                            <th>所定</th>
                             <th>勤務店舗</th>
                             @if ($canManageBasicShift)
                             <th class="action-cell">操作</th>
@@ -99,6 +101,9 @@
                             <td>
                                 <span class="display-value">{{ $row['shift_end'] }}</span>
                                 <input form="{{ $formId }}" class="inline-input" type="time" name="shift_end" step="900" value="{{ $row['shift_end'] }}">
+                            </td>
+                            <td>
+                                <span class="scheduled-hours-preview"></span>
                             </td>
                             <td>
                                 <span class="display-value">{{ $row['shop_name'] }}</span>
@@ -137,6 +142,44 @@
     </main>
     <script>
         (function() {
+            // 所定時間の計算はApp\Support\AttendanceTime::scheduledHours()と同じ式にする
+            // （始業〜退出 + 入出〜終業。退出/入出のどちらか片方しか無ければ始業〜終業のみ）。
+            function parseMinutes(value) {
+                if (!value) return null;
+                var parts = value.split(':');
+                if (parts.length < 2) return null;
+                var h = parseInt(parts[0], 10);
+                var m = parseInt(parts[1], 10);
+                if (isNaN(h) || isNaN(m)) return null;
+                if (h === 0 && m === 0) return null;
+                return (h * 60) + m;
+            }
+
+            function minutesBetween(startMinutes, endMinutes) {
+                if (endMinutes < startMinutes) endMinutes += 24 * 60;
+                return Math.max(0, endMinutes - startMinutes);
+            }
+
+            function scheduledHours(startValue, leaveValue, breakOutValue, endValue) {
+                var startMinutes = parseMinutes(startValue);
+                var endMinutes = parseMinutes(endValue);
+                if (startMinutes === null || endMinutes === null) return 0;
+
+                var leaveMinutes = parseMinutes(leaveValue);
+                var breakOutMinutes = parseMinutes(breakOutValue);
+
+                if (leaveMinutes !== null && breakOutMinutes !== null) {
+                    return (minutesBetween(startMinutes, leaveMinutes) + minutesBetween(breakOutMinutes, endMinutes)) / 60;
+                }
+
+                return minutesBetween(startMinutes, endMinutes) / 60;
+            }
+
+            function formatHours(num) {
+                if (Math.abs(num - Math.round(num)) < 0.00001) return String(Math.round(num));
+                return String(Math.round(num * 100) / 100);
+            }
+
             var rows = document.querySelectorAll('tr[data-row-form]');
             rows.forEach(function(row) {
                 var formId = row.getAttribute('data-row-form');
@@ -148,7 +191,29 @@
                 var shop = document.querySelector('select[name="shop_code"]' + selectorBase);
                 var editBtn = row.querySelector('.edit-trigger');
                 var cancelBtn = row.querySelector('.cancel-trigger');
+                var preview = row.querySelector('.scheduled-hours-preview');
+
+                if (start && exit && inOut && end && preview) {
+                    var updatePreview = function() {
+                        var startMinutes = parseMinutes(start.value);
+                        var endMinutes = parseMinutes(end.value);
+                        if (startMinutes === null || endMinutes === null) {
+                            preview.textContent = '';
+                            return;
+                        }
+                        preview.textContent = formatHours(scheduledHours(start.value, exit.value, inOut.value, end.value));
+                    };
+                    [start, exit, inOut, end].forEach(function(el) {
+                        el.addEventListener('input', updatePreview);
+                        el.addEventListener('change', updatePreview);
+                    });
+                    updatePreview();
+                    row.updateScheduledHoursPreview = updatePreview;
+                }
+
+                // 編集・登録操作は編集権限がある行だけに存在する（canManageBasicShift）。
                 if (!start || !exit || !inOut || !end || !shop || !editBtn) return;
+
                 var initial = {
                     start: start.value,
                     exit: exit.value,
@@ -188,6 +253,7 @@
                         end.value = initial.end;
                         shop.value = initial.shop;
                         setEditing(false);
+                        if (row.updateScheduledHoursPreview) row.updateScheduledHoursPreview();
                     });
                 }
 

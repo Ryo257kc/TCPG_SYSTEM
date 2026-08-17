@@ -142,22 +142,6 @@ class StaffV2Controller extends Controller
         ]);
     }
 
-    public function updateSubmission(Request $request): RedirectResponse
-    {
-        $v = $request->validate([
-            'staff_id' => ['required', 'string', 'max:50'],
-            'q' => ['nullable', 'string', 'max:255'],
-            'employment_filter' => ['nullable', 'in:active,all,retired'],
-            'company_filter' => ['nullable', 'string', 'max:50'],
-            'submission' => ['nullable', Rule::in(array_column($this->service->residentSubmissionOptions(), 'value'))],
-            'addressee_no' => ['nullable', 'string', 'max:100'],
-        ]);
-
-        $this->service->updateSubmission($v);
-
-        return $this->redirectToResident($v, '住民税提出先を保存しました。');
-    }
-
     public function updateInsurance(Request $request): RedirectResponse
     {
         $v = $request->validate([
@@ -186,7 +170,7 @@ class StaffV2Controller extends Controller
 
         $this->service->createKihon($v);
 
-        return $this->redirectToKihon($v);
+        return $this->redirectToKihon($v, '基本給与を登録しました。');
     }
 
     public function storeBasicShift(Request $request): RedirectResponse
@@ -234,7 +218,7 @@ class StaffV2Controller extends Controller
 
         $this->service->updateKihon($v);
 
-        return $this->redirectToKihon($v);
+        return $this->redirectToKihon($v, '基本給与を保存しました。');
     }
 
     public function deleteKihon(Request $request): RedirectResponse
@@ -249,7 +233,7 @@ class StaffV2Controller extends Controller
 
         $this->service->deleteKihon($v);
 
-        return $this->redirectToKihon($v);
+        return $this->redirectToKihon($v, '基本給与を削除しました。');
     }
 
     public function storeShaho(Request $request): RedirectResponse
@@ -258,7 +242,7 @@ class StaffV2Controller extends Controller
 
         $this->service->createShaho($v);
 
-        return $this->redirectToShaho($v);
+        return $this->redirectToShaho($v, '社会保険の履歴を登録しました。');
     }
 
     public function updateShaho(Request $request): RedirectResponse
@@ -270,7 +254,7 @@ class StaffV2Controller extends Controller
 
         $this->service->updateShaho($v);
 
-        return $this->redirectToShaho($v);
+        return $this->redirectToShaho($v, '社会保険の履歴を保存しました。');
     }
 
     public function deleteShaho(Request $request): RedirectResponse
@@ -285,7 +269,7 @@ class StaffV2Controller extends Controller
 
         $this->service->deleteShaho($v);
 
-        return $this->redirectToShaho($v);
+        return $this->redirectToShaho($v, '社会保険の履歴を削除しました。');
     }
 
 
@@ -331,7 +315,7 @@ class StaffV2Controller extends Controller
 
         $this->service->createFuyo($v);
 
-        return $this->redirectToFuyo($v);
+        return $this->redirectToFuyo($v, '扶養親族を登録しました。');
     }
 
     public function updateFuyo(Request $request): RedirectResponse
@@ -343,7 +327,7 @@ class StaffV2Controller extends Controller
 
         $this->service->updateFuyo($v);
 
-        return $this->redirectToFuyo($v);
+        return $this->redirectToFuyo($v, '扶養親族を保存しました。');
     }
 
     public function deleteFuyo(Request $request): RedirectResponse
@@ -358,7 +342,7 @@ class StaffV2Controller extends Controller
 
         $this->service->deleteFuyo($v);
 
-        return $this->redirectToFuyo($v);
+        return $this->redirectToFuyo($v, '扶養親族を削除しました。');
     }
 
     /** @return array<string, array<int, mixed>> */
@@ -482,15 +466,17 @@ class StaffV2Controller extends Controller
         ];
     }
 
-    private function redirectToKihon(array $values): RedirectResponse
+    private function redirectToKihon(array $values, string $status = ''): RedirectResponse
     {
-        return redirect()->route('admin.master.staff', [
+        $redirect = redirect()->route('admin.master.staff', [
             'q' => trim((string) ($values['q'] ?? '')),
             'employment_filter' => trim((string) ($values['employment_filter'] ?? 'active')),
             'company_filter' => trim((string) ($values['company_filter'] ?? '')),
             'staff_id' => trim((string) $values['staff_id']),
             'tab' => 'kihon',
         ]);
+
+        return $status !== '' ? $redirect->with('status', $status) : $redirect;
     }
 
     private function redirectToBasicShift(array $values): RedirectResponse
@@ -592,15 +578,17 @@ class StaffV2Controller extends Controller
         return $status !== '' ? $redirect->with('status', $status) : $redirect;
     }
 
-    private function redirectToFuyo(array $values): RedirectResponse
+    private function redirectToFuyo(array $values, string $status = ''): RedirectResponse
     {
-        return redirect()->route('admin.master.staff', [
+        $redirect = redirect()->route('admin.master.staff', [
             'q' => trim((string) ($values['q'] ?? '')),
             'employment_filter' => trim((string) ($values['employment_filter'] ?? 'active')),
             'company_filter' => trim((string) ($values['company_filter'] ?? '')),
             'staff_id' => trim((string) $values['staff_id']),
             'tab' => 'fuyo',
         ]);
+
+        return $status !== '' ? $redirect->with('status', $status) : $redirect;
     }
 
     private function redirectToShaho(array $values, string $status = ''): RedirectResponse

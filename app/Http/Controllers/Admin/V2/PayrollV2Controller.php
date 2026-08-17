@@ -7,6 +7,7 @@ use App\Services\Admin\V2\Attendance\AttendanceV2AttendanceStaffService;
 use App\Services\Admin\V2\Attendance\AttendanceV2ConfirmedStateService;
 use App\Services\Admin\V2\Payroll\PayrollV2AllowanceLabelService;
 use App\Services\Admin\V2\Payroll\PayrollV2AttendanceReflectService;
+use App\Services\Admin\V2\Payroll\PayrollV2BonusSocialInsuranceService;
 use App\Services\Admin\V2\Payroll\PayrollV2CalculationFlowService;
 use App\Services\Admin\V2\Payroll\PayrollV2CompanyService;
 use App\Services\Admin\V2\Payroll\PayrollV2CreateCandidatesService;
@@ -56,6 +57,7 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2RecalculateService $recalculateService,
         private readonly PayrollV2IncomeTaxService $incomeTaxService,
         private readonly PayrollV2SocialInsuranceAmountService $socialInsuranceAmountService,
+        private readonly PayrollV2BonusSocialInsuranceService $bonusSocialInsuranceAmountService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
         private readonly PayrollV2HomeVisitAllowanceService $homeVisitAllowanceService,
     ) {
@@ -361,7 +363,9 @@ class PayrollV2Controller extends Controller
                 'cost_liquidation' => $this->num($summary['cost_liquidation'] ?? 0),
                 'transfer_amount' => $transferAmount,
                 'work_in_num' => $this->num($summary['work_in_num'] ?? 0),
+                'work_in_num_net' => $this->num($summary['work_in_num_net'] ?? 0),
                 'work_time' => $this->num($summary['work_time'] ?? 0),
+                'work_time_net' => $this->num($summary['work_time_net'] ?? 0),
                 'late_time' => $this->num($summary['late_time'] ?? 0),
                 'overtime' => $this->num($summary['overtime'] ?? 0),
                 'work_holiday_num' => $this->num($summary['work_holiday_num'] ?? ($summary['work_horiday_num'] ?? 0)),
@@ -428,7 +432,22 @@ class PayrollV2Controller extends Controller
 
     public function companyBurdenPrint(Request $request): View
     {
-        $pageData = $this->buildPageData($request, false);
+        return $this->buildCompanyBurdenPrintView($request, false);
+    }
+
+    public function bonusCompanyBurdenPrint(Request $request): View
+    {
+        return $this->buildCompanyBurdenPrintView($request, true);
+    }
+
+    /**
+     * 会社負担一覧は給与・賞与で保険料の計算経路が違うため（賞与は標準賞与額＋上限キャップ）、
+     * $isBonusで金額の算出元だけ切り替える。帳票の様式・集計ロジックは1箇所にまとめる
+     * （bonusWageLedger/buildWageLedgerViewと同じ方針）。
+     */
+    private function buildCompanyBurdenPrintView(Request $request, bool $isBonus): View
+    {
+        $pageData = $this->buildPageData($request, $isBonus);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $selectedCompanyId = (string) $pageData['selectedCompanyId'];
         $selectedMonth = (string) $pageData['selectedMonth'];
@@ -445,11 +464,19 @@ class PayrollV2Controller extends Controller
             'kounen_self',
             'kounen_office',
             'kounen_total',
-            'jidou_office',
+            'child_support_self',
             'child_support_funds',
+            'child_support_total',
+            'jidou_office',
+            'koyou_self',
+            'koyou_office',
+            'koyou_total',
+            'rousai_office',
             'self_total',
             'office_total',
             'grand_total',
+            'transfer_amount',
+            'total_with_burden',
         ];
 
         $groupedStores = [];
@@ -471,17 +498,47 @@ class PayrollV2Controller extends Controller
             }
 
             $staffMaster = (array) ($row['staff_master'] ?? []);
-            $shaho = array_merge(
-                (array) ($row['shaho'] ?? []),
-                $this->socialInsuranceAmountService->loadRatesForStaff($staffId, $selectedPaymentDate)
-            );
-            $amounts = $this->socialInsuranceAmountService->statementAmounts(
-                $summary,
-                $shaho,
-                $this->socialInsuranceAmountService->toDate($staffMaster['birthday'] ?? null),
-                $year,
-                $month
-            );
+
+            if ($isBonus) {
+                $kyuyoShoNo = (int) ($summary['kyuyo_sho_no'] ?? 0);
+                $amounts = $this->bonusSocialInsuranceAmountService->statementAmounts(
+                    $staffId,
+                    $selectedPaymentDate,
+                    $kyuyoShoNo,
+                    $summary
+                );
+            } else {
+                $shaho = array_merge(
+                    (array) ($row['shaho'] ?? []),
+                    $this->socialInsuranceAmountService->loadRatesForStaff($staffId, $selectedPaymentDate)
+                );
+                $amounts = $this->socialInsuranceAmountService->statementAmounts(
+                    $summary,
+                    $shaho,
+                    $this->socialInsuranceAmountService->toDate($staffMaster['birthday'] ?? null),
+                    $year,
+                    $month
+                );
+            }
+
+            // 要確認：雇用保険料・労災保険はPayrollV2EmploymentInsuranceServiceが計算して
+            // mx_kyuyo_shou（koyou/koyou_office/rousai_office）に保存済みの値をそのまま使う
+            // （帳票側で再計算しない、他の項目と同じ方針）。差引支給合計も同様に保存値
+            // （summary.transfer_amount、PayrollV2SummaryServiceで算出済み）を使う。
+            $koyouSelf = $this->num($summary['koyou'] ?? 0);
+            $koyouOffice = $this->num($summary['koyou_office'] ?? 0);
+            $rousaiOffice = $this->num($summary['rousai_office'] ?? 0);
+            $transferAmount = $this->num($summary['transfer_amount'] ?? 0);
+
+            $amounts['koyou_self'] = $koyouSelf;
+            $amounts['koyou_office'] = $koyouOffice;
+            $amounts['koyou_total'] = $koyouSelf + $koyouOffice;
+            $amounts['rousai_office'] = $rousaiOffice;
+            $amounts['self_total'] = $this->num($amounts['self_total'] ?? 0) + $koyouSelf;
+            $amounts['office_total'] = $this->num($amounts['office_total'] ?? 0) + $koyouOffice + $rousaiOffice;
+            $amounts['grand_total'] = $this->num($amounts['grand_total'] ?? 0) + $koyouSelf + $koyouOffice + $rousaiOffice;
+            $amounts['transfer_amount'] = $transferAmount;
+            $amounts['total_with_burden'] = $transferAmount + $amounts['office_total'];
 
             if (
                 $this->num($amounts['self_total'] ?? 0) <= 0
@@ -529,6 +586,7 @@ class PayrollV2Controller extends Controller
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
             'selectedMonth' => $selectedMonth,
+            'isBonus' => $isBonus,
             'companyLabel' => $this->resolveCompanyLabel($rows),
             'groupedStores' => array_values($groupedStores),
             'grandTotals' => $grandTotals,
@@ -1100,7 +1158,9 @@ class PayrollV2Controller extends Controller
             'cost_liquidation' => $this->num($summary['cost_liquidation'] ?? 0),
             'transfer_amount' => $transferAmount,
             'work_in_num' => $this->num($summary['work_in_num'] ?? 0),
+            'work_in_num_net' => $this->num($summary['work_in_num_net'] ?? 0),
             'work_time' => $this->num($summary['work_time'] ?? 0),
+            'work_time_net' => $this->num($summary['work_time_net'] ?? 0),
             'late_time' => $this->num($summary['late_time'] ?? 0),
             'overtime' => $this->num($summary['overtime'] ?? 0),
             'work_holiday_num' => $this->num($summary['work_holiday_num'] ?? ($summary['work_horiday_num'] ?? 0)),

@@ -9,7 +9,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
         <div class="daily-statuses">
             <span @class(['daily-status-badge', 'is-on'=> $hasStaffApproval])>本人承認: {!! $hasStaffApproval ? '有' : '無' !!}</span>
             <span @class(['daily-status-badge', 'is-on'=> $hasManagerApproval])>管理者承認: {!! $hasManagerApproval ? '有' : '無' !!}</span>
-            @if ($isAttendanceChecked)
+            @if (!$isAttendanceChecked)
             <button
                 class="btn"
                 type="submit"

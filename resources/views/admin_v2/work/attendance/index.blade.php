@@ -102,6 +102,18 @@
             min-width: 68px;
         }
 
+        .attendance-reconciliation-alert {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: #fdecea;
+            border: 1px solid #f2b8b5;
+            color: #b3261e;
+            font-weight: 700;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
         .attendance-confirm-toggle.is-confirmed {
             background: #edf8ef;
             border-color: #b9d8c0;
@@ -637,6 +649,7 @@
                             <th>名前</th>
                             <th>部署</th>
                             <th>店舗</th>
+                            <th class="center">検算</th>
                             <th class="center">勤怠確定</th>
                             <th class="num">出勤日数</th>
                             <th class="num">欠勤日数</th>
@@ -678,6 +691,11 @@
                             <td>{{ $row['staff_name'] }}</td>
                             <td>{{ $row['division'] }}</td>
                             <td>{{ $row['store_name'] }}</td>
+                            <td class="center">
+                                @if (!empty($row['reconciliation_mismatch']))
+                                <span class="attendance-reconciliation-alert" title="シフト-休み+残業+休出 と実働時間の差: {{ $row['reconciliation_diff'] }}時間">⚠ {{ $row['reconciliation_diff'] }}</span>
+                                @endif
+                            </td>
                             <td class="center">
                                 <button
                                     @class([ 'btn' , 'btn-small' , 'attendance-confirm-toggle' , 'is-confirmed'=> $isAttendanceChecked,

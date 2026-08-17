@@ -29,7 +29,7 @@ $makeValueItem = fn($label, $value) => [((string)$value === '' || (float)$value 
 
     $attendanceItems = [
     $makeValueItem('出勤日数', $row['work_in_num'] ?? ''),
-    $makeValueItem('実働時間', $row['work_time'] ?? ''),
+    $makeValueItem('出勤時間', $row['work_time'] ?? ''),
     $makeValueItem('休日出勤日数', $row['work_horiday_num'] ?? ''),
     $makeValueItem('休日出勤時間', $row['work_time_num'] ?? ''),
     $makeValueItem('欠勤日数', $row['absence_num'] ?? ''),

@@ -78,8 +78,87 @@ class PayrollV2BonusSocialInsuranceService
             ]);
     }
 
-    /** @return array{kenpo_target_standard:float,kounen_target_standard:float} */
-    private function resolveTargetStandards(string $staffId, int $currentRowId, string $paymentDate, float $currentStandard): array
+    /**
+     * 会社負担一覧（賞与版）向け。標準賞与額の上限キャップ（recalculate()と同じ
+     * resolveTargetStandards()）を踏まえた自己/会社/計を返す。自己側は帳票側で
+     * 再計算せず、recalculate()が保存済みの値（$summaryのkenpo/kaigo/kounen/
+     * child_support_funds）をそのまま使う。会社側・合計だけここで算出する
+     * （2026-08-15、月給用のPayrollV2SocialInsuranceAmountService::statementAmounts()の
+     * 賞与版として新規追加）。
+     *
+     * @param array<string, mixed> $summary mx_kyuyo_shouの対象行（bonus_amo・kenpo等を含む）
+     * @return array<string, int|float>
+     */
+    public function statementAmounts(string $staffId, string $paymentDate, int $kyuyoShoNo, array $summary): array
+    {
+        $companyId = $this->resolveCompanyId($staffId);
+        $bonusRates = $this->loadBonusRates($companyId, $paymentDate);
+        $birthday = $this->loadBirthday($staffId);
+        $year = (int) substr($paymentDate, 0, 4);
+        $month = (int) substr($paymentDate, 5, 2);
+
+        $gross = $this->num($summary['bonus_amo'] ?? 0);
+        $currentStandard = floor($gross / 1000) * 1000;
+        $targets = $this->resolveTargetStandards($staffId, $kyuyoShoNo, $paymentDate, $currentStandard);
+
+        $kenpoSelf = (int) round($this->num($summary['kenpo'] ?? 0));
+        $kaigoSelf = (int) round($this->num($summary['kaigo'] ?? 0));
+        $kounenSelf = (int) round($this->num($summary['kounen'] ?? 0));
+        $childSupportSelf = (int) round($this->num($summary['child_support_funds'] ?? 0));
+
+        $kenpoTotal = $this->officeInsuranceAmount($targets['kenpo_target_standard'], $bonusRates['kenpo_rate'] ?? 0);
+        $kaigoTotal = 0;
+        if ($this->shouldApplyKaigo($birthday, $year, $month)) {
+            $kenpoKaigoTotal = $this->officeInsuranceAmount($targets['kenpo_target_standard'], $bonusRates['kaigo_rate'] ?? 0);
+            $kaigoTotal = max(0, $kenpoKaigoTotal - $kenpoTotal);
+        }
+        $kounenTotal = $this->officeInsuranceAmount($targets['kounen_target_standard'], $bonusRates['kounen_rate'] ?? 0);
+        $childSupportTotal = $this->officeInsuranceAmount($targets['kenpo_target_standard'], $bonusRates['kodomo_shien'] ?? 0);
+        $jidouOffice = $this->officeInsuranceAmount($targets['kounen_target_standard'], $bonusRates['jidou_rate'] ?? 0);
+
+        $kenpoOffice = max(0, $kenpoTotal - $kenpoSelf);
+        $kaigoOffice = max(0, $kaigoTotal - $kaigoSelf);
+        $kounenOffice = max(0, $kounenTotal - $kounenSelf);
+        $childSupportOffice = max(0, $childSupportTotal - $childSupportSelf);
+
+        return [
+            'kenpo_standard' => $targets['kenpo_target_standard'],
+            'kounen_standard' => $targets['kounen_target_standard'],
+            'kenpo_self' => $kenpoSelf,
+            'kenpo_office' => $kenpoOffice,
+            'kenpo_total' => $kenpoTotal,
+            'kaigo_self' => $kaigoSelf,
+            'kaigo_office' => $kaigoOffice,
+            'kaigo_total' => $kaigoTotal,
+            'kounen_self' => $kounenSelf,
+            'kounen_office' => $kounenOffice,
+            'kounen_total' => $kounenTotal,
+            'child_support_self' => $childSupportSelf,
+            'child_support_funds' => $childSupportOffice,
+            'child_support_total' => $childSupportTotal,
+            'jidou_office' => $jidouOffice,
+            'self_total' => $kenpoSelf + $kaigoSelf + $kounenSelf + $childSupportSelf,
+            'office_total' => $kenpoOffice + $kaigoOffice + $kounenOffice + $jidouOffice + $childSupportOffice,
+            'grand_total' => $kenpoTotal + $kaigoTotal + $kounenTotal + $jidouOffice + $childSupportTotal,
+        ];
+    }
+
+    private function officeInsuranceAmount(float $standard, float $ratePercent): int
+    {
+        if ($standard <= 0 || $ratePercent <= 0) {
+            return 0;
+        }
+
+        return (int) ceil($standard * ($ratePercent / 100));
+    }
+
+    /**
+     * 標準賞与額の上限キャップ（健保：年度累計573万円、厚年：同月累計150万円）を反映した
+     * 対象標準額。児童手当拠出金（PayrollV2EmploymentInsuranceService::recalculateBonus）も
+     * 厚生年金と同じ上限を使うため、ここから呼ぶ（2026-08-17、public化）。
+     * @return array{kenpo_target_standard:float,kounen_target_standard:float}
+     */
+    public function resolveTargetStandards(string $staffId, int $currentRowId, string $paymentDate, float $currentStandard): array
     {
         $selectedTs = strtotime($paymentDate);
         if ($selectedTs === false) {
@@ -175,7 +254,7 @@ class PayrollV2BonusSocialInsuranceService
             'kounen_target_standard' => $kounenTargetStandard,
         ];
     }
-    /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float} */
+    /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,kodomo_shien:float,jidou_rate:float} */
     private function loadBonusRates(string $companyId, string $paymentDate): array
     {
         $query = DB::connection('sqlsrv_payroll')->table('dbo.mx_syaho');
@@ -195,6 +274,8 @@ class PayrollV2BonusSocialInsuranceService
                 'kounen_rate',
                 'kodomo_shien',
                 'kodomo_shien_date',
+                'jidou_apply_date',
+                'jidou_rate',
             ]);
 
         return [
@@ -202,6 +283,7 @@ class PayrollV2BonusSocialInsuranceService
             'kaigo_rate' => $this->pickApplicableRate($rows, 'kaigo_apply_date', 'kaigo_rate', $paymentDate),
             'kounen_rate' => $this->pickApplicableRate($rows, 'kou_apply_date', 'kounen_rate', $paymentDate),
             'kodomo_shien' => $this->pickApplicableRate($rows, 'kodomo_shien_date', 'kodomo_shien', $paymentDate),
+            'jidou_rate' => $this->pickApplicableRate($rows, 'jidou_apply_date', 'jidou_rate', $paymentDate),
         ];
     }
 

@@ -44,12 +44,14 @@
 
   $rowDefs = array_merge(
   [
-  ['label' => '出勤日数', 'key' => 'work_in_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
-  ['label' => '実働時間', 'key' => 'work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
-  ['label' => '欠勤日数', 'key' => 'absence_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
-  ['label' => '残業時間', 'key' => 'overtime', 'type' => 'num', 'digits' => 2, 'sum' => true],
-  ['label' => '休日出勤時間', 'key' => 'holiday_work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
+  ['label' => '総出勤日数', 'key' => 'work_in_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
+  ['label' => '平日出勤日数', 'key' => 'work_in_num_net', 'type' => 'num', 'digits' => 0, 'sum' => true],
   ['label' => '休日出勤日数', 'key' => 'work_holiday_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
+  ['label' => '欠勤日数', 'key' => 'absence_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
+  ['label' => '総出勤時間', 'key' => 'work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
+  ['label' => '所定時間', 'key' => 'work_time_net', 'type' => 'num', 'digits' => 2, 'sum' => true],
+  ['label' => '休日出勤時間', 'key' => 'holiday_work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
+  ['label' => '残業時間', 'key' => 'overtime', 'type' => 'num', 'digits' => 2, 'sum' => true],
   ['label' => '有休日数', 'key' => 'holiday_true', 'type' => 'num', 'digits' => 2, 'sum' => true],
   ['label' => '有休残日数', 'key' => 'holiday_true_num', 'type' => 'num', 'digits' => 2, 'sum' => false],
   ['label' => '遅刻・早退時間', 'key' => 'late_time', 'type' => 'num', 'digits' => 2, 'sum' => true],

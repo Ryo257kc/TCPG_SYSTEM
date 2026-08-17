@@ -440,8 +440,7 @@
         .payroll-master-block input[type="text"],
         .payroll-master-block input[type="date"],
         .social-insurance-block input[type="text"],
-        .social-insurance-block input[type="date"],
-        .social-insurance-block input[type="month"] {
+        .social-insurance-block input[type="date"] {
             max-width: 140px;
             min-width: 0;
             box-sizing: border-box;

@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin\V2\Attendance;
 
+use App\Services\Shared\StoreDisplayNameService;
 use App\Support\AttendanceTime;
 
 use DateInterval;
@@ -15,6 +16,7 @@ class AttendanceV2DailyTableItemBuilder
     // 日別画面の下に出す合計も AttendanceV2MonthlySummaryService を使い、一覧や給与反映と同じ式にする。
     public function __construct(
         private readonly AttendanceV2MonthlySummaryService $monthlySummaryService,
+        private readonly StoreDisplayNameService $storeDisplayNameService,
     ) {}
 
     /**
@@ -59,11 +61,11 @@ class AttendanceV2DailyTableItemBuilder
             ->select(['store_code', 'store_name', 'store_short_name'])
             ->orderBy('store_code')
             ->get()
-            ->map(static function ($row): array {
-                $value = trim((string) ($row->store_short_name ?? ''));
-                if ($value === '') {
-                    $value = trim((string) ($row->store_name ?? ''));
-                }
+            ->map(function ($row): array {
+                $value = $this->storeDisplayNameService->resolve(
+                    (string) ($row->store_name ?? ''),
+                    (string) ($row->store_short_name ?? '')
+                );
 
                 return [
                     'value' => $value,
@@ -107,8 +109,10 @@ class AttendanceV2DailyTableItemBuilder
         foreach ($storeRows as $storeRow) {
             $storeCode = trim((string) ($storeRow->store_code ?? ''));
             $storeName = trim((string) ($storeRow->store_name ?? ''));
-            $storeShortName = trim((string) ($storeRow->store_short_name ?? ''));
-            $displayName = $storeShortName !== '' ? $storeShortName : $storeName;
+            $displayName = $this->storeDisplayNameService->resolve(
+                (string) ($storeRow->store_name ?? ''),
+                (string) ($storeRow->store_short_name ?? '')
+            );
 
             if ($displayName === '') {
                 continue;
@@ -174,10 +178,15 @@ class AttendanceV2DailyTableItemBuilder
             ]);
 
             $rawChangeScheduled = trim((string) ($card->change_scheduled ?? ''));
+            // 要確認：有休・有半・振休・欠勤の日はchange_scheduled/change_start・endが
+            // 空のことが多く、そのままだとシフト予定時間へフォールバックして「休みの日なのに
+            // 所定時間が入っている」ように見えてしまう。休みの日はフォールバックさせず空欄にする
+            // （AttendanceV2MonthlySummaryService::isRestCategory()と同じ判定、2026-08-17）。
+            $isRestDay = $this->monthlySummaryService->isRestCategory((string) ($card->work_type ?? ''));
 
             $displayChangeScheduled = $rawChangeScheduled !== ''
                 ? $this->formatNumber($rawChangeScheduled)
-                : ($hasChangeRecord ? $changeScheduled : $shiftScheduled);
+                : ($hasChangeRecord ? $changeScheduled : ($isRestDay ? '' : $shiftScheduled));
 
             $isChangeScheduledOver =
                 $rawChangeScheduled !== '' &&

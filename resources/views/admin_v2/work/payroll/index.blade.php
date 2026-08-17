@@ -18,6 +18,10 @@
     .edit-input {
       width: 82px;
     }
+
+    .kv tr.attendance-group-end td {
+      border-bottom: 2px solid #4a5a75;
+    }
   </style>
 </head>
 
@@ -257,11 +261,16 @@
                   [$k, $m] = $it;
                   $val = $m === -1 ? $t($k) : $n($k, $m);
                   $delta = ($k === 'holiday_true_num' && $m !== -1) ? $deltaFrom($k, $m) : '';
-                  $rowClass = in_array($k, $totalRowKeys, true) ? 'total-row' : '';
+                  $isTotalRow = in_array($k, $totalRowKeys, true);
+                  $rowClass = ($isTotalRow || in_array($k, $boldOnlyRowKeys ?? [], true)) ? 'total-row' : '';
+                  // 日数系(欠勤日数)・時間系(遅刻早退時間)の区切りを太い下線で示す（2026-08-17）。
+                  if (in_array($k, ['absence_num', 'late_time'], true)) {
+                      $rowClass = trim($rowClass . ' attendance-group-end');
+                  }
                   @endphp
                   <tr class="{{ $rowClass }}">
                     <td>{!! $l($k) !!}</td>
-                    <td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!in_array($k, $totalRowKeys, true))<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td>
+                    <td><span class="view-only">{{ $val }}@if($delta !== '') <small style="display:block;color:#c15353;font-weight:700;">{{ $delta }}</small>@endif</span>@if(!$isTotalRow)<input class="edit-input edit-only {{ $m===-1 ? 'text' : '' }}" type="text" value="{{ $val }}" data-key="{{ $k }}">@endif</td>
                   </tr>
                   @endforeach
                 </table>

@@ -136,6 +136,12 @@ class PayrollV2SocialInsuranceAmountService
             'kounen_total' => $totals['kounen_total'],
             'jidou_office' => $totals['jidou_office'],
             'child_support_funds' => $childSupportOffice,
+            // 要確認：child_support_fundsは元々「会社負担額」の意味で使われている
+            // （mx_kyuyo_shou.child_support_fundsの「自己」値とは別物）ため、印刷帳票の
+            // 自己/会社/計3列表示用にchild_support_self/child_support_totalを追加した
+            // （2026-08-15、会社負担一覧の項目追加に伴い）。
+            'child_support_self' => $childSupportSelf,
+            'child_support_total' => $childSupportSelf + $childSupportOffice,
             'self_total' => $kenpoSelf + $kaigoSelf + $kounenSelf + $childSupportSelf,
             'office_total' => $kenpoOffice + $kaigoOffice + $kounenOffice + $officeOnly,
             'grand_total' => $totals['kenpo_total'] + $totals['kaigo_total'] + $totals['kounen_total'] + $totals['jidou_office'] + $totals['child_support_funds'],

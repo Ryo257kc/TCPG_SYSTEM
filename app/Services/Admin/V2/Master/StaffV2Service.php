@@ -2,15 +2,13 @@
 
 namespace App\Services\Admin\V2\Master;
 
+use App\Services\Shared\StoreDisplayNameService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class StaffV2Service
 {
-    /** @var array<string, string>|null */
-    private ?array $submissionMayorMap = null;
-
     /** @var array<string, bool> */
     private array $columnExistsCache = [];
 
@@ -19,6 +17,11 @@ class StaffV2Service
 
     /** @var array<string, bool> */
     private array $tableColumnExistsCache = [];
+
+    public function __construct(
+        private readonly StoreDisplayNameService $storeDisplayNameService,
+    ) {
+    }
 
     public function list(string $keyword, string $employmentFilter = 'active', string $companyFilter = ''): array
     {
@@ -71,7 +74,7 @@ class StaffV2Service
             });
         }
 
-        return $query->get()->map(fn ($r) => [
+        return $query->get()->map(fn($r) => [
             'staff_id' => (string) ($r->staff_id ?? ''),
             'staff_name' => (string) ($r->staff_name ?? ''),
             'staff_name_kana' => (string) ($r->staff_name_kana ?? ''),
@@ -117,7 +120,6 @@ class StaffV2Service
             $detail[$column] = $this->normalizeValue($rawValue);
             $detail['_raw_' . $column] = $this->rawValue($rawValue);
         }
-        $detail['submission'] = $this->resolveSubmissionLabel($detail['submission'] ?? '');
         $detail['employment_status'] = $this->normalizeValue($row->employment ?? null);
         $detail['_store_name'] = $this->normalizeValue($row->_store_name ?? null);
         $detail['_company_name'] = $this->normalizeValue($row->_company_name ?? null);
@@ -153,14 +155,17 @@ class StaffV2Service
                     ->orWhere('is_closed', 0)
                     ->orWhereNull('is_closed');
             })
-            ->select(['store_code', 'store_name'])
+            ->select(['store_code', 'store_name', 'store_short_name'])
             ->orderBy('store_code')
             ->get()
-            ->map(static fn ($row): array => [
+            ->map(fn($row): array => [
                 'store_code' => trim((string) ($row->store_code ?? '')),
-                'store_name' => trim((string) ($row->store_name ?? '')),
+                'store_name' => $this->storeDisplayNameService->resolve(
+                    (string) ($row->store_name ?? ''),
+                    (string) ($row->store_short_name ?? '')
+                ),
             ])
-            ->filter(static fn (array $row): bool => $row['store_code'] !== '')
+            ->filter(static fn(array $row): bool => $row['store_code'] !== '')
             ->values()
             ->all();
     }
@@ -176,7 +181,7 @@ class StaffV2Service
             ->table('dbo.mx_companies')
             ->select(['company_id', 'company_name'])
             ->get()
-            ->mapWithKeys(static fn ($row): array => [
+            ->mapWithKeys(static fn($row): array => [
                 trim((string) ($row->company_id ?? '')) => trim((string) ($row->company_name ?? '')),
             ]);
 
@@ -202,7 +207,7 @@ class StaffV2Service
                     'company_name' => $companyName,
                 ];
             })
-            ->filter(static fn (array $row): bool => $row['value'] !== '' && $row['mayor'] !== '')
+            ->filter(static fn(array $row): bool => $row['value'] !== '' && $row['mayor'] !== '')
             ->values()
             ->all();
 
@@ -326,9 +331,6 @@ class StaffV2Service
                 continue;
             }
 
-            if ($column === 'submission' && !array_key_exists('submission', $values)) {
-                continue;
-            }
             if (in_array($column, $this->staffInsuranceColumns(), true) && !array_key_exists($column, $values)) {
                 continue;
             }
@@ -346,11 +348,6 @@ class StaffV2Service
         }
 
         DB::connection('sqlsrv')->table('dbo.mx_staffs')->insert($payload);
-    }
-
-    public function updateSubmission(array $values): void
-    {
-        $this->updateStaffColumns($values, ['submission', 'addressee_no']);
     }
 
     public function updatePermissions(array $values): void
@@ -385,7 +382,7 @@ class StaffV2Service
                 'ms.staff_name',
                 DB::raw('st.store_name as store_name'),
                 DB::raw('ms.employment as employment_status'),
-            ], array_map(fn (string $c) => "ms.$c", $this->permissionColumns())))
+            ], array_map(fn(string $c) => "ms.$c", $this->permissionColumns())))
             ->orderBy('ms.staff_id');
 
         if ($employmentFilter === 'active') {
@@ -507,7 +504,7 @@ class StaffV2Service
             ->where('staff_name', $staffId)
             ->orderBy('shift_no')
             ->get()
-            ->map(fn ($row): array => [
+            ->map(fn($row): array => [
                 'shift_no' => (string) ($row->shift_no ?? ''),
                 'week' => trim((string) ($row->week ?? '')),
                 'shift_start' => $this->extractTime($row->shift_in ?? null),
@@ -532,7 +529,7 @@ class StaffV2Service
             return;
         }
 
-        $rows = array_map(fn (string $week): array => [
+        $rows = array_map(fn(string $week): array => [
             'staff_name' => $staffId,
             'week' => $week,
         ], $this->weekOptions());
@@ -600,12 +597,12 @@ class StaffV2Service
 
     public function updateShaho(array $values): void
     {
-        $this->updateRow('mx_staff_shou', 'staff_shou_id', $values['staff_shou_id'] ?? '', $values, $this->shahoColumns(), 'sqlsrv_payroll');
+        $this->updateRow('mx_staff_shou', 'staff_id', $values['staff_id'] ?? '', $values, $this->shahoColumns(), 'sqlsrv_payroll');
     }
 
     public function deleteShaho(array $values): void
     {
-        $this->deleteRow('mx_staff_shou', 'staff_shou_id', $values['staff_shou_id'] ?? '', 'sqlsrv_payroll');
+        $this->deleteRow('mx_staff_shou', 'staff_id', $values['staff_id'] ?? '', 'sqlsrv_payroll');
     }
 
     public function createResident(array $values): void
@@ -784,7 +781,6 @@ class StaffV2Service
             'syaho_date',
             'koyou_date',
             'tax_amount',
-            'submission',
             'business_content',
             'has_fixed_term',
             'fixed_term_detail',
@@ -957,45 +953,6 @@ class StaffV2Service
         }
 
         return $normalized;
-    }
-
-    private function resolveSubmissionLabel(string $value): string
-    {
-        $normalized = $this->normalizeMayorKey($value);
-        if ($normalized === '') {
-            return $value;
-        }
-
-        $map = $this->submissionMayorMap();
-        return $map[$normalized] ?? $value;
-    }
-
-    /** @return array<string, string> */
-    private function submissionMayorMap(): array
-    {
-        if ($this->submissionMayorMap !== null) {
-            return $this->submissionMayorMap;
-        }
-
-        $rows = DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_mayor')
-            ->select(['mayor_no', 'mayor'])
-            ->get();
-
-        $map = [];
-        foreach ($rows as $row) {
-            $key = $this->normalizeMayorKey((string) ($row->mayor_no ?? ''));
-            $label = trim((string) ($row->mayor ?? ''));
-            if ($key === '' || $label === '' || isset($map[$key])) {
-                continue;
-            }
-
-            $map[$key] = $label;
-        }
-
-        $this->submissionMayorMap = $map;
-
-        return $this->submissionMayorMap;
     }
 
     private function normalizeMayorKey(string $value): string

@@ -119,6 +119,10 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
   </div>
 
   <div class="staff-tab-panels">
+    @if(session('status'))
+    <div class="status">{{ session('status') }}</div>
+    @endif
+
     @if ($errors->any())
     <div class="error">
       @foreach ($errors->all() as $error)

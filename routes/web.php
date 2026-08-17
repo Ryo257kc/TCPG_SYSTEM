@@ -192,7 +192,6 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/staff/permissions', [StaffV2Controller::class, 'updatePermissions'])->name('admin.master.staff.permissions.update');
         Route::post('/master/staff', [StaffV2Controller::class, 'store'])->name('admin.master.staff.store');
         Route::post('/master/staff/update', [StaffV2Controller::class, 'update'])->name('admin.master.staff.update');
-        Route::post('/master/staff/submission', [StaffV2Controller::class, 'updateSubmission'])->name('admin.master.staff.submission.update');
         Route::post('/master/staff/insurance', [StaffV2Controller::class, 'updateInsurance'])->name('admin.master.staff.insurance.update');
         Route::post('/master/staff/basic-shift', [StaffV2Controller::class, 'storeBasicShift'])->name('admin.master.staff.basic_shift.store');
         Route::post('/master/staff/basic-shift/create-week', [StaffV2Controller::class, 'storeBasicShiftWeek'])->name('admin.master.staff.basic_shift.create_week');

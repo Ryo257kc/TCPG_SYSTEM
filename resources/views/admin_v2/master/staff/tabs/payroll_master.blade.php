@@ -69,6 +69,10 @@ return '履歴 ' . $fallback;
   </div>
 
   <div class="staff-tab-panels">
+    @if(session('status'))
+    <div class="status">{{ session('status') }}</div>
+    @endif
+
     <form method="post" action="{{ route('admin.master.staff.kihon.store') }}" class="info-block payroll-master-block">
       @csrf
       <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">

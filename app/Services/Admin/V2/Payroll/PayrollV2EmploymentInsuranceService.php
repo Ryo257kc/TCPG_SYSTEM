@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 
 class PayrollV2EmploymentInsuranceService
 {
+    public function __construct(
+        private readonly PayrollV2BonusSocialInsuranceService $bonusSocialInsuranceService,
+    ) {}
+
     /**
      * 月給の雇用保険・会社負担分を計算する正本。
      *
@@ -119,8 +123,13 @@ class PayrollV2EmploymentInsuranceService
             'kounen_h',
             'kounen',
         ]);
+        // 要確認：jidou_rateは%表記（例：0.36=0.36%）なので÷100が正しいが、
+        // 以前は÷1000になっており児童手当拠出金が本来の1/10で保存されていた。
+        // 賞与用のjidou_shoyo（%×10で保存、÷1000用）と桁が違うことをmx_syahoの
+        // 実データで確認した上で修正（2026-08-17）。会社負担一覧側の
+        // PayrollV2SocialInsuranceAmountService::fullAmounts()と同じceil/÷100に揃える。
         $jidouOffice = ($jidouRitu > 0 && $jidouBase > 0)
-            ? (int) floor($jidouBase * ($jidouRitu / 1000.0))
+            ? (int) ceil($jidouBase * ($jidouRitu / 100.0))
             : 0;
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;
@@ -253,9 +262,21 @@ class PayrollV2EmploymentInsuranceService
             $koyouOffice = max(0, $total - $koyou);
         }
 
-        $jidouBase = floor($target / 1000.0) * 1000.0;
+        // 要確認：児童手当拠出金は厚生年金と同じ標準賞与額（同月累計150万円上限）が
+        // 基礎になるはずが、以前は雇用保険と同じ上限なしのrouho_target_sumを使っていた。
+        // PayrollV2BonusSocialInsuranceServiceの上限判定（resolveTargetStandards）を
+        // 共有し、厚年の対象標準額と揃える（2026-08-17）。
+        $gross = (float) ($current->bonus_amo ?? 0);
+        $currentStandard = floor($gross / 1000.0) * 1000.0;
+        $targets = $this->bonusSocialInsuranceService->resolveTargetStandards(
+            $staffId,
+            (int) $current->kyuyo_sho_no,
+            $paymentDate,
+            $currentStandard
+        );
+        $jidouBase = $targets['kounen_target_standard'];
         $jidouOffice = ($jidouRitu > 0 && $jidouBase > 0)
-            ? (int) floor($jidouBase * ($jidouRitu / 1000.0))
+            ? (int) ceil($jidouBase * ($jidouRitu / 1000.0))
             : 0;
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;

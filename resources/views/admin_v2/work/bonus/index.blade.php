@@ -226,6 +226,7 @@
             <button class="btn" type="button" id="bonus-recalculate-btn" @disabled($bonusConfirmed)>再計算</button>
             <a class="btn" href="{{ route('admin.bonus.transfer-list', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">振込一覧</a>
             <a class="btn" href="{{ route('admin.bonus.wage-ledger', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">賃金台帳</a>
+            <a class="btn" href="{{ route('admin.bonus.company-burden-print', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">会社負担一覧</a>
           </div>
           @php
           $summary = (array) (($selectedRow['summary'] ?? []) ?: []);

@@ -1055,12 +1055,29 @@ class StoreDailyReportController extends Controller
         }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
-        $isConfirmed = DB::connection('sqlsrv_dailyreport')
+        $dailySummaryRow = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_日報集計')
+            ->select(['日付', '確定'])
             ->where('日報集計No', $dailySummaryId)
-            ->value('確定');
+            ->first();
 
-        if ((bool) $isConfirmed && !$this->isPaymentCheck($staffRow)) {
+        if ($dailySummaryRow === null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '保存対象が確認できません。');
+        }
+
+        // 要確認：月次処理＝「確定した、もう編集しない」という意味（ユーザー確認済み）。
+        // 月次締めチェックが無く、実質ノーガードの「確定」フラグだけで守っているつもりだった。
+        // saveDailySummarySummary()と同じ月次締めチェックを追加した（2026-08-15）。
+        $targetMonthEnd = Carbon::parse((string) $dailySummaryRow->{'日付'})->endOfMonth()->startOfDay();
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '月次処理済のため保存できません。');
+        }
+
+        if ((bool) $dailySummaryRow->{'確定'} && !$this->isPaymentCheck($staffRow)) {
             return redirect()
                 ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
                 ->with('errorMessage', '確定済みの日報は保存できません。');
@@ -1177,8 +1194,12 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '日付または店舗が確認できません。');
         }
 
+        // 要確認：月次処理＝「確定した、もう編集しない」という意味（ユーザー確認済み）なので、
+        // 経理権限(payment_check)の有無に関わらず全員ブロックするのが正しい。以前は
+        // $isPaymentCheckUser && の条件が付いていて、経理権限が無い一般スタッフだけが
+        // 締め後もチェックを素通りできてしまう逆転した作りだった（2026-08-15修正）。
         $targetMonthEnd = Carbon::createFromFormat('Y-m-d', $targetDate)->endOfMonth()->startOfDay();
-        if ($isPaymentCheckUser && $this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
             return redirect()
                 ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
                 ->with('errorMessage', '月次処理済みの経費は保存できません。');
@@ -1436,6 +1457,14 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '患者追加に必要な項目が不足しています。');
         }
 
+        // 要確認：月次締めチェックが元々無く、ノーガードだった（2026-08-15追加）。
+        $targetMonthEnd = Carbon::createFromFormat('Y-m-d', $targetDate)->endOfMonth()->startOfDay();
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '月次処理済のため追加できません。');
+        }
+
         $patientNo = $dailySummaryId . '-' . str_pad((string) ((int) $dailyOrder), 3, '0', STR_PAD_LEFT);
 
         $exists = DB::connection('sqlsrv_dailyreport')
@@ -1501,6 +1530,15 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '確定済みの日報は更新できません。');
         }
 
+        // 要確認：月次締めチェックが無く、実質ノーガードの「確定」フラグだけで守っているつもり
+        // だった（2026-08-15追加）。
+        $targetMonthEnd = Carbon::parse((string) $dailySummaryRow->{'日付'})->endOfMonth()->startOfDay();
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '月次処理済のため更新できません。');
+        }
+
         $targetDate = $this->formatDateValue($dailySummaryRow->{'日付'} ?? null, 'Y-m-d');
         $targetStore = trim((string) ($dailySummaryRow->{'日報集計店舗'} ?? ''));
 
@@ -1544,6 +1582,24 @@ class StoreDailyReportController extends Controller
         }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
+
+        // 要確認：月次締めチェックが元々無く、しかもsaveアクションのみ「確定」フラグ
+        // （実質ノーガード）でチェックしていて、delete_patientアクションはそれすら無かった。
+        // 月次処理＝「もう編集しない」という原則（ユーザー確認済み）に合わせ、save・
+        // delete_patientどちらも月次締めチェックを追加した（2026-08-15）。
+        $dailySummaryDate = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->where('日報集計No', $dailySummaryId)
+            ->value('日付');
+
+        if ($dailySummaryDate !== null) {
+            $targetMonthEnd = Carbon::parse((string) $dailySummaryDate)->endOfMonth()->startOfDay();
+            if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+                return redirect()
+                    ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                    ->with('errorMessage', '月次処理済のため保存できません。');
+            }
+        }
 
         if ($action === 'save' && !$this->isPaymentCheck($staffRow)) {
             $isConfirmed = DB::connection('sqlsrv_dailyreport')

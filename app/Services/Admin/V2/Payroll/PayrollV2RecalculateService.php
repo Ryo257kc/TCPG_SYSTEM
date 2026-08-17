@@ -222,8 +222,15 @@ class PayrollV2RecalculateService
 
         $hourlyRate = $this->hourlyRate($kihon);
         $workTime = $this->num($currentSummary['work_time'] ?? 0);
+        // 要確認：work_timeは残業・休日出勤の時間も含む総時間のため、そのまま時給を掛けると
+        // 残業手当・休日出勤手当（PayrollV2OvertimeDeductionServiceで満額別計算）と二重払いに
+        // なっていた。通常時間分だけ基本給とし、残業・休日出勤分はそちらの手当だけで払う
+        // （2026-08-17）。
+        $overtimeHours = $this->num($currentSummary['overtime'] ?? 0);
+        $holidayHours = $this->num($currentSummary['work_time_num'] ?? 0);
+        $regularHours = max(0.0, $workTime - $overtimeHours - $holidayHours);
 
-        return (int) round($hourlyRate * $workTime, 0);
+        return (int) round($hourlyRate * $regularHours, 0);
     }
 
     /** @param array<string,mixed> $kihon */
@@ -395,7 +402,7 @@ class PayrollV2RecalculateService
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
             ->orderByDesc('kyuyo_sho_no')
-            ->first(['work_in_num', 'work_time', 'allowance_amo_4', 'adjustment_cost', 'koujyo_1']) ?? []);
+            ->first(['work_in_num', 'work_time', 'overtime', 'work_time_num', 'allowance_amo_4', 'adjustment_cost', 'koujyo_1']) ?? []);
     }
 
     private function loadPaymentDate(string $staffId, int $year, int $month): string

@@ -2,11 +2,16 @@
 
 namespace App\Services\Admin\V2;
 
+use App\Services\Shared\StoreDisplayNameService;
 use App\Support\ParsedInput;
 use Illuminate\Support\Facades\DB;
 
 class BillingListV2Service
 {
+    public function __construct(
+        private readonly StoreDisplayNameService $storeDisplayNameService,
+    ) {}
+
     /** @return array<string, mixed> */
     public function pageData(array $filters): array
     {
@@ -122,9 +127,12 @@ class BillingListV2Service
     /** @return list<array{value:string,label:string}> */
     private function storeOptions(): array
     {
+        // 要確認：valueはmx_invoice_detailsの store_name 列（正規名の生テキスト）との
+        // 一致に使うため store_name のまま。表示ラベルだけ短縮名優先にする
+        // （StoreDisplayNameServiceと同じ規則、2026-08-17）。
         return DB::connection('sqlsrv')
             ->table('dbo.mx_stores')
-            ->select(['store_name'])
+            ->select(['store_name', 'store_short_name'])
             ->where(function ($query): void {
                 $query->where('is_closed', false)
                     ->orWhere('is_closed', 0)
@@ -136,7 +144,10 @@ class BillingListV2Service
             ->get()
             ->map(fn($row): array => [
                 'value' => trim((string) ($row->store_name ?? '')),
-                'label' => trim((string) ($row->store_name ?? '')),
+                'label' => $this->storeDisplayNameService->resolve(
+                    (string) ($row->store_name ?? ''),
+                    (string) ($row->store_short_name ?? '')
+                ),
             ])
             ->filter(fn(array $row): bool => $row['value'] !== '')
             ->values()

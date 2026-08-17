@@ -3,6 +3,7 @@
 namespace App\Services\StaffPortal\Attendance;
 
 use App\Services\Admin\V2\Attendance\AttendanceV2MonthlySummaryService;
+use App\Services\Shared\StoreDisplayNameService;
 use App\Support\AttendanceTime;
 
 use DateInterval;
@@ -14,6 +15,7 @@ class AttendanceV2DailyTableItemBuilder
 {
     public function __construct(
         private readonly AttendanceV2MonthlySummaryService $monthlySummaryService,
+        private readonly StoreDisplayNameService $storeDisplayNameService,
     ) {}
 
     /**
@@ -62,11 +64,11 @@ class AttendanceV2DailyTableItemBuilder
             ->select(['store_code', 'store_name', 'store_short_name'])
             ->orderBy('store_code')
             ->get()
-            ->map(static function ($row): array {
-                $value = trim((string) ($row->store_short_name ?? ''));
-                if ($value === '') {
-                    $value = trim((string) ($row->store_name ?? ''));
-                }
+            ->map(function ($row): array {
+                $value = $this->storeDisplayNameService->resolve(
+                    (string) ($row->store_name ?? ''),
+                    (string) ($row->store_short_name ?? '')
+                );
 
                 return [
                     'value' => $value,
@@ -108,8 +110,10 @@ class AttendanceV2DailyTableItemBuilder
         foreach ($storeRows as $storeRow) {
             $storeCode = trim((string) ($storeRow->store_code ?? ''));
             $storeName = trim((string) ($storeRow->store_name ?? ''));
-            $storeShortName = trim((string) ($storeRow->store_short_name ?? ''));
-            $displayName = $storeShortName !== '' ? $storeShortName : $storeName;
+            $displayName = $this->storeDisplayNameService->resolve(
+                (string) ($storeRow->store_name ?? ''),
+                (string) ($storeRow->store_short_name ?? '')
+            );
 
             if ($displayName === '') {
                 continue;

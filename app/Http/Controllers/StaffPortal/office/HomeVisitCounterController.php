@@ -240,6 +240,18 @@ class HomeVisitCounterController extends Controller
                 ->startOfDay();
         }
 
+        // 要確認：isReceiptMonthlyClosed()が定義されているのに一度も呼ばれておらず、
+        // 月次処理済み（EntryControllerのレセ請求月次処理と同じauthority='入金確認'）でも
+        // ここだけ編集・削除できてしまっていた。EntryControllerと同じ判定を追加（2026-08-15）。
+        if ($this->isReceiptMonthlyClosed($targetMonth)) {
+            return redirect()->route('office.receipt.home_visit_counter', array_filter([
+                'target_month' => $data['target_month'],
+                'store_name' => trim((string) ($data['filter_store_name'] ?? '')),
+                'patient_name' => trim((string) ($data['filter_patient_name'] ?? '')),
+                'unpaid_only' => trim((string) ($data['filter_unpaid_only'] ?? '')) === '1' ? '1' : null,
+            ], fn($value): bool => $value !== null && $value !== ''))->with('errorMessage', '月次処理済みのため編集できません。');
+        }
+
         $submittedStoreName = trim((string) ($data['store_name'] ?? ''));
         $resolvedStoreShortName = '';
 
@@ -301,9 +313,28 @@ class HomeVisitCounterController extends Controller
             'filter_unpaid_only' => ['nullable', 'string'],
         ]);
 
+        $detailId = (int) $data['insurance_claim_detail_id'];
+        $existingTreatmentMonth = DB::connection('sqlsrv')
+            ->table('dbo.mx_insurance_claim_details')
+            ->where('insurance_claim_detail_id', $detailId)
+            ->value('treatment_month');
+        $targetMonth = $existingTreatmentMonth !== null
+            ? Carbon::parse((string) $existingTreatmentMonth)->startOfDay()
+            : Carbon::createFromFormat('Y-m-d', (string) $data['target_month'] . '-01')->endOfMonth()->startOfDay();
+
+        // 要確認：save()と同じ理由でここにも月次処理済みチェックを追加（2026-08-15）。
+        if ($this->isReceiptMonthlyClosed($targetMonth)) {
+            return redirect()->route('office.receipt.home_visit_counter', array_filter([
+                'target_month' => $data['target_month'],
+                'store_name' => trim((string) ($data['filter_store_name'] ?? '')),
+                'patient_name' => trim((string) ($data['filter_patient_name'] ?? '')),
+                'unpaid_only' => trim((string) ($data['filter_unpaid_only'] ?? '')) === '1' ? '1' : null,
+            ], fn($value): bool => $value !== null && $value !== ''))->with('errorMessage', '月次処理済みのため削除できません。');
+        }
+
         DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details')
-            ->where('insurance_claim_detail_id', (int) $data['insurance_claim_detail_id'])
+            ->where('insurance_claim_detail_id', $detailId)
             ->delete();
 
         return redirect()->route('office.receipt.home_visit_counter', array_filter([

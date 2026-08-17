@@ -4,6 +4,7 @@ namespace App\Http\Controllers\StaffPortal;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
+use App\Services\Shared\StoreDisplayNameService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,11 @@ use Illuminate\View\View;
 class ShiftController extends Controller
 {
     use HandlesStaffPortalContext;
+
+    public function __construct(
+        private readonly StoreDisplayNameService $storeDisplayNameService,
+    ) {
+    }
 
     public function adminShiftChange(Request $request): RedirectResponse|View
     {
@@ -471,12 +477,13 @@ class ShiftController extends Controller
             ->get()
             ->map(function ($row): array {
                 $storeCode = trim((string) ($row->store_code ?? ''));
-                $shortName = trim((string) ($row->store_short_name ?? ''));
-                $storeName = trim((string) ($row->store_name ?? ''));
 
                 return [
                     'store_code' => $storeCode,
-                    'label' => $shortName !== '' ? $shortName : $storeName,
+                    'label' => $this->storeDisplayNameService->resolve(
+                        (string) ($row->store_name ?? ''),
+                        (string) ($row->store_short_name ?? '')
+                    ),
                 ];
             })
             ->filter(fn(array $row): bool => $row['store_code'] !== '' && $row['label'] !== '')
@@ -599,14 +606,9 @@ class ShiftController extends Controller
 
     private function resolveStoreName(string $shortName, string $name, string $fallback): string
     {
-        if ($shortName !== '') {
-            return $shortName;
-        }
-        if ($name !== '') {
-            return $name;
-        }
+        $resolved = $this->storeDisplayNameService->resolve($name, $shortName);
 
-        return $fallback;
+        return $resolved !== '' ? $resolved : $fallback;
     }
 
     private function extractShiftPayload(Request $request): array

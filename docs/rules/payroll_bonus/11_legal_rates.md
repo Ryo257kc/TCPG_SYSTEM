@@ -31,6 +31,10 @@
 - 計算式そのものを変える場合は、`10_calculation_basis.md` を先に更新する。
 - 検証ケースを追加する。
 - 過去データが変わらないことを確認する。
+- 所得税表は`targetYear`引数で年度分岐する（`PayrollV2IncomeTaxService::salaryDeduction()`／
+  `PayrollV2BonusIncomeTaxCalcService::bonusRateKou()`）。新しい年度を追加する時もこの分岐に
+  テーブルを足す形にし、現行の税額表を上書きしない（2026-08-15、過去年の税額表が無く
+  現行表で計算されていた実例あり。詳細は`12_change_log.md`）。
 
 ## 過去データ
 

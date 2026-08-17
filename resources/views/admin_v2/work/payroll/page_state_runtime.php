@@ -109,11 +109,13 @@ if (!empty($summary['supply_month'])) {
     }
 }
 $labels = [
-    'work_in_num' => '出勤日数',
+    'work_in_num' => '総出勤日数',
+    'work_in_num_net' => '平日出勤日数',
+    'work_time_net' => '所定時間',
     'absence_num' => '欠勤日数',
-    'work_time' => '実働時間',
-    'work_time_num' => '休日勤務時間',
-    'work_holiday_num' => '休日勤務日数',
+    'work_time' => '総出勤時間',
+    'work_time_num' => '休日出勤時間',
+    'work_holiday_num' => '休日出勤日数',
     'overtime' => '普通残業時間',
     'night_over_time' => '深夜残業',
     'late_time' => '遅刻早退時間',
@@ -225,6 +227,9 @@ $l = function (string $k) use ($labels): string {
     return $labels[$k] ?? $k;
 };
 $totalRowKeys = ['sales_core_total', 'taxation_sum', 'not_taxation_sum', 'supply_sum', 'syaho_sum', 'deduction_sum', 'syaho_deduction_sum', 'kotei_sum', 'yakuin_sum', 'rouho_target_sum', 'syaho_target_sum'];
+// work_in_num/work_time（総出勤日数・総出勤時間）は編集はそのまま残しつつ、
+// 見出し的に太字強調したいだけなので$totalRowKeysとは別扱いにする（2026-08-17）。
+$boldOnlyRowKeys = ['work_in_num', 'work_time'];
 $sectionMonth = function (array $source): string {
     foreach (['decision_date', 'raise_year', 'target_month', 'supply_month', 'apply_month', 'display_from'] as $k) {
         if (!array_key_exists($k, $source)) {
@@ -255,7 +260,7 @@ foreach (['kitazaike','higashi_kakogawa','tsubasa_harima','sakura_hari','orita_h
     $salesCoreTotal += is_numeric($summary[$salesKey] ?? null) ? (float) $summary[$salesKey] : 0.0;
 }
 $summary['sales_core_total'] = $salesCoreTotal;
-$attendance = ['勤怠' => [['work_in_num', 2], ['absence_num', 2], ['work_time', 2], ['work_time_num', 2], ['work_holiday_num', 2], ['overtime', 2], ['late_time', 2], ['holiday_true', 2], ['holiday_true_num', 2], ['time_closed', 2], ['days_closed', 2], ['work_kiso_num', 2]]];
+$attendance = ['勤怠' => [['work_in_num', 2], ['work_in_num_net', 2], ['work_holiday_num', 2], ['absence_num', 2], ['work_time', 2], ['work_time_net', 2], ['work_time_num', 2], ['overtime', 2], ['late_time', 2], ['holiday_true', 2], ['holiday_true_num', 2], ['time_closed', 2], ['days_closed', 2], ['work_kiso_num', 2]]];
 $sales = ['売上' => [['peple_num', 0], ['km', 0], ['kitazaike', 0], ['higashi_kakogawa', 0], ['tsubasa_harima', 0], ['sakura_hari', 0], ['orita_hari', 0], ['miyamoto_hari', 0], ['yokoi_hari', 0], ['own_cost', 0], ['unpaid_amo', 0], ['sales_core_total', 0]]];
 $supply = ['支給' => []];
 $mid = [

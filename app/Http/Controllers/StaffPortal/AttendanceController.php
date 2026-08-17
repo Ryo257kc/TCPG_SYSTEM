@@ -98,7 +98,7 @@ class AttendanceController extends Controller
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(30), tc.actual_leave, 120), ''))) as actual_leave,
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(30), tc.actual_break_out, 120), ''))) as actual_break_out,
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(30), tc.actual_end, 120), ''))) as actual_end,
-                LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, CONVERT(nvarchar(50), tc.work_store), ''))) as work_store,
+                LTRIM(RTRIM(COALESCE(NULLIF(LTRIM(RTRIM(st.store_short_name)), ''), NULLIF(LTRIM(RTRIM(st.store_name)), ''), CONVERT(nvarchar(50), tc.work_store), ''))) as work_store,
                 LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id
             ")
             ->first();
@@ -366,7 +366,7 @@ class AttendanceController extends Controller
                 tc.actual_leave as [exit],
                 tc.actual_break_out as in_out,
                 tc.actual_end as [end],
-                LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, tc.work_store, ''))) as shop
+                LTRIM(RTRIM(COALESCE(NULLIF(LTRIM(RTRIM(st.store_short_name)), ''), NULLIF(LTRIM(RTRIM(st.store_name)), ''), tc.work_store, ''))) as shop
             ")
             ->get()
             ->map(fn($row): array => [
@@ -575,7 +575,7 @@ class AttendanceController extends Controller
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(50), tc.change_scheduled), ''))) as change_scheduled,
                 LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(50), tc.overtime), ''))) as overtime,
                 CAST(NULL as nvarchar(50)) as night_overtime,
-                LTRIM(RTRIM(COALESCE(st.store_short_name, st.store_name, CONVERT(nvarchar(50), tc.work_store), ''))) as shop_name,
+                LTRIM(RTRIM(COALESCE(NULLIF(LTRIM(RTRIM(st.store_short_name)), ''), NULLIF(LTRIM(RTRIM(st.store_name)), ''), CONVERT(nvarchar(50), tc.work_store), ''))) as shop_name,
                 LTRIM(RTRIM(COALESCE(tc.timecard_note, ''))) as remark,
                 LTRIM(RTRIM(COALESCE(tc.return_note, ''))) as return_note,
                 ISNULL(tc.is_returned, 0) as is_returned

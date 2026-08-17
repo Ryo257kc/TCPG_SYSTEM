@@ -10,6 +10,7 @@ Route::get('/payroll/wage-ledger', [PayrollV2Controller::class, 'wageLedger'])->
 Route::get('/payroll/personal-wage-ledger', [PayrollV2Controller::class, 'personalWageLedger'])->name('admin.payroll.personal-wage-ledger');
 Route::get('/payroll/outsource-reward-ledger-print', [PayrollV2Controller::class, 'outsourceRewardLedgerPrint'])->name('admin.payroll.outsource-reward-ledger-print');
 Route::get('/payroll/company-burden-print', [PayrollV2Controller::class, 'companyBurdenPrint'])->name('admin.payroll.company-burden-print');
+Route::get('/bonus/company-burden-print', [PayrollV2Controller::class, 'bonusCompanyBurdenPrint'])->name('admin.bonus.company-burden-print');
 Route::get('/payroll/home-visit-sales-print', [PayrollV2Controller::class, 'homeVisitSalesPrint'])->name('admin.payroll.home-visit-sales-print');
 Route::get('/payroll/outsource-menu-sales-print', [PayrollV2Controller::class, 'outsourceMenuSalesPrint'])->name('admin.payroll.outsource-menu-sales-print');
 Route::get('/payroll/home-visit-sales-detail-print', [PayrollV2Controller::class, 'homeVisitSalesDetailPrint'])->name('admin.payroll.home-visit-sales-detail-print');

@@ -9,6 +9,13 @@
 - 店舗名、部門名、会社名を推測で補完しない。
 - 0円になった既存仕訳を勝手に削除する補強を入れない。
 - 既存DBの値を表示用に丸めて保存しない。
+- 月次済みの店舗日報データは編集不可（`docs/rules/store_daily_report/00_common.md`）。
+  - 実例（2026-08-16）: `StoreDailyReportController`の7つの保存系メソッドのうち5つ
+    （`saveDailySummaryHeader`／`saveDailySummaryExpense`（月次チェックの条件が経理権限の
+    有無で逆になっていた）／`addDailySummaryPatient`／`bulkCheckDailySummaryDetail`／
+    `saveDailySummaryDetail`（保存アクションのみで削除アクションは無防備だった））で
+    月次締めチェックが抜けていた。Blade側の表示制御（ボタン非表示）だけでは守られない。
+    新しい保存・削除メソッドを追加する時は、`dailySummaryMonthlyClosingRow()`を必ず呼ぶ。
 
 ## 数字が違うとき
 

@@ -145,7 +145,7 @@ return $value;
       <div class="info-block-grid">
         <label class="detail-field detail-field-compact">
           <span>住民税対象月</span>
-          <input type="month" name="target_month" required>
+          <input type="date" name="target_month" required>
         </label>
         <label class="detail-field detail-field-compact">
           <span>宛名番号　</span>
@@ -205,7 +205,7 @@ return $value;
       <div class="info-block-grid">
         <label class="detail-field detail-field-compact">
           <span>住民税対象月</span>
-          <input type="month" name="target_month" value="{{ substr((string)($row['_raw_target_month'] ?? ''), 0, 7) }}" required>
+          <input type="date" name="target_month" value="{{ substr((string)($row['_raw_target_month'] ?? ''), 0, 10) }}" required>
         </label>
         <label class="detail-field detail-field-compact">
           <span>年間合計</span>

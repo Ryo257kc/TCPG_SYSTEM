@@ -1,5 +1,14 @@
 # 勤怠 変更履歴
 
+## 2026-08-17 総勤務日数・総実働時間の整理、休みの日の除外、検算アラート追加
+
+- `work_in_num`/`work_time`（出勤日数・実働時間）はAccess時代から「休日出勤分も含む総勤務日数・総実働時間」として明細・賃金台帳に出力され続けているため、意味を変えず維持する方針に確定。
+- 新規に`work_in_num_net`/`work_time_net`列を`mx_kyuyo_shou`へ追加（`database/sql/2026_08_add_work_net_columns_to_mx_kyuyo_shou.sql`）。休日出勤・残業を除いた「所定時間」等を別カラムに保存し、既存列は書き換えない。
+- 有休・有半・振休・欠勤は「休みの日」として出勤日数・実働時間の集計から除外（`AttendanceV2MonthlySummaryService::isRestCategory()`）。ただし有半は半日だけ休みのため、実際に働いた半分は出勤扱いのまま残す。
+- `holiday_work_time`(work_time_num、休日出勤時間)は元々`work_type_time`という手入力欄（空のことが多い）から取っていたため、`change_scheduled`ベースの実働時間と食い違うことがあった。総実働時間から所定時間を引いた値と必ず一致するよう`changeScheduled`ベースに統一。
+- 勤怠一覧に検算アラートを追加（`AttendanceV2MonthlySummaryService::reconciliationDiff()`）。シフト予定−休みの日の予定時間−遅早+残業+休日出勤の実働時間が、実働時間(change_scheduled_total)と一致するかを見る。業務委託は対象外。
+- ラベルを明細(`shared/payroll/payslip_item.blade.php`)・legacy側と同じ「出勤」（日数）「出勤」（時間、旧「実働」から統一）に揃えた。総出勤日数／平日出勤日数／休日出勤日数、総出勤時間／所定時間／休日出勤時間。
+
 ## 2026-08-01 初版作成
 
 - 管理側勤怠、スタッフ月間勤怠、スタッフポータル管理用勤怠のルールを分ける方針にした。

@@ -121,7 +121,7 @@ return '履歴 ' . $fallback;
       <div class="info-block-grid">
         <label class="detail-field detail-field-compact">
           <span>適用年月　　　　</span>
-          <input type="month" name="raise_year" required>
+          <input type="date" name="raise_year" required>
         </label>
         @foreach($shahoFields as $field => $label)
         <label class="detail-field detail-field-compact">
@@ -159,7 +159,7 @@ return '履歴 ' . $fallback;
       <div class="info-block-grid">
         <label class="detail-field detail-field-compact">
           <span>適用年月　　　　</span>
-          <input type="month" name="raise_year" value="{{ substr((string)($row['_raw_raise_year'] ?? ''), 0, 7) }}" required>
+          <input type="date" name="raise_year" value="{{ substr((string)($row['_raw_raise_year'] ?? ''), 0, 10) }}" required>
         </label>
         @foreach($shahoFields as $field => $label)
         <label class="detail-field detail-field-compact">
