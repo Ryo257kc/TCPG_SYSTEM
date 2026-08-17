@@ -135,6 +135,14 @@
     };
 
     var salesPayloadFields = ['peple_num', 'km', 'kitazaike', 'higashi_kakogawa', 'tsubasa_harima', 'sakura_hari', 'orita_hari', 'miyamoto_hari', 'yokoi_hari', 'own_cost', 'unpaid_amo'];
+    // peple_num(人数)・km(距離)は金額ではないため合計から除く。PayrollV2SalesImportService::homeVisitSalesTotal()と同じ式
+    var salesMoneyFields = ['kitazaike', 'higashi_kakogawa', 'tsubasa_harima', 'sakura_hari', 'orita_hari', 'miyamoto_hari', 'yokoi_hari', 'own_cost', 'unpaid_amo'];
+
+    var salesRowTotal = function(sales) {
+      return salesMoneyFields.reduce(function(sum, field) {
+        return sum + Number((sales || {})[field] || 0);
+      }, 0);
+    };
 
     var closePayrollSalesInline = function() {
       if (payrollSalesInline) payrollSalesInline.hidden = true;
@@ -218,15 +226,14 @@
         if (Number(row.edit_lock || 0) === 1) tr.className = (tr.className + ' sales-inline-locked').trim();
 
         var name = document.createElement('td');
+        name.className = 'sales-name-cell';
         name.textContent = (row.staff_id || '') + ' ' + (row.staff_name || '');
         tr.appendChild(name);
 
-        salesPayloadFields.forEach(function(field) {
-          var td = document.createElement('td');
-          td.className = 'num';
-          td.textContent = row.sales ? formatSalesNumber(sales[field]) : '';
-          tr.appendChild(td);
-        });
+        var total = document.createElement('td');
+        total.className = 'num sales-total-cell';
+        total.textContent = row.sales ? formatSalesNumber(salesRowTotal(sales)) : '';
+        tr.appendChild(total);
 
         var action = document.createElement('td');
         var button = document.createElement('button');
@@ -239,6 +246,13 @@
         });
         action.appendChild(button);
         tr.appendChild(action);
+
+        salesPayloadFields.forEach(function(field) {
+          var td = document.createElement('td');
+          td.className = 'num';
+          td.textContent = row.sales ? formatSalesNumber(sales[field]) : '';
+          tr.appendChild(td);
+        });
 
         payrollSalesList.appendChild(tr);
       });

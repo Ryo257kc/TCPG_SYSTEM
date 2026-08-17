@@ -24,10 +24,6 @@ class PaidLeaveV2SummaryService
             ];
         }
 
-        $today = Carbon::today();
-        $yearEnd = Carbon::create($selectedYear, 12, 31);
-        $cutoff = $selectedYear === (int) $today->format('Y') ? $today : $yearEnd;
-
         $staff = (array) (DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->select([
@@ -55,31 +51,34 @@ class PaidLeaveV2SummaryService
             ->get();
 
         return [
-            'summary' => $this->buildSummary($staff, $history, $cutoff),
+            'summary' => $this->buildSummary($staff, $history),
             'historyRows' => $this->buildHistoryRows($history, $page, $perPage),
             'historyPager' => $this->buildHistoryPager($history, $page, $perPage),
         ];
     }
 
-    private function buildSummary(array $staff, Collection $history, Carbon $cutoff): array
+    private function buildSummary(array $staff, Collection $history): array
     {
         $joinDate = $this->dateOrNull($staff['nyu_date'] ?? null);
 
         $additionRows = $history->filter(fn ($row) => $this->dateOrNull($row->addition_day ?? null) !== null);
         $firstGrantDate = $joinDate?->copy()->addMonths(6);
-        $lastGrantDate = $additionRows->map(fn ($row) => $this->dateOrNull($row->addition_day))->filter()->sort()->last();
+        $lastGrantRow = $additionRows
+            ->sortBy(fn ($row) => $this->dateOrNull($row->addition_day ?? null)?->format('Ymd') ?? '')
+            ->last();
+        $lastGrantDate = $lastGrantRow !== null ? $this->dateOrNull($lastGrantRow->addition_day ?? null) : null;
+        $lastGrantDays = $lastGrantRow !== null ? $this->num($lastGrantRow->remaining_day ?? null) : 0.0;
         $nextGrantDate = ($lastGrantDate ?? $firstGrantDate)?->copy()->addYear();
 
-        $grantTotal = $history->sum(fn ($row) => $this->num($row->remaining_day ?? null));
-        $usedTotal = $history->sum(fn ($row) => $this->num($row->days_used ?? null));
-        $lostTotal = $history->sum(fn ($row) => $this->num($row->lost_num ?? null));
-
-        $extinguishDays = $history->filter(function ($row) use ($cutoff) {
-            $date = $this->scheduledExpireDate($row);
-            return $date !== null && (int) $date->format('Y') === (int) $cutoff->format('Y');
-        })->sum(fn ($row) => $this->num($row->lost_num ?? null));
-
         $remainingDays = $this->remainingService->remainingDays(trim((string) ($staff['staff_id'] ?? '')));
+        // 要確認：有休は付与から2年で消滅するため、常に直近1回分の付与だけは保護され、
+        // 残日数のうちそれを超える分は次の消滅処理で消える運命にある。上限は本来
+        // 「直近の付与＋今回の新規付与」だが、残日数にはまだ今回分を含めていないので
+        // 今回の付与数を知らなくても max(0, 残日数-直近の付与数) で同じ結果になる
+        // （Accessの右上サマリー「消滅日数」と同じ考え方。以前はlost_numを消滅期限の年で
+        // 拾っていたが、lost_numは付与のたびに手入力される実績値で見込み計算とは別物のため
+        // 一致しないことがあった、2026-08-17）。
+        $extinguishDays = max(0.0, $remainingDays - $lastGrantDays);
         $grantCount = (int) $additionRows->count();
 
         return [
@@ -193,21 +192,15 @@ class PaidLeaveV2SummaryService
             ->values();
     }
 
+    // 要確認：以前は消滅期限日（addition_day+2年）も候補に入れて一番新しい日付を採用していたため、
+    // 付与行が「付与日」ではなく2年後の期限日の位置に表示され、時系列が実際の出来事と
+    // ズレて見えていた（付与行のlost_numは付与時点でのその回の付与分の消滅数で、期限日は
+    // 参考情報の1列に過ぎない）。付与行は付与日、使用行は使用日という実際の出来事の日付だけで
+    // 並べる（2026-08-17）。
     private function historySortDate(object $row): ?Carbon
     {
-        $dates = array_filter([
-            $this->dateOrNull($row->date_use ?? null),
-            $this->scheduledExpireDate($row),
-            $this->dateOrNull($row->addition_day ?? null),
-        ]);
-
-        if ($dates === []) {
-            return null;
-        }
-
-        usort($dates, fn (Carbon $a, Carbon $b) => $b->getTimestamp() <=> $a->getTimestamp());
-
-        return $dates[0];
+        return $this->dateOrNull($row->date_use ?? null)
+            ?? $this->dateOrNull($row->addition_day ?? null);
     }
 
     private function nextGrantDays(int $grantCount): float

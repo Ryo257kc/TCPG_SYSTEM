@@ -117,7 +117,9 @@
           <div class="sales-inline-table-wrap">
             <table class="sales-inline-table">
               <colgroup>
-                <col style="width: 40px;">
+                <col style="width: 35px;">
+                <col style="width: 32px;">
+                <col style="width: 25px;">
                 <col style="width: 20px;">
                 <col style="width: 20px;">
                 <col style="width: 30px;">
@@ -129,11 +131,12 @@
                 <col style="width: 30px;">
                 <col style="width: 30px;">
                 <col style="width: 30px;">
-                <col style="width: 20px;">
               </colgroup>
               <thead>
                 <tr>
-                  <th>スタッフ</th>
+                  <th class="sales-name-cell">スタッフ</th>
+                  <th class="sales-total-cell">合計</th>
+                  <th>操作</th>
                   <th>人数</th>
                   <th>距離</th>
                   <th>北在家</th>
@@ -145,7 +148,6 @@
                   <th>横井鍼灸</th>
                   <th>自費</th>
                   <th>未収金</th>
-                  <th>操作</th>
                 </tr>
               </thead>
               <tbody id="payroll-sales-list"></tbody>
@@ -265,7 +267,7 @@
                   $rowClass = ($isTotalRow || in_array($k, $boldOnlyRowKeys ?? [], true)) ? 'total-row' : '';
                   // 日数系(欠勤日数)・時間系(遅刻早退時間)の区切りを太い下線で示す（2026-08-17）。
                   if (in_array($k, ['absence_num', 'late_time'], true)) {
-                      $rowClass = trim($rowClass . ' attendance-group-end');
+                  $rowClass = trim($rowClass . ' attendance-group-end');
                   }
                   @endphp
                   <tr class="{{ $rowClass }}">

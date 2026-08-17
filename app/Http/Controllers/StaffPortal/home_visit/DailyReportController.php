@@ -37,6 +37,34 @@ class DailyReportController extends Controller
         return $map[$staffId] ?? false;
     }
 
+    // 未収金は給与の売上取込（PayrollV2SalesImportService）に使われるため、給与が
+    // 確定（edit_lock）した後は編集不可にする。取込先の給与年月は日報の月の翌月
+    // （PayrollV2SalesImportService::salesYearMonth()の逆算、2026-08-17）。
+    private function isUncollectedLockedByPayroll(string $staffId, string $treatmentDate): bool
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '') {
+            return false;
+        }
+
+        $year = (int) date('Y', strtotime($treatmentDate));
+        $month = (int) date('n', strtotime($treatmentDate)) + 1;
+        if ($month > 12) {
+            $year++;
+            $month = 1;
+        }
+
+        $editLock = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 0)
+            ->whereRaw('YEAR([supply_month]) = ?', [$year])
+            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+            ->value('edit_lock');
+
+        return (int) ($editLock ?? 0) === 1;
+    }
+
     // 往診閲覧: 編集権限は無いが全スタッフのデータを閲覧できる
     private function canViewAnyDailyReportStaff(?array $staffRow): bool
     {
@@ -130,6 +158,7 @@ class DailyReportController extends Controller
         $canSelectStaff = $this->canViewAnyDailyReportStaff($staffRow);
         $targetMonthStart = date('Y-m-01', strtotime($date));
         $isSalesLocked = $this->isSalesLockedByAttendance($targetStaffId, $date);
+        $isUncollectedLocked = $this->isUncollectedLockedByPayroll($targetStaffId, $date);
 
         return view('staff_portal.home_visit.daily_report.index', $this->commonViewData($request, [
             'date' => $date,
@@ -139,6 +168,7 @@ class DailyReportController extends Controller
             'items' => $items,
             'summary' => $summary,
             'isSalesLocked' => $isSalesLocked,
+            'isUncollectedLocked' => $isUncollectedLocked,
         ]));
     }
 
@@ -595,6 +625,61 @@ class DailyReportController extends Controller
 
         return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
             ->with('status', '売上金額を更新しました。');
+    }
+
+    // 未収金のみの更新（日報一覧から直接入力。給与計算で未収額を確認しながら入力するため、
+    // 日報が確定した後でも編集できるよう通常の update() のロックとは別ルートにしている。
+    // 売上金額(updateSalesAmount)と違い、ロックの基準は勤怠確定ではなく給与確定
+    // （その日報が取り込まれる給与月がedit_lock済みかどうか、2026-08-17）。
+    public function updateUncollectedAmount(Request $request, string $nippouNo): RedirectResponse
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if ($staffId === '') {
+            return $this->redirectToStaffPortalLogin();
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isAccounting($staffRow)) {
+            abort(403);
+        }
+
+        $date = trim((string) $request->input('date', now()->format('Y-m-d')));
+        $targetStaffId = trim((string) $request->input('staff_name', ''));
+
+        $existing = DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->first(['staff_name', 'treatment_date', 'is_management_fixed']);
+
+        if (!$existing) {
+            return back()->withErrors([
+                'visits' => '対象の往診データが見つかりません。',
+            ]);
+        }
+
+        if ((int) $existing->is_management_fixed !== 1) {
+            return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+                ->withErrors(['visits' => '管理者が日報を確定していないため、未収金を入力できません。']);
+        }
+
+        if ($this->isUncollectedLockedByPayroll((string) $existing->staff_name, (string) $existing->treatment_date)) {
+            return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+                ->withErrors(['visits' => '対象の給与が確定済みのため編集できません。']);
+        }
+
+        $validated = $request->validate([
+            'uncollected_amount' => ['nullable'],
+        ]);
+
+        DB::connection('sqlsrv')
+            ->table('dbo.hv_nippou')
+            ->where('daily_report_id', $nippouNo)
+            ->update([
+                'uncollected_amount' => $validated['uncollected_amount'] !== '' ? $validated['uncollected_amount'] : null,
+            ]);
+
+        return redirect()->route('home_visit.daily_report', ['date' => $date, 'staff_name' => $targetStaffId])
+            ->with('status', '未収金を更新しました。');
     }
 
     // 往診1件削除

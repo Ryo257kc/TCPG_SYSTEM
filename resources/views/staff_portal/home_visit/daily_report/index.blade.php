@@ -115,7 +115,7 @@
                         <col style="width: 90px;">
                         @endif
                         <col style="width: 60px;">
-                        <col style="width: 60px;">
+                        <col style="width: 90px;">
                     </colgroup>
                     <thead>
                         <tr>
@@ -164,7 +164,7 @@
                                     @csrf
                                     <input type="hidden" name="date" value="{{ $date }}">
                                     <input type="hidden" name="staff_name" value="{{ $targetStaffId ?? '' }}">
-                                    <input type="number" step="1" name="sales_amount" value="{{ formatNumber($item->sales_amount) }}" class="sales-amount-input" {{ $salesRowLocked ? 'disabled' : '' }}>
+                                    <input type="number" step="1" name="sales_amount" value="{{ $item->sales_amount !== null ? (int) $item->sales_amount : '' }}" class="sales-amount-input" {{ $salesRowLocked ? 'disabled' : '' }}>
                                     @unless($salesRowLocked)
                                     <button type="submit" class="btn btn_small">登録</button>
                                     @endunless
@@ -173,7 +173,25 @@
                             </td>
                             @endif
                             <td>{{ formatNumber($item->private_fee) }}</td>
-                            <td>{{ formatNumber($item->uncollected_amount) }}</td>
+                            <td>
+                                @if($isAccounting && !empty($item->daily_report_id))
+                                @php
+                                $uncollectedNotYetReady = (int) $item->is_management_fixed !== 1;
+                                $uncollectedRowLocked = ($isUncollectedLocked ?? false) || $uncollectedNotYetReady;
+                                @endphp
+                                <form method="post" action="{{ route('home_visit.daily_report.uncollected_amount.update', ['nippouNo' => $item->daily_report_id]) }}" class="sales-amount-form">
+                                    @csrf
+                                    <input type="hidden" name="date" value="{{ $date }}">
+                                    <input type="hidden" name="staff_name" value="{{ $targetStaffId ?? '' }}">
+                                    <input type="number" step="1" name="uncollected_amount" value="{{ $item->uncollected_amount !== null ? (int) $item->uncollected_amount : '' }}" class="sales-amount-input" {{ $uncollectedRowLocked ? 'disabled' : '' }}>
+                                    @unless($uncollectedRowLocked)
+                                    <button type="submit" class="btn btn_small">登録</button>
+                                    @endunless
+                                </form>
+                                @else
+                                {{ formatNumber($item->uncollected_amount) }}
+                                @endif
+                            </td>
                         </tr>
                         @endforeach
                     </tbody>

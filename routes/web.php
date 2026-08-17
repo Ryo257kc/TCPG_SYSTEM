@@ -323,6 +323,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::get('/home_visit/daily_report/{nippouNo}/edit', [DailyReportController::class, 'edit'])->name('home_visit.daily_report.edit');
     Route::post('/home_visit/daily_report/{nippouNo}/update', [DailyReportController::class, 'update'])->name('home_visit.daily_report.update');
     Route::post('/home_visit/daily_report/{nippouNo}/sales-amount', [DailyReportController::class, 'updateSalesAmount'])->name('home_visit.daily_report.sales_amount.update');
+    Route::post('/home_visit/daily_report/{nippouNo}/uncollected-amount', [DailyReportController::class, 'updateUncollectedAmount'])->name('home_visit.daily_report.uncollected_amount.update');
     Route::post('/home_visit/daily_report/{nippouNo}/delete', [DailyReportController::class, 'destroy'])->name('home_visit.daily_report.destroy');
     Route::post('/staff-portal/home-visit/receipts/{id}/update', [ReceiptController::class, 'update'])->name('home_visit.receipts.update');
     Route::delete('/staff-portal/home-visit/receipts/{id}', [ReceiptController::class, 'destroy'])->name('home_visit.receipts.destroy');

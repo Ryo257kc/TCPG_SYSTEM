@@ -762,6 +762,12 @@ input[type="month"] {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+.sales-inline-table .sales-name-cell {
+    padding-right: 2px;
+}
+.sales-inline-table .sales-total-cell {
+    padding-left: 2px;
+}
 .sales-inline-no-data td,
 .sales-inline-locked td {
     color: #7b8798;
