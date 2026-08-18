@@ -126,6 +126,10 @@
       text-align: center;
     }
 
+    .secondary-account-row td {
+      background: var(--header-bg);
+    }
+
     .bank-subtotal td {
       font-size: 12px;
       font-weight: 600;
@@ -358,17 +362,36 @@
             </thead>
             <tbody>
               @foreach ($group['rows'] as $row)
+              @php
+              $hasSecondaryAccount = !empty($row['secondary_account']);
+              $primaryAmount = $hasSecondaryAccount
+                ? (float) $row['transfer_amount'] - (float) $row['secondary_account']['amount']
+                : (float) $row['transfer_amount'];
+              @endphp
               <tr>
                 <td>{{ $row['division'] !== '' ? $row['division'] : '-' }}</td>
                 <td>{{ $row['staff_name'] !== '' ? $row['staff_name'] : '-' }}</td>
                 <td>{{ $row['staff_name_furi'] !== '' ? $row['staff_name_furi'] : '-' }}</td>
                 <td>{{ $row['bank_name'] !== '' ? $row['bank_name'] : '-' }}</td>
                 <td>{{ $row['bank_branch'] !== '' ? $row['bank_branch'] : '-' }}</td>
-                <td class="center">{{ $row['account_no'] !== '' ? $row['account_no'] : '-' }}</td>
-                <td class="num">{{ number_format((float) $row['transfer_amount']) }}</td>
+                <td class="center">{{ $row['account_no'] !== '' ? $row['account_no'] : '-' }}{{ $hasSecondaryAccount && $row['transfer_purpose'] !== '' ? '（' . $row['transfer_purpose'] . '）' : '' }}</td>
+                <td class="num">{{ number_format($primaryAmount) }}</td>
                 <td>{{ $row['city'] !== '' ? $row['city'] : '-' }}</td>
                 <td class="num">{{ number_format((float) $row['income_tax']) }}</td>
               </tr>
+              @if ($hasSecondaryAccount)
+              <tr class="secondary-account-row">
+                <td>-</td>
+                <td></td>
+                <td></td>
+                <td>{{ $row['secondary_account']['bank_name'] !== '' ? $row['secondary_account']['bank_name'] : '-' }}</td>
+                <td>{{ $row['secondary_account']['bank_branch'] !== '' ? $row['secondary_account']['bank_branch'] : '-' }}</td>
+                <td class="center">{{ $row['secondary_account']['account_no'] !== '' ? $row['secondary_account']['account_no'] : '-' }}</td>
+                <td class="num">{{ number_format((float) $row['secondary_account']['amount']) }}</td>
+                <td>-</td>
+                <td></td>
+              </tr>
+              @endif
               @endforeach
               <tr class="bank-subtotal">
                 <td colspan="6" class="bank-subtotal-label">{{ $group['bank_name'] }} 合計</td>

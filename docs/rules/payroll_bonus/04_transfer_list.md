@@ -18,6 +18,17 @@
 - 銀行情報は第1口座を基本にし、必要時に第2口座を使う既存ルールを守る。
 - 給与と賞与で違う集計にしない。
 
+## 振込残額（口座2への分割振込）
+
+`mx_kyuyo_shou.transfer_balance`（振込残額）が設定されているスタッフは、第2口座
+（`bank_name_2`等）へその分だけ分けて振り込む。両口座の登録がある場合のみ、表示上だけ2行に
+割る（`buildTransferListView()`の`secondary_account`、2026-08-18）。集計用の1スタッフ1行は
+そのまま維持し（ソート・人数カウント・住民税/課税対象額/所得税の二重計上を避けるため）、
+blade側で口座1行の直後に口座2の内訳行（氏名・部署は空欄、網掛け、`(メイン)`等の
+`transfer_purpose`を口座番号の横に表示）を追加描画する。口座1の表示額は
+`transfer_amount - secondary_account.amount`。`transfer_amount`自体は口座分割前の総額のまま
+保存されている（`PayrollV2SummaryService::transferAmount()`はtransfer_balanceを引かない）。
+
 ## 業務委託の扱い（会社合計サマリーのみ除外）
 
 「会社合計」ブロックの住民税・所得税・課税対象額合計は、委託を除いた社員・パートの納税

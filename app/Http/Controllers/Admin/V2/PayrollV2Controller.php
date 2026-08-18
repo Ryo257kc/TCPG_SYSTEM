@@ -169,6 +169,22 @@ class PayrollV2Controller extends Controller
             // transfer_amountは保存済みsupply_deduction_sumから既に入っている（帳票側で再計算しない）。
             $transferAmount = (float) ($summary['transfer_amount'] ?? 0);
 
+            // 振込残額(transfer_balance)がある場合、口座1に全額ではなく口座2へその分を
+            // 分けて振り込む。第2口座の登録がある時だけ表示を2行に割る（並び替え後に展開する
+            // ためソートキーには影響させない）。氏名・部署等は口座1側にだけ表示し、口座2側は
+            // 空欄＋網掛けで同一人物の続きとわかるようにする（2026-08-18）。
+            $transferBalance = (float) ($summary['transfer_balance'] ?? 0);
+            $bankName2 = trim((string) ($staffMaster['bank_name_2'] ?? ''));
+            $secondaryAccount = null;
+            if (abs($transferBalance) > 0.0000001 && $bankName !== '' && $bankName2 !== '') {
+                $secondaryAccount = [
+                    'bank_name' => $bankName2,
+                    'bank_branch' => trim((string) ($staffMaster['bank_branch_2'] ?? '')),
+                    'account_no' => trim((string) ($staffMaster['account_num2'] ?? '')),
+                    'amount' => $transferBalance,
+                ];
+            }
+
             $transferRows[] = [
                 'company_name' => trim((string) ($row['company_name'] ?? '')),
                 'division' => trim((string) ($row['division'] ?? '')),
@@ -178,6 +194,7 @@ class PayrollV2Controller extends Controller
                 'bank_branch' => $bankBranch,
                 'account_no' => $accountNo,
                 'transfer_amount' => $transferAmount,
+                'secondary_account' => $secondaryAccount,
                 'city' => $this->resolveMunicipalityLabel(
                     trim((string) ($resident['submission'] ?? '')),
                     trim((string) ($staffMaster['city'] ?? '')),
