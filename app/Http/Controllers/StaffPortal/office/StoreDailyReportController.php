@@ -882,6 +882,13 @@ class StoreDailyReportController extends Controller
                         return false;
                     }
 
+                    // 保険証忘れ（保険証=1 or 2）は保険証を持ってきてもらうまで金額が
+                    // 全て0のまま。それが正しい未対応状態なので、金額0を理由に修正日報から
+                    // 消してはいけない（2026-08-18、秋富さんの行が消える不具合で発覚）。
+                    if (in_array(trim((string) ($row['保険証'] ?? '')), ['1', '2'], true)) {
+                        return true;
+                    }
+
                     $total = $moneyTextToFloat($row['自費計'] ?? null)
                         + $moneyTextToFloat($row['保険負担計'] ?? null)
                         + $moneyTextToFloat($row['請求金額計'] ?? null);
