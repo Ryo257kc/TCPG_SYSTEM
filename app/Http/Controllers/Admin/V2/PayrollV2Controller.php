@@ -340,8 +340,6 @@ class PayrollV2Controller extends Controller
                 'family_allowance' => $this->num($summary['rent_subsidies'] ?? 0),
                 'adjust_allowance' => $this->num($summary['adjustment_add'] ?? 0),
                 'fixed_overtime_allowance' => $this->num($kihon['fixed_overtime'] ?? 0),
-                'taxable_commuting' => $this->num($kihon['traffic_pay'] ?? 0),
-                'non_taxable_commuting' => $this->num($kihon['rent_pay'] ?? 0),
                 'taxation_sum' => $this->num($summary['taxation_sum'] ?? 0),
                 'not_taxation_sum' => $this->num($summary['not_taxation_sum'] ?? 0),
                 'supply_sum' => $this->num($summary['supply_sum'] ?? 0),
@@ -381,6 +379,13 @@ class PayrollV2Controller extends Controller
                     continue;
                 }
                 $ledgerRow[$entryKey] = $this->num($summary[$entryKey] ?? 0);
+            }
+
+            // 非課税通勤費加算(traffic_addition)は行を分けず非課税通勤費(allowance_amo_6)に
+            // 合算して表示する（給与明細と同じ扱い、2026-08-18）。行自体は
+            // wage_ledger blade側のexcludedAllowanceKeysで非表示にする。
+            if (array_key_exists('allowance_amo_6', $ledgerRow)) {
+                $ledgerRow['allowance_amo_6'] += $this->num($summary['traffic_addition'] ?? 0);
             }
 
             $ledgerRows[] = $ledgerRow;
@@ -997,6 +1002,11 @@ class PayrollV2Controller extends Controller
             // transfer_amountは保存済みsupply_deduction_sumから既に入っている（帳票側で再計算しない）。
             $transferAmount = (float) ($summary['transfer_amount'] ?? 0);
 
+            // 課税/非課税を問わず交通費として1行に合算する（賃金台帳とは別基準、2026-08-18）。
+            $commutingTotal = $this->num($summary['allowance_amo_10'] ?? 0)
+                + $this->num($summary['allowance_amo_6'] ?? 0)
+                + $this->num($summary['traffic_addition'] ?? 0);
+
             $rows[] = array_merge($summary, [
                 'staff_id' => trim((string) ($row['staff_id'] ?? '')),
                 'staff_name' => trim((string) ($row['staff_name'] ?? '')),
@@ -1004,6 +1014,7 @@ class PayrollV2Controller extends Controller
                 'division' => trim((string) ($row['division'] ?? '')),
                 'transfer_amount' => $transferAmount,
                 'sales_total' => $salesTotal,
+                'commuting_total' => $commutingTotal,
             ]);
         }
 
@@ -1175,6 +1186,11 @@ class PayrollV2Controller extends Controller
             if ($entryKey !== '') {
                 $row[$entryKey] = $this->num($summary[$entryKey] ?? 0);
             }
+        }
+
+        // 非課税通勤費加算(traffic_addition)は行を分けず非課税通勤費(allowance_amo_6)に合算する。
+        if (array_key_exists('allowance_amo_6', $row)) {
+            $row['allowance_amo_6'] += $this->num($summary['traffic_addition'] ?? 0);
         }
 
         return $row;

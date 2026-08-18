@@ -273,7 +273,10 @@ class AccountingV2Controller extends Controller
         $payrollPaymentMonth = $from->copy()->addMonthNoOverflow();
         $payrollLabel = $payrollPaymentMonth->format('Y/n') . '月給与';
         $bonusLabel = $payrollPaymentMonth->format('Y/n') . '月賞与';
-        $salesSummary = $this->salesService->summary($targetMonth, '');
+        // 要確認：会社を絞らないと「T_さくら 店舗」という同名の部門が㈱プレッジ側にもあるため
+        // 売上が混ざる。さくら経費・売上は㈱トータルケア（company_id=2）のさくら店舗のみが対象
+        // （2026-08-18、店舗経費側の同じ問題とあわせて修正）。
+        $salesSummary = $this->salesService->summary($targetMonth, '2');
         $sakuraSalesRows = array_values(array_filter(
             (array) ($salesSummary['rows'] ?? []),
             fn(array $row): bool => $this->isSakuraStoreSalesRow($row)
@@ -366,8 +369,16 @@ class AccountingV2Controller extends Controller
 
         $payrollRows = array_values(array_merge($salaryRows, $bonusRows));
 
+        // 要確認：部門名「T_さくら 店舗」は㈱プレッジ側にも同名で存在するため、部門名だけで
+        // 判定すると他社のさくら店舗以外のデータまで混ざる。さくら経費（店舗経費）は
+        // ㈱トータルケアのさくら店舗のみを対象にする（会社経費の分割（allocation_ratio）が
+        // 入ってるものは2社とも対象のまま、company_name_shortでは絞らない）。
+        // ただし人件費（給料手当・役員報酬・賞与・業務委託料・法定福利費、is_labor_cost）だけは
+        // ㈱プレッジのさくら店舗分も実際に混ざり得るため、会社での絞り込みから除外する
+        // （2026-08-18）。
         $storeExpenseRows = array_values(array_filter($expenseRows, function (array $row): bool {
             return $this->containsSakura((string) ($row['debit_department_name'] ?? ''))
+                && (($row['is_labor_cost'] ?? false) || str_contains((string) ($row['company_name_short'] ?? ''), 'トータルケア'))
                 && !in_array((string) ($row['debit_account_title'] ?? ''), ['医療未収入金', '現金'], true);
         }));
 

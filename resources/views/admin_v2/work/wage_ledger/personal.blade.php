@@ -16,6 +16,7 @@
   $excludedAllowanceKeys = [
   'allowance_amo_1',
   'allowance_amo_2',
+  'traffic_addition',
   ];
   $excludedAllowanceNames = [
   '基本給',

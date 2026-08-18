@@ -1,5 +1,25 @@
 # 給与・賞与 変更履歴
 
+## 2026-08-18
+
+### 賃金台帳・委託報酬台帳の通勤費表示を統一
+
+- `admin/payroll/wage-ledger`・個人賃金台帳は`mx_allowance`マスタ駆動の動的行生成
+  （`PayrollV2AllowanceLabelService::entries()`）で、非課税通勤費(`allowance_amo_6`)と
+  非課税通勤費加算(`traffic_addition`)がマスタに別々に登録されているため、そのままだと
+  2行に分かれて表示されていた（給与明細では既に合算表示）。
+  `PayrollV2Controller::buildWageLedgerView()`／`personalWageLedgerRow()`で
+  `traffic_addition`を`allowance_amo_6`側へ合算し、blade側の`excludedAllowanceKeys`に
+  `traffic_addition`を追加して単独行を非表示にした。課税通勤費(`allowance_amo_10`)は
+  賃金台帳では合算せず別行のまま。
+- `admin/payroll/outsource-reward-ledger-print`はマスタ駆動ではなく固定行定義。こちらは
+  課税/非課税を問わず`allowance_amo_10`＋`allowance_amo_6`＋`traffic_addition`を
+  1行「交通費」に合算する仕様（賃金台帳とは合算基準が異なる点に注意）。
+  `outsourceRewardLedgerPrint()`で`commuting_total`を計算して行に追加。
+- ついでに`buildWageLedgerView()`にあった未使用の`taxable_commuting`/`non_taxable_commuting`
+  キー（どのblade からも参照されていなかった死んだコード、2026-08-18の前回修正で追加したが
+  実際に画面へ反映される経路ではなかった）を削除。
+
 ## 2026-08-15〜16
 
 ### 所得税の年度分岐（過去年の税額表）

@@ -23,6 +23,13 @@
 - 子ども支援金を表示する。
 - 差引支給額には立替経費、会社立替、振込残額などの扱いを計算根拠に合わせる。
 - 欠勤、遅早控除はマイナス値として保存・表示する。
+- 非課税通勤費(`allowance_amo_6`)と非課税通勤費加算(`traffic_addition`)は1行に合算表示する
+  （給与明細と同じ扱い）。課税通勤費(`allowance_amo_10`)は賃金台帳では合算せず別行のまま。
+  行の生成元は`mx_allowance`マスタ駆動（`PayrollV2AllowanceLabelService::entries()`）なので、
+  合算・非表示にする場合は`PayrollV2Controller`側の値合算とblade側`excludedAllowanceKeys`の
+  両方を揃える必要がある（2026-08-18）。
+  委託報酬台帳（`outsource_reward_ledger_print.blade.php`）は別基準で、課税/非課税を問わず
+  `allowance_amo_10`＋`allowance_amo_6`＋`traffic_addition`を「交通費」1行に合算する。
 
 ## 差引支給額（supply_deduction_sum）は保存値、帳票では計算しない
 
