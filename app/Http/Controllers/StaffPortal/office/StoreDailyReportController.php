@@ -845,6 +845,7 @@ class StoreDailyReportController extends Controller
             ->orderBy('時刻')
             ->orderBy('患者名')
             ->orderBy('日別順')
+            ->orderBy('先生別No')
             ->get()
             ->map(fn($row): array => [
                 '日別順' => trim((string) ($row->{'日別順'} ?? '')),
@@ -857,7 +858,11 @@ class StoreDailyReportController extends Controller
                 'メニュー集計' => trim((string) ($row->{'メニュー集計'} ?? '')),
                 '回数表示' => trim((string) ($row->{'回数表示'} ?? '')),
                 '備考' => trim((string) ($row->{'備考'} ?? '')),
-                'レセ負担金' => $this->formatMoneyValue($row->{'レセ負担金'} ?? null),
+                // 保険証忘れ(保険証=1/2)は施術日の日報では0円表示にし、保険証を持ってきた
+                // 回収日の行（is_collection_row=1）でだけ実額を出す（2026-08-18）。
+                'レセ負担金' => (in_array(trim((string) ($row->{'保険証'} ?? '')), ['1', '2'], true) && (int) ($row->{'is_collection_row'} ?? 0) === 0)
+                    ? $this->formatMoneyValue(0)
+                    : $this->formatMoneyValue($row->{'レセ負担金'} ?? null),
                 '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
                 '自費計' => $this->formatMoneyValue($row->{'自費計'} ?? null),
                 '保険負担計' => $this->formatMoneyValue($row->{'保険負担計'} ?? null),
@@ -876,12 +881,23 @@ class StoreDailyReportController extends Controller
             ->all();
 
         if ($isModifiedPrint) {
-            // 修正日報から除外するのは修正☑(ch=1)が付いた行だけ、というのが顧客の強い希望。
+            // 修正日報から除外するのは修正☑が付いた行だけ、というのが顧客の強い希望。
             // 以前は「割合=交は除外」「金額が全部0の行は除外」も混ざっていて、後者が
             // 保険証忘れ（保険証を持ってきてもらうまで金額が全部0のまま＝未対応）の行を
             // 巻き込んで消していた（2026-08-18、秋富さんの行が消える不具合で発覚・修正）。
+            //
+            // 「修正☑」は先生別日報.ch（自費・保険負担の確認）と患者名日報.負担金ch
+            // （レセ負担金の確認）の2種類があり別々にチェックする。片方だけ済んでいても
+            // もう片方が未確認なら修正日報に残す必要がある（2026-08-18、レセ負担金だけ
+            // 未確認の患者が丸ごと消えていた不具合で発覚）。
             $printRows = collect($printRows)
-                ->filter(fn(array $row): bool => trim((string) ($row['ch'] ?? '')) !== '1')
+                ->filter(function (array $row): bool {
+                    $treatmentChecked = trim((string) ($row['ch'] ?? '')) === '1';
+                    $receiptBurdenCheckedValue = strtolower(trim((string) ($row['負担金ch'] ?? '')));
+                    $receiptBurdenChecked = !in_array($receiptBurdenCheckedValue, ['', '0', 'false'], true);
+
+                    return !($treatmentChecked && $receiptBurdenChecked);
+                })
                 ->values()
                 ->all();
         }
@@ -1742,6 +1758,10 @@ class StoreDailyReportController extends Controller
         $privateFeeSql = $isInsuranceCardCollection
             ? 'CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 2' . ($isModifiedPrint ? ' AND teacher.ch = 0' : '') . ' THEN teacher.自費 ELSE 0 END as 自費計'
             : 'CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0' . ($isModifiedPrint ? ' AND teacher.ch = 0' : '') . ' THEN teacher.自費 ELSE 0 END as 自費計';
+        // 保険証忘れ(保険証=1/2)は施術日にレセ負担金を計上せず、保険証を持ってきた回収日に
+        // 計上する（2026-08-18確認）。UNION後もどちらの分岐で選ばれた行かを判定できるよう
+        // マーカーを持たせる。
+        $collectionRowMarkerSql = $isInsuranceCardCollection ? '1 as is_collection_row' : '0 as is_collection_row';
 
         return [
             DB::raw('patient.No as No'),
@@ -1784,6 +1804,7 @@ class StoreDailyReportController extends Controller
             'teacher.先生別外',
             'patient.店舗',
             DB::raw('COUNT(DISTINCT patient.患者No) as 人数'),
+            DB::raw($collectionRowMarkerSql),
         ];
     }
 
