@@ -766,6 +766,7 @@ class StoreDailyReportController extends Controller
             'dailySummary' => $dailySummary,
             'targetDate' => $targetDate,
             'targetMonth' => $targetMonth,
+            'targetStore' => $targetStore,
             'isDailySummaryMonthlyClosed' => $isDailySummaryMonthlyClosed,
             'dailySummaryMonthlyClosingProcessedAt' => $this->formatDateValue($monthlyClosingRow?->processed_at, 'Y/m/d H:i'),
             'nextDailyOrder' => $nextDailyOrder,

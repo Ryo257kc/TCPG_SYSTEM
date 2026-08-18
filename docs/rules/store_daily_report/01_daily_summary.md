@@ -77,3 +77,13 @@
 
 - 来院人数、予約人数、院内人数、先生別計、差額、交通事故、銀行預入金額、カード、誤差チェックは表示専用にし、この保存では更新しない。
 - 表紙表示欄は dbo.T_日報集計.備考 に保存する。
+
+## 日報詳細の「戻る」ボタン
+
+`url()->previous()` は使わない。編集保存（+追加・一括ch等）はPOST→同じdetailページへのGETリダイレクトなので、
+保存後は`url()->previous()`が月間一覧ではなく詳細ページ自身のURLを指すようになり、「戻る」が反応しなくなる
+（Laravelの`StartSession::storeCurrentUrl()`はGETリクエストの度に「前回のURL」を現在のURLで上書きするため、
+POSTを挟んでも保存直前のGET＝詳細ページ自身のURLが「前回」として残ってしまう）。
+`route('office.store_daily_report.daily_summary', ['target_month'=>$targetMonth, '日報集計店舗'=>$targetStore])`
+のように、遷移元が確定しているページでは明示的にルートを組み立てる（2026-08-18修正）。
+同じ理由で`resources/views/staff_portal/admin/shift/basic.blade.php`（基本シフト）の「戻る」も同時に修正済み。

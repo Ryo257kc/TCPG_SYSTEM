@@ -911,7 +911,7 @@
             </div>
 
             <div>
-                <a href="{{ url()->previous() }}" class="btn btn_back">戻る</a>
+                <a href="{{ route('office.store_daily_report.daily_summary', ['target_month' => $targetMonth, '日報集計店舗' => $targetStore]) }}" class="btn btn_back">戻る</a>
             </div>
         </section>
     </main>

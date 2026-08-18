@@ -49,6 +49,15 @@
 - ユーザーから明示的に頼まれていないラベル・見出し・メニュー・リンクの文言や配置を、
   自分の判断で変更しない（今回のセッションでも、意図せぬラベル変更が何度か問題になった）。
 
+## 「戻る」リンクに url()->previous() を使わない
+
+編集保存がPOST→同じページへのGETリダイレクトになっているページ（一覧の詳細画面など）で
+`url()->previous()`を使うと、保存後は「前回のURL」が遷移元の一覧ではなく詳細ページ自身の
+URLに上書きされ、「戻る」ボタンが反応しなくなる（LaravelはGETリクエストの度に
+`_previous.url`セッション値を現在のURLで更新するため）。遷移元が一意に決まるページでは
+`route()`で明示的にリンク先を組み立てる（2026-08-18、`store_daily_report/daily_summary/detail`と
+`staff_portal/admin/shift/basic`で発覚・修正、詳細は`docs/rules/store_daily_report/01_daily_summary.md`）。
+
 ## DB・SQL Server依存の最小化
 
 - 新規・修正コードでは、既存のService/Repositoryパターンで済む場合に

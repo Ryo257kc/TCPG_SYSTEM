@@ -134,7 +134,7 @@
             </div>
             @endif
             <div>
-                <a href="{{ url()->previous() }}" class="btn btn_back">戻る</a>
+                <a href="{{ route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId]) }}" class="btn btn_back">戻る</a>
             </div>
         </section>
 
