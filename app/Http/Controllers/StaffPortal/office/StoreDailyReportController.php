@@ -684,8 +684,12 @@ class StoreDailyReportController extends Controller
         }
 
         if ($filterModifiedOnly) {
+            // 修正日報 = 修正☑(ch)がまだ入っていない行（ch=0）を表示する。日報印刷側の
+            // 修正日報（dailySummaryDetailSelects()のisModifiedPrint）と同じ条件に揃える。
+            // 以前は逆(ch=1のみ)になっており、未チェックの行が修正日報から消えていた
+            // （2026-08-18、秋富さんの行が出ない不具合で発覚）。
             $dailyDetailRowsCollection = $dailyDetailRowsCollection
-                ->filter(fn(array $row): bool => (int) ($row['ch'] ?? 0) === 1)
+                ->filter(fn(array $row): bool => (int) ($row['ch'] ?? 0) === 0)
                 ->values();
         }
 
@@ -1845,6 +1849,11 @@ class StoreDailyReportController extends Controller
                 DB::raw("MAX(CASE WHEN patient.新患 = N'新患扱い' THEN 1 ELSE 0 END) as 新患扱い"),
                 DB::raw('SUM(CASE WHEN patient.保険証 = 0 AND COALESCE(teacher.ch, 0) = 0 THEN COALESCE(teacher.自費, 0) ELSE 0 END) as 自費計'),
                 DB::raw('MAX(CASE WHEN patient.保険証 = 0 AND COALESCE(patient.負担金ch, 0) = 0 THEN COALESCE(patient.レセ負担金, 0) ELSE 0 END) as 保険負担計'),
+                // 現金で窓口に返金した分（先生別日報.メニュー=返金）は、受付側のレセ負担金には
+                // 反映されず記録が先生別側にしか残らない。レジの実額(T_日報集計.レジ)は
+                // この返金を差し引いた額と一致するため、保険負担計にも同様に反映する
+                // （2026-08-18、7/17さくらの保険負担が4,400円多く出る不具合で発覚）。
+                DB::raw("SUM(CASE WHEN patient.保険証 = 0 AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END) as 返金保険負担計"),
                 DB::raw('0 as レセ差額計'),
                 DB::raw('MAX(CASE WHEN patient.保険証 = 0 THEN COALESCE(patient.レセ負担金, 0) ELSE 0 END) as レセ負担金計'),
                 DB::raw('SUM(CASE WHEN patient.保険証 = 2 THEN COALESCE(teacher.レセ差額, 0) ELSE 0 END) as レセ差額減算'),
@@ -1869,6 +1878,7 @@ class StoreDailyReportController extends Controller
                 DB::raw("MAX(CASE WHEN patient.新患 = N'新患扱い' THEN 1 ELSE 0 END) as 新患扱い"),
                 DB::raw('SUM(CASE WHEN patient.保険証 <> 0 AND COALESCE(teacher.ch, 0) = 0 THEN COALESCE(teacher.自費, 0) ELSE 0 END) as 自費計'),
                 DB::raw('MAX(CASE WHEN patient.保険証 = 2 AND COALESCE(patient.負担金ch, 0) = 0 THEN COALESCE(patient.レセ負担金, 0) ELSE 0 END) as 保険負担計'),
+                DB::raw('0 as 返金保険負担計'),
                 DB::raw('0 as レセ差額計'),
                 DB::raw('MAX(CASE WHEN patient.保険証 = 2 THEN COALESCE(patient.レセ負担金, 0) ELSE 0 END) as レセ負担金計'),
                 DB::raw('0 as レセ差額減算'),
@@ -1951,7 +1961,8 @@ class StoreDailyReportController extends Controller
             ->map(function ($rows, string $key) use ($expenseByDateStore, $dailyDiffByDateStore): array {
                 [$date, $storeName] = explode('|', $key, 2);
                 $selfPay = (float) $rows->sum(fn($row): float => (float) ($row->{'自費計'} ?? 0));
-                $insurance = (float) $rows->sum(fn($row): float => (float) ($row->{'保険負担計'} ?? 0));
+                $insurance = (float) $rows->sum(fn($row): float => (float) ($row->{'保険負担計'} ?? 0))
+                    + (float) $rows->sum(fn($row): float => (float) ($row->{'返金保険負担計'} ?? 0));
                 $expense = (float) ($expenseByDateStore[$key] ?? 0);
                 $receiptBurden = (float) $rows->sum(fn($row): float => (float) ($row->{'レセ負担金計'} ?? 0));
                 $difference = (float) ($dailyDiffByDateStore[$key] ?? 0);
