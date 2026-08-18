@@ -876,25 +876,12 @@ class StoreDailyReportController extends Controller
             ->all();
 
         if ($isModifiedPrint) {
+            // 修正日報から除外するのは修正☑(ch=1)が付いた行だけ、というのが顧客の強い希望。
+            // 以前は「割合=交は除外」「金額が全部0の行は除外」も混ざっていて、後者が
+            // 保険証忘れ（保険証を持ってきてもらうまで金額が全部0のまま＝未対応）の行を
+            // 巻き込んで消していた（2026-08-18、秋富さんの行が消える不具合で発覚・修正）。
             $printRows = collect($printRows)
-                ->filter(function (array $row) use ($moneyTextToFloat): bool {
-                    if (trim((string) ($row['割合'] ?? '')) === '交') {
-                        return false;
-                    }
-
-                    // 保険証忘れ（保険証=1 or 2）は保険証を持ってきてもらうまで金額が
-                    // 全て0のまま。それが正しい未対応状態なので、金額0を理由に修正日報から
-                    // 消してはいけない（2026-08-18、秋富さんの行が消える不具合で発覚）。
-                    if (in_array(trim((string) ($row['保険証'] ?? '')), ['1', '2'], true)) {
-                        return true;
-                    }
-
-                    $total = $moneyTextToFloat($row['自費計'] ?? null)
-                        + $moneyTextToFloat($row['保険負担計'] ?? null)
-                        + $moneyTextToFloat($row['請求金額計'] ?? null);
-
-                    return $total !== 0.0;
-                })
+                ->filter(fn(array $row): bool => trim((string) ($row['ch'] ?? '')) !== '1')
                 ->values()
                 ->all();
         }
