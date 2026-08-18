@@ -209,6 +209,10 @@ class PayrollV2Controller extends Controller
         foreach ($transferRows as $row) {
             $companyKey = $row['company_name'] !== '' ? $row['company_name'] : '未設定';
             $bankKey = $row['bank_name'] !== '' ? $row['bank_name'] : '未設定';
+            // 業務委託は事業所得扱いで給与所得の源泉徴収・住民税特別徴収の対象外のため、
+            // 「会社合計」サマリー（課税対象額合計・所得税額・住民税・営業店在籍者人数）だけ
+            // 除く。市町村別サマリー・振込支払額・個別行は業務委託も含めたまま（2026-08-18）。
+            $isOutsourceRow = $row['division'] === '業務委託';
 
             if (!isset($groupedCompanies[$companyKey])) {
                 $groupedCompanies[$companyKey] = [
@@ -254,11 +258,11 @@ class PayrollV2Controller extends Controller
                 $groupedCompanies[$companyKey]['city_totals'][$cityKey]['resident_tax_total'] += $row['resident_tax'];
             }
             $groupedCompanies[$companyKey]['transfer_total'] += $row['transfer_amount'];
-            $groupedCompanies[$companyKey]['resident_tax_total'] += $row['resident_tax'];
-            $groupedCompanies[$companyKey]['taxation_total'] += $row['taxation_sum'];
-            $groupedCompanies[$companyKey]['income_tax_total'] += $row['income_tax'];
             $groupedCompanies[$companyKey]['row_count']++;
-            if ($row['division'] !== '業務委託') {
+            if (!$isOutsourceRow) {
+                $groupedCompanies[$companyKey]['resident_tax_total'] += $row['resident_tax'];
+                $groupedCompanies[$companyKey]['taxation_total'] += $row['taxation_sum'];
+                $groupedCompanies[$companyKey]['income_tax_total'] += $row['income_tax'];
                 $groupedCompanies[$companyKey]['non_outsource_count']++;
             }
             $grandTransfer += $row['transfer_amount'];
