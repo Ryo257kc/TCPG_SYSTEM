@@ -407,6 +407,7 @@
     ? (string) (
     ((int) preg_replace('/\D/', '', (string) ($dailySummaryPeopleTotals['自費人数'] ?? '0')))
     + ((int) preg_replace('/\D/', '', (string) ($dailySummaryPeopleTotals['保険人数'] ?? '0')))
+    + ((int) preg_replace('/\D/', '', (string) ($dailySummaryPeopleTotals['保険証忘れ'] ?? '0')))
     )
     : (string) ($dailySummaryPeopleTotals['来院人数'] ?? '');
     @endphp

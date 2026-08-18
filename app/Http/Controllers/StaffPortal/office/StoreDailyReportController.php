@@ -848,9 +848,10 @@ class StoreDailyReportController extends Controller
             ->orderBy('先生別No')
             ->get()
             ->map(function ($row) use ($isModifiedPrint): array {
-                // 保険証忘れ(保険証=1/2)は施術日の日報では0円表示にし、保険証を持ってきた
-                // 回収日の行（is_collection_row=1）でだけ実額を出す（2026-08-18）。
-                $receiptBurden = (in_array(trim((string) ($row->{'保険証'} ?? '')), ['1', '2'], true) && (int) ($row->{'is_collection_row'} ?? 0) === 0)
+                // 保険証忘れ(保険証=1/2)は修正日報でだけ施術日は0円表示にし、保険証を持ってきた
+                // 回収日の行（is_collection_row=1）でだけ実額を出す。通常日報は生の値のまま
+                // （通常日報と修正日報は計算が別物なので条件を共有しない、2026-08-18確認）。
+                $receiptBurden = ($isModifiedPrint && in_array(trim((string) ($row->{'保険証'} ?? '')), ['1', '2'], true) && (int) ($row->{'is_collection_row'} ?? 0) === 0)
                     ? 0.0
                     : (float) ($row->{'レセ負担金'} ?? 0);
 
@@ -868,12 +869,10 @@ class StoreDailyReportController extends Controller
                     'レセ負担金' => $this->formatMoneyValue($receiptBurden),
                     '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
                     '自費計' => $this->formatMoneyValue($row->{'自費計'} ?? null),
-                    // 修正日報では「保険負担」列はteacher.保険負担ではなくレセ負担金と同額で
-                    // 表示する（Accessの修正日報を確認すると、この2列は常に同じ値になっていた。
-                    // 通常日報は従来通りteacher.保険負担を使う。2026-08-18）。
-                    '保険負担計' => $isModifiedPrint
-                        ? $this->formatMoneyValue($receiptBurden)
-                        : $this->formatMoneyValue($row->{'保険負担計'} ?? null),
+                    // 保険負担は通常日報・修正日報で変えない（teacher.保険負担のまま）。
+                    // 変わるのはレセ負担金と自費だけ、というユーザー確認に基づく
+                    // （2026-08-18、一時的にレセ負担金と同額にする誤った修正を入れたが撤回）。
+                    '保険負担計' => $this->formatMoneyValue($row->{'保険負担計'} ?? null),
                     'レセ差額' => $this->formatMoneyValue($row->{'レセ差額'} ?? null),
                     '請求金額計' => $this->formatMoneyValue($row->{'請求金額計'} ?? null),
                     'カード計' => $this->formatMoneyValue($row->{'カード計'} ?? null),
@@ -895,17 +894,22 @@ class StoreDailyReportController extends Controller
             // 保険証忘れ（保険証を持ってきてもらうまで金額が全部0のまま＝未対応）の行を
             // 巻き込んで消していた（2026-08-18、秋富さんの行が消える不具合で発覚・修正）。
             //
-            // 「修正☑」は先生別日報.ch（自費・保険負担の確認）と患者名日報.負担金ch
-            // （レセ負担金の確認）の2種類があり別々にチェックする。片方だけ済んでいても
-            // もう片方が未確認なら修正日報に残す必要がある（2026-08-18、レセ負担金だけ
-            // 未確認の患者が丸ごと消えていた不具合で発覚）。
+            // 修正☑(ch=1)が付いていても、自費・保険負担・請求金額・レセ負担金のどれか1つでも
+            // 金額が残っていれば確認すべきものが残っているとみなし修正日報に残す。全部0円に
+            // なって初めて除外する（2026-08-18、ユーザー確認）。
+            // - 保険証忘れ（ch=0のまま、金額は全部0）は対象外（ch=0なのでそもそも除外されない）。
+            // - 赤阪さん（自費・保険負担・請求金額・レセ負担金が全部0、ch=1）は除外される。
+            // - 納庄さん（ch=1だが保険負担が残っている）は除外されない。
             $printRows = collect($printRows)
                 ->filter(function (array $row): bool {
                     $treatmentChecked = trim((string) ($row['ch'] ?? '')) === '1';
-                    $receiptBurdenCheckedValue = strtolower(trim((string) ($row['負担金ch'] ?? '')));
-                    $receiptBurdenChecked = !in_array($receiptBurdenCheckedValue, ['', '0', 'false'], true);
+                    $moneyToFloat = fn($v): float => (float) str_replace(',', '', (string) ($v ?? '0'));
+                    $allAmountsZero = $moneyToFloat($row['自費計'] ?? 0) === 0.0
+                        && $moneyToFloat($row['保険負担計'] ?? 0) === 0.0
+                        && $moneyToFloat($row['請求金額計'] ?? 0) === 0.0
+                        && $moneyToFloat($row['レセ負担金'] ?? 0) === 0.0;
 
-                    return !($treatmentChecked && $receiptBurdenChecked);
+                    return !($treatmentChecked && $allAmountsZero);
                 })
                 ->values()
                 ->all();
@@ -913,7 +917,7 @@ class StoreDailyReportController extends Controller
 
         $usedCopaymentPatientNos = [];
         $printRows = collect($printRows)
-            ->map(function (array $row) use (&$usedCopaymentPatientNos, $isModifiedPrint): array {
+            ->map(function (array $row) use (&$usedCopaymentPatientNos): array {
                 $patientNo = trim((string) ($row['患者No'] ?? ''));
                 if ($patientNo === '') {
                     return $row;
@@ -921,12 +925,6 @@ class StoreDailyReportController extends Controller
 
                 if (isset($usedCopaymentPatientNos[$patientNo])) {
                     $row['レセ負担金'] = '0';
-                    // 修正日報の「保険負担」列は上でレセ負担金と同額にしているため、
-                    // 同じ患者の2行目以降はこちらも0にしないと来院ごとに二重計上される
-                    // （2026-08-18）。通常日報はteacher.保険負担のままなので対象外。
-                    if ($isModifiedPrint) {
-                        $row['保険負担計'] = '0';
-                    }
                     return $row;
                 }
 
@@ -1012,12 +1010,15 @@ class StoreDailyReportController extends Controller
             ->where('店舗', $targetStore)
             ->select([
                 '予約人数',
-                // 保険証忘れ(保険証<>0)はその日まだ売上が立っていない扱いなので、来院人数・
-                // 保険人数からも除外する（金額集計と同じ理由、2026-08-18確認）。
-                DB::raw('COUNT(DISTINCT CASE WHEN (請求金額 + 保険負担) <> 0 AND T_患者名日報.保険証 = 0 THEN T_患者名日報.患者No END) AS 保険人数'),
+                // 保険証忘れ(保険証<>0)は通常日報では来院人数に含めるが、修正日報では他のカウント
+                // （自費人数等）と同じく除外する。2026/7/10さくらで確認：通常日報は来院64、
+                // 修正日報は来院63（2026-08-18）。保険人数はSQL側では絞らず（Accessの元クエリと
+                // 同じ、`(請求金額+保険負担)<>0`のみ）、表示側で保険証忘れの人数を引く
+                // （$dailySummaryPeopleTotalsで調整。ユーザー確認：61-1=60が正）。
+                DB::raw('COUNT(DISTINCT CASE WHEN (請求金額 + 保険負担) <> 0 THEN T_患者名日報.患者No END) AS 保険人数'),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'自'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 自費人数"),
                 DB::raw('COUNT(DISTINCT CASE WHEN 保険証 <> 0 THEN T_患者名日報.患者No END) AS 保険証忘れ'),
-                DB::raw('COUNT(DISTINCT CASE WHEN 先生別外 = 0 AND T_患者名日報.保険証 = 0 THEN T_患者名日報.患者No END) AS 来院人数'),
+                DB::raw('COUNT(DISTINCT CASE WHEN 先生別外 = 0' . ($isModifiedPrint ? ' AND T_患者名日報.保険証 = 0' : '') . ' THEN T_患者名日報.患者No END) AS 来院人数'),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'交'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 交通事故"),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'交'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 自賠責"),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 <> N'交' AND メニュー LIKE N'%交通事故%' AND 請求金額 <> 0" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 健康保険"),
@@ -1029,7 +1030,11 @@ class StoreDailyReportController extends Controller
             '予約人数' => $this->formatNumberValue($dailySummaryPeopleRow->{'予約人数'} ?? null),
             '来院人数' => $this->formatNumberValue($dailySummaryPeopleRow->{'来院人数'} ?? null),
             '自費人数' => $this->formatNumberValue($dailySummaryPeopleRow->{'自費人数'} ?? null),
-            '保険人数' => $this->formatNumberValue($dailySummaryPeopleRow->{'保険人数'} ?? null),
+            // 保険人数はSQL側の集計から保険証忘れの人数を引いた値を表示する
+            // （2026-08-18、ユーザー確認）。
+            '保険人数' => $this->formatNumberValue(
+                (int) ($dailySummaryPeopleRow->{'保険人数'} ?? 0) - (int) ($dailySummaryPeopleRow->{'保険証忘れ'} ?? 0)
+            ),
             '保険証忘れ' => $this->formatNumberValue($dailySummaryPeopleRow->{'保険証忘れ'} ?? null),
             '交通事故' => $this->formatNumberValue($dailySummaryPeopleRow->{'交通事故'} ?? null),
             '自賠責' => $this->formatNumberValue($dailySummaryPeopleRow->{'自賠責'} ?? null),
