@@ -847,37 +847,46 @@ class StoreDailyReportController extends Controller
             ->orderBy('日別順')
             ->orderBy('先生別No')
             ->get()
-            ->map(fn($row): array => [
-                '日別順' => trim((string) ($row->{'日別順'} ?? '')),
-                '新患' => trim((string) ($row->{'新患'} ?? '')),
-                '患者No' => trim((string) ($row->{'患者No'} ?? '')),
-                '時刻' => $this->formatDateValue($row->{'時刻'} ?? null, 'H:i'),
-                '患者名' => trim((string) ($row->{'患者名'} ?? '')),
-                '割合' => trim((string) ($row->{'割合'} ?? '')),
-                'ch' => trim((string) ($row->{'ch'} ?? '')),
-                'メニュー集計' => trim((string) ($row->{'メニュー集計'} ?? '')),
-                '回数表示' => trim((string) ($row->{'回数表示'} ?? '')),
-                '備考' => trim((string) ($row->{'備考'} ?? '')),
+            ->map(function ($row) use ($isModifiedPrint): array {
                 // 保険証忘れ(保険証=1/2)は施術日の日報では0円表示にし、保険証を持ってきた
                 // 回収日の行（is_collection_row=1）でだけ実額を出す（2026-08-18）。
-                'レセ負担金' => (in_array(trim((string) ($row->{'保険証'} ?? '')), ['1', '2'], true) && (int) ($row->{'is_collection_row'} ?? 0) === 0)
-                    ? $this->formatMoneyValue(0)
-                    : $this->formatMoneyValue($row->{'レセ負担金'} ?? null),
-                '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
-                '自費計' => $this->formatMoneyValue($row->{'自費計'} ?? null),
-                '保険負担計' => $this->formatMoneyValue($row->{'保険負担計'} ?? null),
-                'レセ差額' => $this->formatMoneyValue($row->{'レセ差額'} ?? null),
-                '請求金額計' => $this->formatMoneyValue($row->{'請求金額計'} ?? null),
-                'カード計' => $this->formatMoneyValue($row->{'カード計'} ?? null),
-                '担当者' => trim((string) ($row->staff_display_name ?? '')),
-                '項目' => trim((string) ($row->{'項目'} ?? '')),
-                '計算外' => trim((string) ($row->{'計算外'} ?? '')),
-                '差額' => $this->formatMoneyValue($row->{'差額'} ?? null),
-                'charge' => trim((string) ($row->{'charge'} ?? '')),
-                '保険証' => trim((string) ($row->{'保険証'} ?? '')),
-                '回収日' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y/m/d'),
-                '日報備考' => trim((string) ($row->{'日報備考'} ?? '')),
-            ])
+                $receiptBurden = (in_array(trim((string) ($row->{'保険証'} ?? '')), ['1', '2'], true) && (int) ($row->{'is_collection_row'} ?? 0) === 0)
+                    ? 0.0
+                    : (float) ($row->{'レセ負担金'} ?? 0);
+
+                return [
+                    '日別順' => trim((string) ($row->{'日別順'} ?? '')),
+                    '新患' => trim((string) ($row->{'新患'} ?? '')),
+                    '患者No' => trim((string) ($row->{'患者No'} ?? '')),
+                    '時刻' => $this->formatDateValue($row->{'時刻'} ?? null, 'H:i'),
+                    '患者名' => trim((string) ($row->{'患者名'} ?? '')),
+                    '割合' => trim((string) ($row->{'割合'} ?? '')),
+                    'ch' => trim((string) ($row->{'ch'} ?? '')),
+                    'メニュー集計' => trim((string) ($row->{'メニュー集計'} ?? '')),
+                    '回数表示' => trim((string) ($row->{'回数表示'} ?? '')),
+                    '備考' => trim((string) ($row->{'備考'} ?? '')),
+                    'レセ負担金' => $this->formatMoneyValue($receiptBurden),
+                    '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
+                    '自費計' => $this->formatMoneyValue($row->{'自費計'} ?? null),
+                    // 修正日報では「保険負担」列はteacher.保険負担ではなくレセ負担金と同額で
+                    // 表示する（Accessの修正日報を確認すると、この2列は常に同じ値になっていた。
+                    // 通常日報は従来通りteacher.保険負担を使う。2026-08-18）。
+                    '保険負担計' => $isModifiedPrint
+                        ? $this->formatMoneyValue($receiptBurden)
+                        : $this->formatMoneyValue($row->{'保険負担計'} ?? null),
+                    'レセ差額' => $this->formatMoneyValue($row->{'レセ差額'} ?? null),
+                    '請求金額計' => $this->formatMoneyValue($row->{'請求金額計'} ?? null),
+                    'カード計' => $this->formatMoneyValue($row->{'カード計'} ?? null),
+                    '担当者' => trim((string) ($row->staff_display_name ?? '')),
+                    '項目' => trim((string) ($row->{'項目'} ?? '')),
+                    '計算外' => trim((string) ($row->{'計算外'} ?? '')),
+                    '差額' => $this->formatMoneyValue($row->{'差額'} ?? null),
+                    'charge' => trim((string) ($row->{'charge'} ?? '')),
+                    '保険証' => trim((string) ($row->{'保険証'} ?? '')),
+                    '回収日' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y/m/d'),
+                    '日報備考' => trim((string) ($row->{'日報備考'} ?? '')),
+                ];
+            })
             ->all();
 
         if ($isModifiedPrint) {
@@ -904,7 +913,7 @@ class StoreDailyReportController extends Controller
 
         $usedCopaymentPatientNos = [];
         $printRows = collect($printRows)
-            ->map(function (array $row) use (&$usedCopaymentPatientNos): array {
+            ->map(function (array $row) use (&$usedCopaymentPatientNos, $isModifiedPrint): array {
                 $patientNo = trim((string) ($row['患者No'] ?? ''));
                 if ($patientNo === '') {
                     return $row;
@@ -912,6 +921,12 @@ class StoreDailyReportController extends Controller
 
                 if (isset($usedCopaymentPatientNos[$patientNo])) {
                     $row['レセ負担金'] = '0';
+                    // 修正日報の「保険負担」列は上でレセ負担金と同額にしているため、
+                    // 同じ患者の2行目以降はこちらも0にしないと来院ごとに二重計上される
+                    // （2026-08-18）。通常日報はteacher.保険負担のままなので対象外。
+                    if ($isModifiedPrint) {
+                        $row['保険負担計'] = '0';
+                    }
                     return $row;
                 }
 
@@ -997,10 +1012,12 @@ class StoreDailyReportController extends Controller
             ->where('店舗', $targetStore)
             ->select([
                 '予約人数',
-                DB::raw('COUNT(DISTINCT CASE WHEN (請求金額 + 保険負担) <> 0 THEN T_患者名日報.患者No END) AS 保険人数'),
+                // 保険証忘れ(保険証<>0)はその日まだ売上が立っていない扱いなので、来院人数・
+                // 保険人数からも除外する（金額集計と同じ理由、2026-08-18確認）。
+                DB::raw('COUNT(DISTINCT CASE WHEN (請求金額 + 保険負担) <> 0 AND T_患者名日報.保険証 = 0 THEN T_患者名日報.患者No END) AS 保険人数'),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'自'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 自費人数"),
                 DB::raw('COUNT(DISTINCT CASE WHEN 保険証 <> 0 THEN T_患者名日報.患者No END) AS 保険証忘れ'),
-                DB::raw('COUNT(DISTINCT CASE WHEN 先生別外 = 0 THEN T_患者名日報.患者No END) AS 来院人数'),
+                DB::raw('COUNT(DISTINCT CASE WHEN 先生別外 = 0 AND T_患者名日報.保険証 = 0 THEN T_患者名日報.患者No END) AS 来院人数'),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'交'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 交通事故"),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 = N'交'" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 自賠責"),
                 DB::raw("COUNT(DISTINCT CASE WHEN 割合 <> N'交' AND メニュー LIKE N'%交通事故%' AND 請求金額 <> 0" . ($isModifiedPrint ? " AND ch = 0" : "") . " THEN T_患者名日報.患者No END) AS 健康保険"),
