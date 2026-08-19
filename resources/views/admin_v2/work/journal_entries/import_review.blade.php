@@ -8,7 +8,60 @@
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
     <link rel="stylesheet" href="{{ asset('css/admin_v2/data_table.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/admin_v2/import_review.css') }}">
+    <style>
+        .import-review-group {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .import-review-group-header {
+            margin-bottom: 8px;
+        }
+
+        .import-review-group-header label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+        }
+
+        .import-review-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .import-review-diff {
+            font-weight: bold;
+            color: #c0392b;
+        }
+
+        .import-review-table-wrap {
+            overflow-x: auto;
+        }
+
+        .import-review-pair-table {
+            table-layout: fixed;
+            min-width: 900px;
+        }
+
+        .import-review-sub-existing {
+            background: #fbfbfb;
+        }
+
+        .import-review-sub-new {
+            background: #fff;
+            border-right: 2px solid #ddd;
+        }
+
+        .import-review-diff-cell {
+            background: #fdecea !important;
+            color: #b3261e;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
