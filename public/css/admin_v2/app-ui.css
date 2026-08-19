@@ -34,7 +34,8 @@ input[type="button"]:hover {
 .btn:disabled,
 button:disabled,
 input[type="submit"]:disabled,
-input[type="button"]:disabled {
+input[type="button"]:disabled,
+.daily-edit-input:disabled {
     background: #eef0f3;
     border-color: #d7dce3;
     color: #9aa3af;

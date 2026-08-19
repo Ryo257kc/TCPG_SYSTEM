@@ -30,6 +30,9 @@
   両方を揃える必要がある（2026-08-18）。
   委託報酬台帳（`outsource_reward_ledger_print.blade.php`）は別基準で、課税/非課税を問わず
   `allowance_amo_10`＋`allowance_amo_6`＋`traffic_addition`を「交通費」1行に合算する。
+  この合算処理は`PayrollV2Controller::mergeTrafficAdditionIntoNonTaxableCommuting()`に
+  1箇所へ統合済み（賃金台帳一覧・個人賃金台帳の両方から呼ぶ。以前は同じ処理が2箇所に
+  別々に書かれていた、2026-08-18）。
 
 ## 差引支給額（supply_deduction_sum）は保存値、帳票では計算しない
 

@@ -25,9 +25,24 @@
 割る（`buildTransferListView()`の`secondary_account`、2026-08-18）。集計用の1スタッフ1行は
 そのまま維持し（ソート・人数カウント・住民税/課税対象額/所得税の二重計上を避けるため）、
 blade側で口座1行の直後に口座2の内訳行（氏名・部署は空欄、網掛け、`(メイン)`等の
-`transfer_purpose`を口座番号の横に表示）を追加描画する。口座1の表示額は
-`transfer_amount - secondary_account.amount`。`transfer_amount`自体は口座分割前の総額のまま
-保存されている（`PayrollV2SummaryService::transferAmount()`はtransfer_balanceを引かない）。
+`transfer_purpose`を口座番号の横に表示）を追加描画する。`transfer_amount`自体は口座分割前の
+総額のまま保存されている（`PayrollV2SummaryService::transferAmount()`はtransfer_balanceを
+引かない）。
+
+- 口座1の表示額はコントローラー側で確定した`row['primary_amount']`
+  （`= transfer_amount - secondary_account.amount`）を使う。bladeで再計算しない
+  （「帳票は保存値・計算済み値のみ表示する」という原則。以前はblade側で毎回引き算していた、
+  2026-08-18修正）。
+- 銀行ごとの小計（`groups[$bankKey]['transfer_total']`）は、口座1の銀行には`primary_amount`
+  だけを、口座2の銀行（`bank_name_1`と異なる場合）には`secondary_account.amount`を別途
+  加算する。以前は口座1の銀行の小計に分割後の全額が乗ったままだった（口座1・口座2が別銀行の
+  場合、その銀行への振込準備で使う小計が実際より多く出る不具合。2026-08-18修正。会社合計
+  （`transfer_total`）は元々分割に関係なく総額のままで問題ない）。
+- `bank_name_1`が空で`bank_name_2`にフォールバックする人（口座1が未登録で口座2しかない）に
+  振込残額があると、フォールバック後の`$bankName`と`$bankName2`が同じ値になり、同じ口座が
+  「主」「口座2」の両方に二重表示される不具合があった。フォールバック前の生の`bank_name_1`が
+  実在するかで判定するよう修正（2026-08-18。DEVデータでは該当者ゼロだったため実害は未確認、
+  レビューで発見）。
 
 ## 業務委託の扱い（会社合計サマリーのみ除外）
 

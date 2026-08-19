@@ -54,6 +54,11 @@ freee由来の仕訳は、管理番号、発生日、勘定科目、部門、取
 - 店舗日報月次が作る経費仕訳（`journal_breakdown`が「年月+経費」で始まる、消耗品費/現金など）。
 - 現金出納帳の仕訳（`vault_name`が入っている）。
 
+`journal_breakdown`がNULLの行（`journal_breakdown`列を使わない手入力仕訳）を、この除外条件の
+`not like`がSQLの三値論理で丸ごと除外してしまうバグがあった（`credit_account_title`で
+2026-08-17に見つけたのと同じパターン。DEVに該当65件、2026-08-18修正）。NULLは明示的に
+許可する（`whereNull()->orWhere('not like', ...)`）。
+
 実装: `AccountingV2Controller::buildJournalReconciliation()`
 
 ## 要確認の仕訳（既存とCSVの内容が違う場合）
@@ -69,7 +74,18 @@ freee由来の仕訳は、管理番号、発生日、勘定科目、部門、取
 DB保存順とCSVの行順が一致するとは限らないため、まず中身が完全一致する行同士を対応づけて
 除外し、残った本当に中身が違う行だけを突き合わせて表示する。
 
-実装: `AccountingV2Controller::buildReviewLinePairs()`
+実装: `AccountingV2Controller::buildReviewLinePairs()`（表示用）、
+`AccountingV2Controller::pairJournalLines()`（対応づけの本体、`lineSignature()`で内容比較）
+
+**実際の書き込み（`applyJournalEntriesReview()`）も同じ`pairJournalLines()`を使う**（2026-08-18修正）。
+以前は表示側だけ内容一致で対応づけ、実際にUPDATEする側は既存行とCSV行を出現順（0番目同士…）で
+対応づけたままだった。複合仕訳でDB保存順とCSV行順が違うと、表示は「一致」に見えるのに
+実適用で別の行に上書きする恐れがあった。対応づけを1箇所（`pairJournalLines`）に統一。
+
+**「要確認の仕訳」を先に適用しても新規追加候補は消えない**（2026-08-18修正）。以前は
+`applyJournalEntriesReview()`が処理後に`Cache::forget()`でトークンを丸ごと消していたため、
+「新規追加」ボタンをまだ押していない新規仕訳（`new_groups`）が一緒に失われ、二度と取り込めなく
+なっていた。`new_groups`が残っている間はトークンを維持し、確認画面へ戻して続けて反映できるようにする。
 
 ## 触らないこと
 

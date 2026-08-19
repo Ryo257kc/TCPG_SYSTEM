@@ -586,15 +586,7 @@ class AccountingV2Controller extends Controller
         // （2026-08-17）。
         $identicalCount = 0;
         $reviewGroups = [];
-        $rowSignature = function (array $row): string {
-            $row = array_intersect_key($row, self::REVIEW_COMPARE_FIELDS);
-            ksort($row);
-            foreach ($row as $key => $value) {
-                $row[$key] = is_numeric($value) ? (string) round((float) $value, 4) : trim((string) ($value ?? ''));
-            }
-
-            return json_encode($row);
-        };
+        $rowSignature = fn(array $row): string => $this->lineSignature($row);
 
         // 要確認：取込ボタンを押した瞬間に新規分を問答無用でINSERTしていたのを、確認してから
         // 別ボタンで反映する2段階に変更（2026-08-17）。新規分もここでは書き込まず$newGroupsに
@@ -732,8 +724,14 @@ class AccountingV2Controller extends Controller
                 $subQuery->whereNull('credit_account_title')
                     ->orWhereNotIn('credit_account_title', ['保険収入', '自費収入', '窓口収入']);
             });
+            // journal_breakdownがNULLの行（journal_breakdown列を使わない手入力仕訳）も、
+            // credit_account_titleと同じNULL三値論理バグで丸ごと除外されていた
+            // （2026-08-18、レビューで発覚。DEVに65件該当）。NULLは除外対象にしない。
             foreach ($internalJournalBreakdownPrefixes as $prefix) {
-                $query->where('journal_breakdown', 'not like', $prefix . '%');
+                $query->where(function ($subQuery) use ($prefix): void {
+                    $subQuery->whereNull('journal_breakdown')
+                        ->orWhere('journal_breakdown', 'not like', $prefix . '%');
+                });
             }
         };
 
@@ -798,9 +796,6 @@ class AccountingV2Controller extends Controller
 
         $groups = [];
         foreach ($staged['groups'] as $groupKey => $group) {
-            $existingLines = array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['existing']);
-            $newLines = array_map(fn(array $row): array => $this->reviewLineDisplay($row), $group['new']);
-
             $groups[] = [
                 'group_key' => $groupKey,
                 'company_name_short' => $group['company_name_short'],
@@ -808,8 +803,9 @@ class AccountingV2Controller extends Controller
                 'journal_breakdown' => $group['journal_breakdown'],
                 // 要確認：既存とCSVを別々の表で左右に並べると行がズレて比較しづらいという指摘のため、
                 // 同じ行番号の既存・CSVを1行にまとめ、項目ごとに既存値/CSV値を隣り合わせで
-                // 出す形にした（2026-08-17）。
-                'line_pairs' => $this->buildReviewLinePairs($existingLines, $newLines),
+                // 出す形にした（2026-08-17）。対応づけは生の行データに対して行う
+                // （buildReviewLinePairsが内部でreviewLineDisplay()にかけて表示用に整形する）。
+                'line_pairs' => $this->buildReviewLinePairs($group['existing'], $group['new']),
             ];
         }
 
@@ -907,47 +903,69 @@ class AccountingV2Controller extends Controller
                     continue;
                 }
 
-                $existingRows = array_values($group['existing']);
-                $payloads = $group['new'];
-                $pairCount = min(count($existingRows), count($payloads));
+                // 要確認：以前は既存行とCSV行を出現順（0番目同士…）で対応づけてUPDATEしていたため、
+                // DB保存順とCSV内の行順が違うだけで別の行に上書きする恐れがあった（表示側の
+                // buildReviewLinePairsは2026-08-17に内容一致で対応づける方式へ直したが、実際に
+                // 書き込むこちらは直っていなかった）。同じpairJournalLines()で内容一致ペアを
+                // 先に対応づけてから書き込む（2026-08-18）。
+                foreach ($this->pairJournalLines($group['existing'], $group['new']) as $pair) {
+                    $existingRow = $pair['existing'];
+                    $payload = $pair['new'];
 
-                // journal_entry_idを維持したままUPDATEすることで、入金確認（PaymentConfirmationController等）
-                // や分割割合などCSVに無い列がこのIDに紐づいたまま残るようにする。
-                for ($i = 0; $i < $pairCount; $i++) {
-                    DB::connection('sqlsrv')
-                        ->table('dbo.mx_journal_entries')
-                        ->where('journal_entry_id', (int) $existingRows[$i]['journal_entry_id'])
-                        ->update($payloads[$i]);
-                    $updatedCount++;
-                }
+                    if ($existingRow !== null && $payload !== null) {
+                        // journal_entry_idを維持したままUPDATEすることで、入金確認
+                        // （PaymentConfirmationController等）や分割割合などCSVに無い列が
+                        // このIDに紐づいたまま残るようにする。
+                        DB::connection('sqlsrv')
+                            ->table('dbo.mx_journal_entries')
+                            ->where('journal_entry_id', (int) $existingRow['journal_entry_id'])
+                            ->update($payload);
+                        $updatedCount++;
+                        continue;
+                    }
 
-                for ($i = $pairCount; $i < count($payloads); $i++) {
-                    DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($payloads[$i]);
-                    $importedCount++;
-                }
+                    if ($payload !== null) {
+                        DB::connection('sqlsrv')->table('dbo.mx_journal_entries')->insert($payload);
+                        $importedCount++;
+                        continue;
+                    }
 
-                for ($i = $pairCount; $i < count($existingRows); $i++) {
-                    $leftoverRow = $existingRows[$i];
-                    $manualLabels = $this->manualOnlyColumnLabels($leftoverRow);
+                    $manualLabels = $this->manualOnlyColumnLabels($existingRow);
                     if ($manualLabels === []) {
                         DB::connection('sqlsrv')
                             ->table('dbo.mx_journal_entries')
-                            ->where('journal_entry_id', (int) $leftoverRow['journal_entry_id'])
+                            ->where('journal_entry_id', (int) $existingRow['journal_entry_id'])
                             ->delete();
                         $deletedCount++;
                     } else {
                         $reviewNotes[] = $group['company_name_short'] . ' ' . $group['occurred_at'] . ' No.' . $group['journal_breakdown']
-                            . '（ID:' . $leftoverRow['journal_entry_id'] . ' / ' . implode('・', $manualLabels) . '）';
+                            . '（ID:' . $existingRow['journal_entry_id'] . ' / ' . implode('・', $manualLabels) . '）';
                     }
                 }
             }
         });
 
-        Cache::forget($cacheKey);
+        // 要確認：以前はここで無条件にCache::forgetしていたため、「新規追加」ボタンをまだ
+        // 押していない未反映のnew_groups（CSVにあってDBにまだ無い純粋な新規仕訳）が
+        // 一緒に消えてしまっていた（要確認の仕訳を先に適用すると、後から新規追加を押しても
+        // 何も入らない）。new_groupsが残っている間はトークンを維持する（2026-08-18）。
+        $remainingNewGroups = $staged['new_groups'] ?? [];
+        if ($remainingNewGroups === []) {
+            Cache::forget($cacheKey);
+        } else {
+            Cache::put($cacheKey, $staged, now()->addMinutes(60));
+        }
 
+        $pendingNewCount = array_sum(array_map(fn(array $group): int => count($group['payloads']), $remainingNewGroups));
         $message = '確認分の取込が完了しました。更新: ' . $updatedCount . '件 / 追加: ' . $importedCount . '件 / 削除: ' . $deletedCount . '件'
             . ($skippedGroupCount > 0 ? ' / 見送り（未チェック）: ' . $skippedGroupCount . '件' : '')
-            . ($reviewNotes !== [] ? ' / 手動入力値が残っているため削除せず保持した仕訳: ' . implode('、', $reviewNotes) : '');
+            . ($reviewNotes !== [] ? ' / 手動入力値が残っているため削除せず保持した仕訳: ' . implode('、', $reviewNotes) : '')
+            . ($pendingNewCount > 0 ? ' / まだ新規追加候補' . $pendingNewCount . '件が残っています。続けて反映してください' : '');
+
+        if ($pendingNewCount > 0) {
+            return redirect()->route('admin.work.journal_entries.import_review', ['token' => $data['token']])
+                ->with('statusMessage', $message);
+        }
 
         return redirect()->route('admin.work.journal_entries', [
             'date_from' => $staged['date_from'],
@@ -972,27 +990,54 @@ class AccountingV2Controller extends Controller
      * @param list<array<string,mixed>> $newLines
      * @return list<array{existing:array<string,mixed>,new:array<string,mixed>,diff:array<string,bool>}>
      */
-    private function buildReviewLinePairs(array $existingLines, array $newLines): array
+    /**
+     * REVIEW_COMPARE_FIELDS（借方/貸方科目・金額）だけを見た、行の内容比較用シグネチャ。
+     * 「既存グループと完全一致か」の判定（importJournalEntries）と「既存行とCSV行を
+     * 内容で対応づける」処理（pairJournalLines、表示・実適用の両方で共有）の、
+     * 唯一の正本にする。以前は2箇所に別々の実装（丸め方も違う）があり、表示上は
+     * 一致して見えるのに判定がズレる余地があった（2026-08-18、レビューで発覚）。
+     *
+     * @param array<string,mixed> $row 生のDB/CSV行（フォーマット前の値）
+     */
+    private function lineSignature(array $row): string
     {
-        $compareFields = array_keys(self::REVIEW_COMPARE_FIELDS);
-        $lineSignature = function (array $line) use ($compareFields): string {
-            $parts = [];
-            foreach ($compareFields as $field) {
-                $parts[] = (string) ($line[$field] ?? '');
-            }
-
-            return implode("\x1f", $parts);
-        };
-
-        $matchedPairs = [];
-        $remainingExisting = [];
-        foreach ($existingLines as $existing) {
-            $remainingExisting[$lineSignature($existing)][] = $existing;
+        $row = array_intersect_key($row, self::REVIEW_COMPARE_FIELDS);
+        ksort($row);
+        foreach ($row as $key => $value) {
+            $row[$key] = is_numeric($value) ? (string) round((float) $value, 4) : trim((string) ($value ?? ''));
         }
 
+        return json_encode($row);
+    }
+
+    /**
+     * 既存行とCSV/新規行を、REVIEW_COMPARE_FIELDSの内容が完全一致するもの同士で先に
+     * 1対1に対応づけ、余った行（＝本当に中身が違う／新規／削除候補の行）だけを残りの
+     * 数で突き合わせる。複合仕訳（1つの仕訳Noに複数行）はDB保存順とCSV内の行順が
+     * 一致するとは限らないため、単純な位置合わせ（0番目同士…）はしない（2026-08-17、
+     * 実例：6042016）。
+     *
+     * 表示用（importJournalEntriesReview）と実適用（applyJournalEntriesReview）の
+     * 両方から、生の行データに対して呼ぶ（フォーマット後の文字列に対して呼ばない）。
+     * 以前は表示用に別実装があり、実適用側は対応づけ自体をしていなかった
+     * （出現順のまま更新していた）ため、行順がズレていると違う行に上書きする
+     * リスクがあった（2026-08-18、レビューで発覚）。
+     *
+     * @param list<array<string,mixed>> $existingLines
+     * @param list<array<string,mixed>> $newLines
+     * @return list<array{existing:?array<string,mixed>,new:?array<string,mixed>}>
+     */
+    private function pairJournalLines(array $existingLines, array $newLines): array
+    {
+        $remainingExisting = [];
+        foreach ($existingLines as $existing) {
+            $remainingExisting[$this->lineSignature($existing)][] = $existing;
+        }
+
+        $matchedPairs = [];
         $remainingNew = [];
         foreach ($newLines as $new) {
-            $signature = $lineSignature($new);
+            $signature = $this->lineSignature($new);
             if (!empty($remainingExisting[$signature])) {
                 $matchedPairs[] = ['existing' => array_shift($remainingExisting[$signature]), 'new' => $new];
                 continue;
@@ -1000,14 +1045,25 @@ class AccountingV2Controller extends Controller
             $remainingNew[] = $new;
         }
 
-        $leftoverExisting = array_merge(...array_values($remainingExisting ?: [[]]));
+        $leftoverExisting = $remainingExisting === [] ? [] : array_merge(...array_values($remainingExisting));
         $rowCount = max(count($leftoverExisting), count($remainingNew));
         for ($i = 0; $i < $rowCount; $i++) {
             $matchedPairs[] = ['existing' => $leftoverExisting[$i] ?? null, 'new' => $remainingNew[$i] ?? null];
         }
 
+        return $matchedPairs;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $existingLines 生の既存行
+     * @param list<array<string,mixed>> $newLines 生のCSV行
+     * @return list<array{existing:?array<string,mixed>,new:?array<string,mixed>,diff:array<string,bool>}>
+     */
+    private function buildReviewLinePairs(array $existingLines, array $newLines): array
+    {
+        $compareFields = array_keys(self::REVIEW_COMPARE_FIELDS);
         $pairs = [];
-        foreach ($matchedPairs as $pair) {
+        foreach ($this->pairJournalLines($existingLines, $newLines) as $pair) {
             $existing = $pair['existing'];
             $new = $pair['new'];
             $diff = [];
@@ -1015,7 +1071,11 @@ class AccountingV2Controller extends Controller
                 $diff[$field] = ($existing === null || $new === null)
                     || (($existing[$field] ?? '') !== ($new[$field] ?? ''));
             }
-            $pairs[] = ['existing' => $existing, 'new' => $new, 'diff' => $diff];
+            $pairs[] = [
+                'existing' => $existing === null ? null : $this->reviewLineDisplay($existing),
+                'new' => $new === null ? null : $this->reviewLineDisplay($new),
+                'diff' => $diff,
+            ];
         }
 
         return $pairs;

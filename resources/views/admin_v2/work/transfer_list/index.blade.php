@@ -364,9 +364,6 @@
               @foreach ($group['rows'] as $row)
               @php
               $hasSecondaryAccount = !empty($row['secondary_account']);
-              $primaryAmount = $hasSecondaryAccount
-                ? (float) $row['transfer_amount'] - (float) $row['secondary_account']['amount']
-                : (float) $row['transfer_amount'];
               @endphp
               <tr>
                 <td>{{ $row['division'] !== '' ? $row['division'] : '-' }}</td>
@@ -375,7 +372,7 @@
                 <td>{{ $row['bank_name'] !== '' ? $row['bank_name'] : '-' }}</td>
                 <td>{{ $row['bank_branch'] !== '' ? $row['bank_branch'] : '-' }}</td>
                 <td class="center">{{ $row['account_no'] !== '' ? $row['account_no'] : '-' }}{{ $hasSecondaryAccount && $row['transfer_purpose'] !== '' ? '（' . $row['transfer_purpose'] . '）' : '' }}</td>
-                <td class="num">{{ number_format($primaryAmount) }}</td>
+                <td class="num">{{ number_format($row['primary_amount']) }}</td>
                 <td>{{ $row['city'] !== '' ? $row['city'] : '-' }}</td>
                 <td class="num">{{ number_format((float) $row['income_tax']) }}</td>
               </tr>

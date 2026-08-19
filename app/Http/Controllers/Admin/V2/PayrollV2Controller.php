@@ -155,7 +155,8 @@ class PayrollV2Controller extends Controller
             // mx_staffs.submissionはこの機能移設後は更新されなくなるため使わない。
             $resident = (array) ($row['resident'] ?? []);
 
-            $bankName = trim((string) ($staffMaster['bank_name_1'] ?? ''));
+            $bankName1Raw = trim((string) ($staffMaster['bank_name_1'] ?? ''));
+            $bankName = $bankName1Raw;
             $bankBranch = trim((string) ($staffMaster['bank_branch_1'] ?? ''));
             $accountNo = trim((string) ($staffMaster['account_num'] ?? ''));
 
@@ -176,7 +177,11 @@ class PayrollV2Controller extends Controller
             $transferBalance = (float) ($summary['transfer_balance'] ?? 0);
             $bankName2 = trim((string) ($staffMaster['bank_name_2'] ?? ''));
             $secondaryAccount = null;
-            if (abs($transferBalance) > 0.0000001 && $bankName !== '' && $bankName2 !== '') {
+            // bank_name_1が空でbank_name_2にフォールバックした場合、$bankNameは既にbank_name_2に
+            // なっている。そのため$bankNameだけで判定すると同じ口座2が「主」「口座2」の両方に
+            // 二重表示されてしまう。フォールバック前の生のbank_name_1で口座1が実在するかを見る
+            // （2026-08-18、レビューで発覚）。
+            if (abs($transferBalance) > 0.0000001 && $bankName1Raw !== '' && $bankName2 !== '') {
                 $secondaryAccount = [
                     'bank_name' => $bankName2,
                     'bank_branch' => trim((string) ($staffMaster['bank_branch_2'] ?? '')),
@@ -194,6 +199,9 @@ class PayrollV2Controller extends Controller
                 'bank_branch' => $bankBranch,
                 'account_no' => $accountNo,
                 'transfer_amount' => $transferAmount,
+                // 口座1側の表示額（帳票は保存値・計算済み値のみ表示する原則のため、ここで
+                // 確定しておく。bladeで再計算しない、2026-08-18）。
+                'primary_amount' => $transferAmount - ($secondaryAccount['amount'] ?? 0.0),
                 'secondary_account' => $secondaryAccount,
                 'city' => $this->resolveMunicipalityLabel(
                     trim((string) ($resident['submission'] ?? '')),
@@ -257,10 +265,31 @@ class PayrollV2Controller extends Controller
             }
 
             $groupedCompanies[$companyKey]['groups'][$bankKey]['rows'][] = $row;
-            $groupedCompanies[$companyKey]['groups'][$bankKey]['transfer_total'] += $row['transfer_amount'];
+            // 口座2に分割してる分は別の銀行への振込なので、この銀行（口座1）の小計には
+            // 口座1側の額（primary_amount）だけを乗せる。口座2側の額は口座2の銀行の小計へ
+            // 別途加算する（2026-08-18、口座1・口座2が別銀行の場合に小計が実際より多く
+            // 出ていた不具合を修正）。
+            $groupedCompanies[$companyKey]['groups'][$bankKey]['transfer_total'] += $row['primary_amount'];
             $groupedCompanies[$companyKey]['groups'][$bankKey]['resident_tax_total'] += $row['resident_tax'];
             $groupedCompanies[$companyKey]['groups'][$bankKey]['taxation_total'] += $row['taxation_sum'];
             $groupedCompanies[$companyKey]['groups'][$bankKey]['income_tax_total'] += $row['income_tax'];
+
+            if (!empty($row['secondary_account'])) {
+                $secondaryBankKey = $row['secondary_account']['bank_name'] !== ''
+                    ? $row['secondary_account']['bank_name']
+                    : '未設定';
+                if (!isset($groupedCompanies[$companyKey]['groups'][$secondaryBankKey])) {
+                    $groupedCompanies[$companyKey]['groups'][$secondaryBankKey] = [
+                        'bank_name' => $secondaryBankKey,
+                        'rows' => [],
+                        'transfer_total' => 0.0,
+                        'resident_tax_total' => 0.0,
+                        'taxation_total' => 0.0,
+                        'income_tax_total' => 0.0,
+                    ];
+                }
+                $groupedCompanies[$companyKey]['groups'][$secondaryBankKey]['transfer_total'] += $row['secondary_account']['amount'];
+            }
             $cityKey = trim((string) ($row['city'] ?? ''));
             if ($cityKey !== '' && $cityKey !== '-') {
                 if (!isset($groupedCompanies[$companyKey]['city_totals'][$cityKey])) {
@@ -402,12 +431,7 @@ class PayrollV2Controller extends Controller
                 $ledgerRow[$entryKey] = $this->num($summary[$entryKey] ?? 0);
             }
 
-            // 非課税通勤費加算(traffic_addition)は行を分けず非課税通勤費(allowance_amo_6)に
-            // 合算して表示する（給与明細と同じ扱い、2026-08-18）。行自体は
-            // wage_ledger blade側のexcludedAllowanceKeysで非表示にする。
-            if (array_key_exists('allowance_amo_6', $ledgerRow)) {
-                $ledgerRow['allowance_amo_6'] += $this->num($summary['traffic_addition'] ?? 0);
-            }
+            $ledgerRow = $this->mergeTrafficAdditionIntoNonTaxableCommuting($ledgerRow, $summary);
 
             $ledgerRows[] = $ledgerRow;
         }
@@ -1209,12 +1233,28 @@ class PayrollV2Controller extends Controller
             }
         }
 
-        // 非課税通勤費加算(traffic_addition)は行を分けず非課税通勤費(allowance_amo_6)に合算する。
-        if (array_key_exists('allowance_amo_6', $row)) {
-            $row['allowance_amo_6'] += $this->num($summary['traffic_addition'] ?? 0);
-        }
+        $row = $this->mergeTrafficAdditionIntoNonTaxableCommuting($row, $summary);
 
         return $row;
+    }
+
+    /**
+     * 非課税通勤費加算(traffic_addition)は行を分けず非課税通勤費(allowance_amo_6)に合算して
+     * 表示する（給与明細と同じ扱い）。行自体はwage_ledger blade側のexcludedAllowanceKeysで
+     * 非表示にする。賃金台帳一覧・個人賃金台帳の両方から呼ぶ、合算ルールの正本（2026-08-18、
+     * 2箇所に同じ処理が別々に書かれていたのを統合）。
+     *
+     * @param array<string,mixed> $ledgerRow
+     * @param array<string,mixed> $summary
+     * @return array<string,mixed>
+     */
+    private function mergeTrafficAdditionIntoNonTaxableCommuting(array $ledgerRow, array $summary): array
+    {
+        if (array_key_exists('allowance_amo_6', $ledgerRow)) {
+            $ledgerRow['allowance_amo_6'] += $this->num($summary['traffic_addition'] ?? 0);
+        }
+
+        return $ledgerRow;
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
