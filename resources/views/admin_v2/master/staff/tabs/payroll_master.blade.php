@@ -1,36 +1,25 @@
 @php
-$kihonFields = [
-'monthly_salary',
-'hourly_pay',
-'hourly_salary',
-'executive_remu',
-'position_allow',
-'duties_allow',
-'qualification_allow',
-'claim_allow',
-'traffic_pay',
-'adjustment_add',
-'rent_subsidies',
-'rent_pay',
-'adjustment_pay',
-'fixed_overtime',
+$kihonFieldGroups = [
+'基本給' => ['monthly_salary', 'hourly_pay', 'hourly_salary', 'executive_remu'],
+'手当' => ['position_allow', 'duties_allow', 'qualification_allow', 'claim_allow', 'traffic_pay', 'adjustment_add', 'rent_subsidies', 'rent_pay', 'fixed_overtime'],
+'控除' => ['adjustment_pay'],
 ];
 
 $kihonLabels = [
-'decision_date' => '決定日　　　',
-'monthly_salary' => '月給　　　　',
-'hourly_pay' => '時給換算　　',
-'hourly_salary' => '時給　　　　',
-'executive_remu' => '役員報酬　　',
-'position_allow' => '役職手当　　',
-'duties_allow' => '職務手当　　',
-'qualification_allow' => '資格手当　　',
-'claim_allow' => '請求手当　　',
-'traffic_pay' => '交通費　　　',
-'adjustment_add' => '調整手当　　',
-'rent_subsidies' => '家族手当　　',
-'rent_pay' => '家賃補助　　',
-'adjustment_pay' => '欠勤控除　　',
+'decision_date' => '決定日',
+'monthly_salary' => '月給',
+'hourly_pay' => '時給換算',
+'hourly_salary' => '時給',
+'executive_remu' => '役員報酬',
+'position_allow' => '役職手当',
+'duties_allow' => '職務手当',
+'qualification_allow' => '資格手当',
+'claim_allow' => '請求手当',
+'traffic_pay' => '交通費',
+'adjustment_add' => '調整手当',
+'rent_subsidies' => '家族手当',
+'rent_pay' => '家賃補助',
+'adjustment_pay' => '欠勤控除',
 'fixed_overtime' => '固定残業手当',
 ];
 
@@ -73,30 +62,40 @@ return '履歴 ' . $fallback;
     <div class="status">{{ session('status') }}</div>
     @endif
 
-    <form method="post" action="{{ route('admin.master.staff.kihon.store') }}" class="info-block payroll-master-block">
-      @csrf
-      <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
-      <input type="hidden" name="q" value="{{ $keyword }}">
-      <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
-      <input type="hidden" name="company_filter" value="{{ $companyFilter }}">
+    <div class="master-create" id="master-create">
+      <button type="button" class="btn-secondary master-toggle-btn" data-toggle-target="master-create">＋新規登録</button>
+      <form method="post" action="{{ route('admin.master.staff.kihon.store') }}" class="info-block payroll-master-block master-toggle-body">
+        @csrf
+        <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+        <input type="hidden" name="q" value="{{ $keyword }}">
+        <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
+        <input type="hidden" name="company_filter" value="{{ $companyFilter }}">
 
-      <div class="info-block-title">新規登録</div>
-      <div class="info-block-grid">
-        <label class="detail-field detail-field-compact">
-          <span>{{ $kihonLabels['decision_date'] }}</span>
-          <input type="date" name="decision_date" required>
-        </label>
-        @foreach($kihonFields as $field)
-        <label class="detail-field detail-field-compact">
-          <span>{{ $kihonLabels[$field] ?? $field }}</span>
-          <input type="text" name="{{ $field }}">
-        </label>
+        <div class="info-block-title">新規登録</div>
+        <div class="payroll-master-group-grid">
+          <label class="detail-field detail-field-compact">
+            <span>{{ $kihonLabels['decision_date'] }}</span>
+            <input type="date" name="decision_date" required>
+          </label>
+        </div>
+        @foreach($kihonFieldGroups as $groupLabel => $groupFields)
+        <div class="payroll-master-group">
+          <div class="payroll-master-group-label">{{ $groupLabel }}</div>
+          <div class="payroll-master-group-grid">
+            @foreach($groupFields as $field)
+            <label class="detail-field detail-field-compact">
+              <span>{{ $kihonLabels[$field] ?? $field }}</span>
+              <input type="text" name="{{ $field }}">
+            </label>
+            @endforeach
+          </div>
+        </div>
         @endforeach
-      </div>
-      <div class="detail-actions">
-        <button type="submit" class="btn-primary">登録</button>
-      </div>
-    </form>
+        <div class="detail-actions">
+          <button type="submit" class="btn-primary">登録</button>
+        </div>
+      </form>
+    </div>
 
     @if(($kihonRows ?? []) !== [])
     @foreach($kihonRows as $index => $row)
@@ -106,7 +105,7 @@ return '履歴 ' . $fallback;
     @endphp
 
     @if($isLatest)
-    <form method="post" action="{{ route('admin.master.staff.kihon.update') }}" class="info-block payroll-master-block">
+    <form method="post" action="{{ route('admin.master.staff.kihon.update') }}" class="info-block payroll-master-block master-editable" id="payroll-master-latest">
       @csrf
       <input type="hidden" name="kihon_no" value="{{ $row['kihon_no'] ?? '' }}">
       <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
@@ -117,20 +116,30 @@ return '履歴 ' . $fallback;
       <div class="payroll-master-title-row">
         <span class="payroll-master-title">{{ $title }}</span>
         <span class="payroll-master-badge">最新</span>
+        <button type="button" class="btn-secondary master-edit-btn" data-edit-target="payroll-master-latest">編集</button>
       </div>
-      <div class="info-block-grid">
+      <div class="payroll-master-group-grid">
         <label class="detail-field detail-field-compact">
           <span>{{ $kihonLabels['decision_date'] }}</span>
+          <div class="payroll-master-value">{{ str_replace('-', '/', (string) ($row['_raw_decision_date'] ?? '---')) }}</div>
           <input type="date" name="decision_date" value="{{ $row['_raw_decision_date'] ?? '' }}" required>
         </label>
-        @foreach($kihonFields as $field)
-        <label class="detail-field detail-field-compact">
-          <span>{{ $kihonLabels[$field] ?? $field }}</span>
-          <input type="text" name="{{ $field }}" value="{{ $formatKihonNumber($row[$field] ?? '') }}">
-        </label>
-        @endforeach
       </div>
-      <div class="detail-actions">
+      @foreach($kihonFieldGroups as $groupLabel => $groupFields)
+      <div class="payroll-master-group">
+        <div class="payroll-master-group-label">{{ $groupLabel }}</div>
+        <div class="payroll-master-group-grid">
+          @foreach($groupFields as $field)
+          <label class="detail-field detail-field-compact">
+            <span>{{ $kihonLabels[$field] ?? $field }}</span>
+            <div class="payroll-master-value">{{ $formatKihonNumber($row[$field] ?? '') !== '' ? $formatKihonNumber($row[$field] ?? '') : '---' }}</div>
+            <input type="text" name="{{ $field }}" value="{{ $formatKihonNumber($row[$field] ?? '') }}">
+          </label>
+          @endforeach
+        </div>
+      </div>
+      @endforeach
+      <div class="detail-actions master-edit-actions">
         <button type="submit" class="btn-primary">保存</button>
         <button type="submit" class="btn-secondary" formaction="{{ route('admin.master.staff.kihon.delete') }}" onclick="return confirm('この給与マスタ履歴を削除します。');">削除</button>
       </div>
@@ -140,14 +149,19 @@ return '履歴 ' . $fallback;
       <div class="payroll-master-title-row">
         <span class="payroll-master-title">{{ $title }}</span>
       </div>
-      <div class="info-block-grid">
-        @foreach($kihonFields as $field)
-        <label class="detail-field detail-field-compact">
-          <span>{{ $kihonLabels[$field] ?? $field }}</span>
-          <div class="payroll-master-value">{{ $formatKihonNumber($row[$field] ?? '') !== '' ? $formatKihonNumber($row[$field] ?? '') : '---' }}</div>
-        </label>
-        @endforeach
+      @foreach($kihonFieldGroups as $groupLabel => $groupFields)
+      <div class="payroll-master-group">
+        <div class="payroll-master-group-label">{{ $groupLabel }}</div>
+        <div class="payroll-master-group-grid">
+          @foreach($groupFields as $field)
+          <label class="detail-field detail-field-compact">
+            <span>{{ $kihonLabels[$field] ?? $field }}</span>
+            <div class="payroll-master-value">{{ $formatKihonNumber($row[$field] ?? '') !== '' ? $formatKihonNumber($row[$field] ?? '') : '---' }}</div>
+          </label>
+          @endforeach
+        </div>
       </div>
+      @endforeach
     </div>
     @endif
     @endforeach

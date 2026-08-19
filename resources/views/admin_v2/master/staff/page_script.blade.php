@@ -81,9 +81,37 @@ function setupStaffDateEraHints() {
   });
 }
 
+// 給与マスタ・社保・住民税・扶養タブ共通：「最新」ブロックの読み取り⇔入力欄の切り替えと、
+// 「新規登録」の折りたたみ開閉（2026-08-18、給与マスタから展開）。
+function setupPayrollStyleToggles() {
+  document.querySelectorAll('[data-edit-target]').forEach((btn) => {
+    if (btn.dataset.toggleReady === '1') return;
+    btn.dataset.toggleReady = '1';
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.editTarget);
+      if (!target) return;
+      const editing = target.classList.toggle('is-editing');
+      btn.textContent = editing ? '閉じる' : '編集';
+    });
+  });
+
+  document.querySelectorAll('[data-toggle-target]').forEach((btn) => {
+    if (btn.dataset.toggleReady === '1') return;
+    btn.dataset.toggleReady = '1';
+    const openLabel = btn.textContent;
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.toggleTarget);
+      if (!target) return;
+      const open = target.classList.toggle('is-open');
+      btn.textContent = open ? '－閉じる' : openLabel;
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('staff-info-form');
   toggleStaffInfoEdit(form && form.dataset.initialEditing === '1');
   setupStaffDateEraHints();
+  setupPayrollStyleToggles();
 });
 </script>

@@ -1,17 +1,17 @@
 @php
 $residentMonths = [
-'resident_tax1' => '06月　',
-'resident_tax2' => '07月　',
-'resident_tax3' => '08月　',
-'resident_tax4' => '09月　',
-'resident_tax5' => '10月　',
-'resident_tax6' => '11月　',
-'resident_tax7' => '12月　',
-'resident_tax8' => '01月　',
-'resident_tax9' => '02月　',
-'resident_tax10' => '03月　',
-'resident_tax11' => '04月　',
-'resident_tax12' => '05月　',
+'resident_tax1' => '06月',
+'resident_tax2' => '07月',
+'resident_tax3' => '08月',
+'resident_tax4' => '09月',
+'resident_tax5' => '10月',
+'resident_tax6' => '11月',
+'resident_tax7' => '12月',
+'resident_tax8' => '01月',
+'resident_tax9' => '02月',
+'resident_tax10' => '03月',
+'resident_tax11' => '04月',
+'resident_tax12' => '05月',
 ];
 
 $residentTotal = function (array $row) use ($residentMonths): float {
@@ -134,51 +134,54 @@ return $value;
     <div class="status">{{ session('status') }}</div>
     @endif
 
-    <form method="post" action="{{ route('admin.master.staff.resident.store') }}" class="info-block resident-tax-block">
-      @csrf
-      <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
-      <input type="hidden" name="q" value="{{ $keyword }}">
-      <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
-      <input type="hidden" name="company_filter" value="{{ $companyFilter }}">
+    <div class="master-create" id="resident-tax-create">
+      <button type="button" class="btn-secondary master-toggle-btn" data-toggle-target="resident-tax-create">＋新規登録</button>
+      <form method="post" action="{{ route('admin.master.staff.resident.store') }}" class="info-block resident-tax-block master-toggle-body">
+        @csrf
+        <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+        <input type="hidden" name="q" value="{{ $keyword }}">
+        <input type="hidden" name="employment_filter" value="{{ $employmentFilter }}">
+        <input type="hidden" name="company_filter" value="{{ $companyFilter }}">
 
-      <div class="info-block-title">新規登録</div>
-      <div class="info-block-grid">
-        <label class="detail-field detail-field-compact">
-          <span>住民税対象月</span>
-          <input type="date" name="target_month" required>
-        </label>
-        <label class="detail-field detail-field-compact">
-          <span>宛名番号　</span>
-          <input type="text" name="addressee_no">
-        </label>
-        <label class="detail-field detail-field-compact resident-tax-submission-field">
-          <span>住民税提出先</span>
-          <select name="submission">
-            <option value=""></option>
-            @foreach(($residentSubmissionOptions ?? []) as $option)
-            <option value="{{ $option['value'] ?? '' }}">{{ $option['label'] ?? ($option['value'] ?? '') }}</option>
-            @endforeach
-          </select>
-        </label>
-        <div class="resident-tax-month-box">
-          <div class="resident-tax-month-title">月別住民税</div>
-          <div class="resident-tax-month-blocks">
-            @foreach($residentMonths as $field => $label)
-            <label class="detail-field detail-field-compact">
-              <span>{{ $label }}</span>
-              <input type="text" name="{{ $field }}" @if($field==='resident_tax2' ) data-resident-tax-fill-source="1" @endif>
-            </label>
-            @endforeach
+        <div class="info-block-title">新規登録</div>
+        <div class="info-block-grid">
+          <label class="detail-field detail-field-compact">
+            <span>住民税対象月</span>
+            <input type="date" name="target_month" required>
+          </label>
+          <label class="detail-field detail-field-compact">
+            <span>宛名番号</span>
+            <input type="text" name="addressee_no">
+          </label>
+          <label class="detail-field detail-field-compact resident-tax-submission-field">
+            <span>住民税提出先</span>
+            <select name="submission">
+              <option value=""></option>
+              @foreach(($residentSubmissionOptions ?? []) as $option)
+              <option value="{{ $option['value'] ?? '' }}">{{ $option['label'] ?? ($option['value'] ?? '') }}</option>
+              @endforeach
+            </select>
+          </label>
+          <div class="resident-tax-month-box">
+            <div class="resident-tax-month-title">月別住民税</div>
+            <div class="resident-tax-month-blocks">
+              @foreach($residentMonths as $field => $label)
+              <label class="detail-field detail-field-compact">
+                <span>{{ $label }}</span>
+                <input type="text" name="{{ $field }}" @if($field==='resident_tax2' ) data-resident-tax-fill-source="1" @endif>
+              </label>
+              @endforeach
+            </div>
           </div>
+          <label class="detail-field detail-field-wide detail-field-textarea detail-field-textarea-no-label">
+            <textarea name="memo" rows="3" class="resident-tax-memo" placeholder="備考"></textarea>
+          </label>
         </div>
-        <label class="detail-field detail-field-wide detail-field-textarea detail-field-textarea-no-label">
-          <textarea name="memo" rows="3" class="resident-tax-memo" placeholder="備考"></textarea>
-        </label>
-      </div>
-      <div class="detail-actions">
-        <button type="submit" class="btn-primary">登録</button>
-      </div>
-    </form>
+        <div class="detail-actions">
+          <button type="submit" class="btn-primary">登録</button>
+        </div>
+      </form>
+    </div>
 
     @if(($residentRows ?? []) !== [])
     @foreach($residentRows as $index => $row)
@@ -190,7 +193,7 @@ return $value;
     @endphp
 
     @if($isLatest)
-    <form method="post" action="{{ route('admin.master.staff.resident.update') }}" class="info-block resident-tax-block">
+    <form method="post" action="{{ route('admin.master.staff.resident.update') }}" class="info-block resident-tax-block master-editable" id="resident-tax-latest">
       @csrf
       <input type="hidden" name="resident_no" value="{{ $row['resident_no'] ?? '' }}">
       <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
@@ -201,10 +204,12 @@ return $value;
       <div class="resident-tax-title-row">
         <span class="resident-tax-title">{{ $title }}</span>
         <span class="resident-tax-badge">最新</span>
+        <button type="button" class="btn-secondary master-edit-btn" data-edit-target="resident-tax-latest">編集</button>
       </div>
       <div class="info-block-grid">
         <label class="detail-field detail-field-compact">
           <span>住民税対象月</span>
+          <div class="resident-tax-value">{{ str_replace('-', '/', substr((string)($row['_raw_target_month'] ?? ''), 0, 10)) ?: '---' }}</div>
           <input type="date" name="target_month" value="{{ substr((string)($row['_raw_target_month'] ?? ''), 0, 10) }}" required>
         </label>
         <label class="detail-field detail-field-compact">
@@ -212,7 +217,8 @@ return $value;
           <div class="resident-tax-value">{{ number_format($annualTotal) }}</div>
         </label>
         <label class="detail-field detail-field-compact">
-          <span>宛名番号　</span>
+          <span>宛名番号</span>
+          <div class="resident-tax-value">{{ ($row['addressee_no'] ?? '') !== '' ? $row['addressee_no'] : '---' }}</div>
           <input type="text" name="addressee_no" value="{{ $row['addressee_no'] ?? '' }}">
         </label>
         @php
@@ -220,6 +226,7 @@ return $value;
         @endphp
         <label class="detail-field detail-field-compact resident-tax-submission-field">
           <span>住民税提出先</span>
+          <div class="resident-tax-value">{{ $submissionLabel($rowSubmission) !== '' ? $submissionLabel($rowSubmission) : '---' }}</div>
           <select name="submission">
             <option value=""></option>
             @foreach(($residentSubmissionOptions ?? []) as $option)
@@ -233,16 +240,19 @@ return $value;
             @foreach($residentMonths as $field => $label)
             <label class="detail-field detail-field-compact">
               <span>{{ $label }}</span>
+              <div class="resident-tax-value">{{ $formatResidentNumber($row[$field] ?? '') !== '' ? $formatResidentNumber($row[$field] ?? '') : '---' }}</div>
               <input type="text" name="{{ $field }}" value="{{ $formatResidentNumber($row[$field] ?? '') }}" @if($field==='resident_tax2' ) data-resident-tax-fill-source="1" @endif>
             </label>
             @endforeach
           </div>
         </div>
-        <label class="detail-field detail-field-wide detail-field-textarea detail-field-textarea-no-label">
+        <label class="detail-field detail-field-wide detail-field-textarea">
+          <span>備考</span>
+          <div class="detail-value detail-value-textarea resident-tax-memo-value {{ $memoValue === '' ? 'detail-value-empty' : '' }}">{{ $memoValue !== '' ? $memoValue : '---' }}</div>
           <textarea name="memo" rows="3" class="resident-tax-memo" placeholder="備考">{{ $memoValue }}</textarea>
         </label>
       </div>
-      <div class="detail-actions">
+      <div class="detail-actions master-edit-actions">
         <button type="submit" class="btn-primary">保存</button>
         <button type="submit" class="btn-secondary" formaction="{{ route('admin.master.staff.resident.delete') }}" onclick="return confirm('この住民税履歴を削除します。');">削除</button>
       </div>

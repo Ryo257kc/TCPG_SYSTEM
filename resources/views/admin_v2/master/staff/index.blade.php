@@ -457,6 +457,77 @@
             white-space: nowrap;
         }
 
+        .payroll-master-group {
+            margin-top: 10px;
+        }
+
+        .payroll-master-group-label {
+            font-size: 11px;
+            font-weight: 800;
+            color: #6b83a6;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+
+        .payroll-master-group-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, max-content));
+            gap: 4px 16px;
+        }
+
+        /* 給与マスタ・社保・住民税・扶養タブ共通：「最新」ブロックは普段読み取り表示、
+           編集ボタンで入力欄に切り替える。「新規登録」は普段畳んでおく（2026-08-18、
+           給与計算ページの編集トグルと見た目・操作感を揃える）。 */
+        .master-editable input,
+        .master-editable select,
+        .master-editable textarea,
+        .master-editable .checkbox-line {
+            display: none;
+        }
+
+        .master-editable.is-editing input,
+        .master-editable.is-editing select {
+            display: block;
+        }
+
+        .master-editable.is-editing textarea {
+            display: block;
+            width: 100%;
+        }
+
+        .master-editable.is-editing .checkbox-line {
+            display: flex;
+        }
+
+        .master-editable.is-editing .payroll-master-value,
+        .master-editable.is-editing .social-insurance-value,
+        .master-editable.is-editing .resident-tax-value,
+        .master-editable.is-editing .resident-tax-memo-value,
+        .master-editable.is-editing .detail-value {
+            display: none;
+        }
+
+        .master-edit-actions {
+            display: none;
+        }
+
+        .master-editable.is-editing .master-edit-actions {
+            display: flex;
+        }
+
+        .master-edit-btn {
+            margin-left: auto;
+        }
+
+        .master-create .master-toggle-body {
+            display: none;
+        }
+
+        .master-create.is-open .master-toggle-body {
+            display: block;
+            margin-top: 8px;
+        }
+
         .payroll-master-history,
         .social-insurance-history,
         .resident-tax-history {
@@ -468,6 +539,7 @@
         .resident-tax-title-row {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 8px;
             padding-bottom: 6px;
             border-bottom: 1px solid #dbe6f5;
