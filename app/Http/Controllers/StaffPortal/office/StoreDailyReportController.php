@@ -2828,6 +2828,16 @@ class StoreDailyReportController extends Controller
         return $timestamp === false ? null : date('Y-m-d', $timestamp);
     }
 
+    /**
+     * T_患者名日報.時刻は「時刻だけ」の列だが、DATETIME型なので日付部分が必要になる。
+     * 既存データは全てAccess由来の基準日 1899-12-30 が入っており（時刻の並び替えは
+     * この基準日で統一されている前提）、実際の来院日（$dateValue）を日付部分に使うと
+     * その行だけ日時が実日付になり、時刻順ソートで極端に後ろへ飛んでしまう
+     * （2026-08-20、8/1ひなた・橘さんの行が時刻順で最後に出る不具合で発覚。原因はこの
+     * メソッドが来院日をそのまま時刻の日付部分に使っていたこと。新規行追加でのみ使われる）。
+     * $dateValueは「来院日が指定されているか」の判定にだけ使い、保存する日付部分は
+     * 常にAccessの基準日に固定する。
+     */
     private function normalizeDateTimeValue(mixed $dateValue, mixed $timeValue): ?string
     {
         $date = $this->normalizeDateValue($dateValue);
@@ -2836,7 +2846,7 @@ class StoreDailyReportController extends Controller
             return null;
         }
 
-        $timestamp = strtotime($date . ' ' . $time);
+        $timestamp = strtotime('1899-12-30 ' . $time);
 
         return $timestamp === false ? null : date('Y-m-d H:i:s', $timestamp);
     }

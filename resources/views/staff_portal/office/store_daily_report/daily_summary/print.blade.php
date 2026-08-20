@@ -401,7 +401,23 @@
     $firstRow['_display_receipt_burden_amount'] = $rows->sum(fn($row) => $displayReceiptBurdenAmount($row));
 
     return $firstRow;
-    })
+    });
+    if ($isModifiedPrint) {
+    // 患者名でまとめた後の金額（自費計・請求金額計・保険負担・レセ負担金）が全部0円なら、
+    // その患者の行自体を印刷から外す。コントローラー側の「修正☑＋4項目全部0円は除外」は
+    // 先生別行1件ごとの判定のため、1人の患者に複数の先生別行があると、金額が0円の行だけが
+    // ここでの患者名グルーピングにより「担当者名だけ残った空の行」として印刷されてしまって
+    // いた（2026-08-20、7/31さくら・後藤浩一朗さんの例で発覚。担当者名を結合する処理が
+    // 金額の有無を見ずに全先生別行の担当者名を無条件で連結していたため）。
+    $displayPrintRowsCollection = $displayPrintRowsCollection
+    ->filter(function (array $row) use ($moneyToInt) {
+    return $moneyToInt($row['自費計'] ?? 0) !== 0
+    || $moneyToInt($row['請求金額計'] ?? 0) !== 0
+    || (int) ($row['_display_insurance_amount'] ?? 0) !== 0
+    || (int) ($row['_display_receipt_burden_amount'] ?? 0) !== 0;
+    });
+    }
+    $displayPrintRowsCollection = $displayPrintRowsCollection
     ->values();
     $displayVisitCount = $isModifiedPrint
     ? (string) (
