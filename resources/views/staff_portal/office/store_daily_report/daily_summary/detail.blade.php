@@ -721,13 +721,19 @@
                                                 </table>
                                             </div>
 
+                                            @php
+                                            $insuranceCardLabels = ['' => '', '0' => '持参', '1' => '忘れ', '2' => '回収'];
+                                            $insuranceCardLabel = $insuranceCardLabels[(string) ($row['保険証'] ?? '')] ?? '';
+                                            @endphp
                                             <div class="daily-summary-access-group">
                                                 <p class="daily-summary-access-group-title">保険証</p>
                                                 <table class="data-table f_size12">
                                                     <tbody>
                                                         <tr>
                                                             <th>保険証</th>
-                                                            <td>割合
+                                                            <td>
+                                                                @if ($canSaveDailySummaryDetail)
+                                                                割合
                                                                 <select name="割合">
                                                                     <option value=""></option>
                                                                     @foreach ($ratioOptions as $option)
@@ -740,11 +746,20 @@
                                                                     <option value="1" @selected((string) ($row['保険証'] ?? '' )==='1' )>忘れ</option>
                                                                     <option value="2" @selected((string) ($row['保険証'] ?? '' )==='2' )>回収</option>
                                                                 </select>
+                                                                @else
+                                                                割合 {{ $row['割合'] }} ／ {{ $insuranceCardLabel }}
+                                                                @endif
                                                             </td>
                                                         </tr>
                                                         <tr>
                                                             <th>回収日</th>
-                                                            <td><input type="text" name="回収日" value="{{ $row['回収日'] }}"></td>
+                                                            <td>
+                                                                @if ($canSaveDailySummaryDetail)
+                                                                <input type="text" name="回収日" value="{{ $row['回収日'] }}">
+                                                                @else
+                                                                {{ $row['回収日'] }}
+                                                                @endif
+                                                            </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -756,7 +771,13 @@
                                                     <tbody>
                                                         <tr>
                                                             <th>レセ負担金</th>
-                                                            <td class="daily-summary-receipt-burden-cell"><input type="text" name="レセ負担金" value="{{ $row['レセ負担金'] }}" data-daily-summary-receipt-burden><input type="checkbox" name="負担金ch" value="1" @checked($isCheckedValue($row['負担金ch'] ?? null))></td>
+                                                            <td class="daily-summary-receipt-burden-cell">
+                                                                @if ($canSaveDailySummaryDetail)
+                                                                <input type="text" name="レセ負担金" value="{{ $row['レセ負担金'] }}" data-daily-summary-receipt-burden><input type="checkbox" name="負担金ch" value="1" @checked($isCheckedValue($row['負担金ch'] ?? null))>
+                                                                @else
+                                                                {{ $row['レセ負担金'] }}
+                                                                @endif
+                                                            </td>
                                                         </tr>
                                                         <tr>
                                                             <th>保険請求</th>
@@ -778,7 +799,13 @@
                                                 <table class="data-table f_size12">
                                                     <tbody>
                                                         <tr>
-                                                            <td><textarea class="daily-summary-remarks-textarea" name="日報備考" rows="4">{{ $row['日報備考'] }}</textarea></td>
+                                                            <td>
+                                                                @if ($canSaveDailySummaryDetail)
+                                                                <textarea class="daily-summary-remarks-textarea" name="日報備考" rows="4">{{ $row['日報備考'] }}</textarea>
+                                                                @else
+                                                                {{ $row['日報備考'] }}
+                                                                @endif
+                                                            </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
