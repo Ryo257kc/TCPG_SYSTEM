@@ -376,17 +376,38 @@
 
     $displayReceiptBurdenTotal = $printRowsCollection->sum(fn($row) => $displayReceiptBurdenAmount($row));
     $displayInsuranceTotal = $printRowsCollection->sum(fn($row) => $displayInsuranceAmount($row));
+    // 修正☑(ch=1)が付いていて、かつその先生別行自身の自費計・保険負担計・請求金額計が
+    // 全部0円の行は、「その先生別行は解決済みで報告対象から消えた」行とみなす。
+    // メニュー・担当者のラベルはこの行を除いた残りの先生別行だけから作る（患者共通の
+    // レセ負担金は行ごとの判定に含めない。レセ負担金は患者単位の値であって、この
+    // 先生別行自身が消えたかどうかとは無関係のため）。2026-08-20、7/31さくら・後藤浩一朗
+    // さんの例で発覚：ch=1で自費計等が0になった行の担当者名（沖野／尾内のどちらか）が、
+    // 実額が残っている別の先生別行とまとめられた後も担当者欄に残ってしまっていた。
+    $isLineResolvedAway = static function (array $row) use ($moneyToInt, $isModifiedPrint): bool {
+    if (!$isModifiedPrint || trim((string) ($row['ch'] ?? '')) !== '1') {
+    return false;
+    }
+
+    return $moneyToInt($row['自費計'] ?? 0) === 0
+    && $moneyToInt($row['保険負担計'] ?? 0) === 0
+    && $moneyToInt($row['請求金額計'] ?? 0) === 0;
+    };
+
     $displayPrintRowsCollection = $printRowsCollection
     ->groupBy(fn($row) => trim((string) ($row['患者名'] ?? '')))
-    ->map(function ($rows) use ($moneyToInt, $displayInsuranceAmount, $displayReceiptBurdenAmount) {
+    ->map(function ($rows) use ($moneyToInt, $displayInsuranceAmount, $displayReceiptBurdenAmount, $isLineResolvedAway) {
     $firstRow = $rows->first() ?? [];
-    $menuLabels = $rows
+    $activeRows = $rows->reject($isLineResolvedAway);
+    if ($activeRows->isEmpty()) {
+    $activeRows = $rows;
+    }
+    $menuLabels = $activeRows
     ->map(fn($row) => trim((string) ($row['メニュー集計'] ?? '')))
     ->filter(fn($value) => $value !== '')
     ->unique()
     ->values()
     ->all();
-    $staffLabels = $rows
+    $staffLabels = $activeRows
     ->map(fn($row) => trim((string) ($row['担当者'] ?? '')))
     ->filter(fn($value) => $value !== '')
     ->unique()
