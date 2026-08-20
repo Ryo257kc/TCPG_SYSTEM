@@ -247,20 +247,46 @@ class CashBookController extends Controller
             'vault_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $targetMonthEnd = Carbon::createFromFormat('Y-m-d', (string) $data['target_month'] . '-01')->endOfMonth();
+        $targetMonthStart = Carbon::createFromFormat('Y-m-d', (string) $data['target_month'] . '-01')->startOfMonth();
+        $targetMonthEnd = $targetMonthStart->copy()->endOfMonth();
+        $nextMonthStart = $targetMonthStart->copy()->addMonthNoOverflow()->startOfMonth();
         $vaultName = trim((string) ($data['vault_name'] ?? ''));
-        $deleted = DB::connection('sqlsrv')
-            ->table('dbo.mx_monthly_closings')
-            ->whereDate('closing_month', $targetMonthEnd->format('Y-m-d'))
-            ->where('authority', self::MONTHLY_CLOSING_AUTHORITY)
-            ->delete();
+
+        // closeMonthly()は解除対象月の月次確定と同時に、金庫ごとの「翌月繰越」仕訳
+        // （journal_breakdown='繰越'、month_date=翌月1日）も作る。ここが消し漏れていると、
+        // 解除→残高が変わる修正→再度月次処理、をしても closeMonthly() の$alreadyExistsチェックが
+        // 古い繰越仕訳を「もうある」と誤認して何もしないため、残高が古いまま固定されてしまう
+        // （2026-08-20、ユーザー指摘「小口の場合は残高も作り直しとかになるけどちゃんとできてんのかな」
+        // で発覚）。月次確定行の削除と必ずセットで、翌月繰越仕訳も削除する。
+        $deletedJournalCount = 0;
+        $deleted = 0;
+        DB::connection('sqlsrv')->transaction(function () use ($nextMonthStart, $targetMonthEnd, &$deletedJournalCount, &$deleted): void {
+            $deletedJournalCount = DB::connection('sqlsrv')
+                ->table('dbo.mx_journal_entries')
+                ->where('journal_breakdown', '繰越')
+                ->where('debit_account_title', '小口現金')
+                ->where('credit_account_title', '前月繰越')
+                ->whereDate('occurred_at', $nextMonthStart->format('Y-m-d'))
+                ->delete();
+
+            $deleted = DB::connection('sqlsrv')
+                ->table('dbo.mx_monthly_closings')
+                ->whereDate('closing_month', $targetMonthEnd->format('Y-m-d'))
+                ->where('authority', self::MONTHLY_CLOSING_AUTHORITY)
+                ->delete();
+        });
+
+        $message = $deleted > 0 ? '小口月次確定を解除しました。' : '解除対象の小口月次確定がありませんでした。';
+        if ($deletedJournalCount > 0) {
+            $message .= ' 翌月繰越仕訳を' . $deletedJournalCount . '件削除しました。';
+        }
 
         return redirect()
             ->route('office.office_menu.cash_book', [
                 'target_month' => $data['target_month'],
                 'vault_name' => $vaultName,
             ])
-            ->with('statusMessage', $deleted > 0 ? '小口月次確定を解除しました。' : '解除対象の小口月次確定がありませんでした。');
+            ->with('statusMessage', $message);
     }
 
     public function closeMonthly(Request $request): RedirectResponse

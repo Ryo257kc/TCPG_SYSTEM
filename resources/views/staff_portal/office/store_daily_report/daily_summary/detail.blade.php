@@ -55,9 +55,14 @@
             flex: 0 0 auto;
         }
 
+        .daily-summary-readonly-value {
+            display: inline-block;
+            color: #374151;
+        }
+
         .daily-summary-access-form {
             display: grid;
-            grid-template-columns: 0.5fr 0.8fr 0.8fr 0.6fr 1fr;
+            grid-template-columns: 0.6fr 0.8fr 0.6fr 0.6fr 1fr;
             gap: 8px;
         }
 
@@ -411,7 +416,21 @@
 
             $newPatientOptions = $makeOptions($patientSummaryOptionRows->pluck('新患'));
             $patientNameOptions = $makeOptions($patientSummaryOptionRows->pluck('患者名'));
-            $ratioOptions = $makeOptions($patientSummaryOptionRows->pluck('割合'));
+            // 割合は「0/1/2/3」等の数字（負担割合）と「自/交/母/子/障」等の記号が混在するため、
+            // 数字を昇順で先に並べ、記号類はその後ろへ通常の文字列比較で並べる。
+            $ratioOptions = $makeOptions($patientSummaryOptionRows->pluck('割合'))
+            ->sort(function ($a, $b) {
+            $aIsNumeric = is_numeric($a);
+            $bIsNumeric = is_numeric($b);
+            if ($aIsNumeric && $bIsNumeric) {
+            return $a <=> $b;
+            }
+            if ($aIsNumeric !== $bIsNumeric) {
+            return $aIsNumeric ? -1 : 1;
+            }
+            return strcmp($a, $b);
+            })
+            ->values();
             $staffOptions = $patientDetailOptionRows
             ->mapWithKeys(function (array $row): array {
             $staffId = trim((string) ($row['担当者ID'] ?? ''));
@@ -627,6 +646,17 @@
                         '新患扱い' => 'daily-order-new-like',
                         default => '',
                         };
+                        $moneyToFloatForRow = fn($value) => (float) str_replace(',', '', trim((string) ($value ?? '')));
+                        // 保険請求・差額の表示は保存値（$row['保険請求']・$row['差額']）そのまま。
+                        // ここで計算するのはJSのライブプレビュー（レセ負担金入力中の見込み表示）用の
+                        // 基準値だけで、保険請求・差額の初期表示には使わない（保存値と表示がズレて
+                        // 気づけなくなるのを避けるため。2026-08-20、ユーザー指摘）。
+                        // 保険請求＝請求金額計−レセ負担金、差額＝保険負担計−レセ負担金
+                        // （8/3 ひなた・石田翼の実例で確認：請求金額1227-レセ負担金370=保険請求857、
+                        // 保険負担800-レセ負担金370=差額430）。実際の保存はsaveDailySummaryDetail()
+                        // 側で同じ式・同じpatientReceiptTotals()を使って計算し直す。
+                        $patientClaimTotal = collect($detailRows)->sum(fn($d) => $moneyToFloatForRow($d['請求金額計'] ?? null));
+                        $patientCopaymentTotal = collect($detailRows)->sum(fn($d) => $moneyToFloatForRow($d['保険負担計'] ?? null));
                         @endphp
                         <tr>
                             <td class="{{ $dailyOrderClass }}">{{ $row['日別順'] }}</td>
@@ -670,7 +700,7 @@
                                                         </tr>
                                                         <tr>
                                                             <th>時刻</th>
-                                                            <td><input type="text" name="時刻" value="{{ $row['時刻'] }}"></td>
+                                                            <td>{{ $row['時刻'] }}</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -681,20 +711,11 @@
                                                     <tbody>
                                                         <tr>
                                                             <th>新患</th>
-                                                            <td>
-                                                                <select name="新患">
-                                                                    <option value=""></option>
-                                                                    @foreach ($newPatientOptions as $option)
-                                                                    <option value="{{ $option }}" @selected((string) ($row['新患'] ?? '' )===(string) $option)>{{ $option }}</option>
-                                                                    @endforeach
-                                                                </select>
-                                                            </td>
+                                                            <td>{{ $row['新患'] }}</td>
                                                         </tr>
                                                         <tr>
                                                             <th>患者名</th>
-                                                            <td>
-                                                                <input type="text" name="患者名" value="{{ $row['患者名'] }}" list="daily-summary-patient-name-options">
-                                                            </td>
+                                                            <td>{{ $row['患者名'] }}</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -712,7 +733,7 @@
                                                                     @foreach ($ratioOptions as $option)
                                                                     <option value="{{ $option }}" @selected((string) ($row['割合'] ?? '' )===(string) $option)>{{ $option }}</option>
                                                                     @endforeach
-                                                                </select>／
+                                                                </select>
                                                                 <select name="保険証">
                                                                     <option value="" @selected((string) ($row['保険証'] ?? '' )==='' )></option>
                                                                     <option value="0" @selected((string) ($row['保険証'] ?? '' )==='0' )>持参</option>
@@ -731,19 +752,23 @@
 
                                             <div class="daily-summary-access-group">
                                                 <p class="daily-summary-access-group-title">レセ金額</p>
-                                                <table class="data-table f_size12">
+                                                <table class="data-table f_size12" data-daily-summary-receipt-amount-table>
                                                     <tbody>
                                                         <tr>
                                                             <th>レセ負担金</th>
-                                                            <td class="daily-summary-receipt-burden-cell"><input type="text" name="レセ負担金" value="{{ $row['レセ負担金'] }}"><input type="checkbox" name="負担金ch" value="1" @checked($isCheckedValue($row['負担金ch'] ?? null))></td>
+                                                            <td class="daily-summary-receipt-burden-cell"><input type="text" name="レセ負担金" value="{{ $row['レセ負担金'] }}" data-daily-summary-receipt-burden><input type="checkbox" name="負担金ch" value="1" @checked($isCheckedValue($row['負担金ch'] ?? null))></td>
                                                         </tr>
                                                         <tr>
                                                             <th>保険請求</th>
-                                                            <td><input type="text" name="保険請求" value="{{ $row['保険請求'] }}"></td>
+                                                            <td>
+                                                                <span class="daily-summary-readonly-value" data-daily-summary-receipt-claim data-daily-summary-receipt-claim-base="{{ $patientClaimTotal }}">{{ $row['保険請求'] }}</span>
+                                                            </td>
                                                         </tr>
                                                         <tr>
                                                             <th>差額</th>
-                                                            <td><input type="text" name="差額" value="{{ $row['差額'] }}"></td>
+                                                            <td>
+                                                                <span class="daily-summary-readonly-value" data-daily-summary-receipt-diff data-daily-summary-receipt-diff-base="{{ $patientCopaymentTotal }}">{{ $row['差額'] }}</span>
+                                                            </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -926,6 +951,28 @@
                 const isOpen = !detailRow.hidden;
                 detailRow.hidden = isOpen;
                 button.textContent = isOpen ? '+' : '-';
+            });
+        });
+
+        document.querySelectorAll('[data-daily-summary-receipt-burden]').forEach((burdenInput) => {
+            const table = burdenInput.closest('[data-daily-summary-receipt-amount-table]');
+            const claimSpan = table?.querySelector('[data-daily-summary-receipt-claim]');
+            const diffSpan = table?.querySelector('[data-daily-summary-receipt-diff]');
+            if (!claimSpan || !diffSpan) {
+                return;
+            }
+
+            // 保険請求＝請求金額計−レセ負担金、差額＝保険負担計−レセ負担金。
+            // 請求金額計・保険負担計（base）はサーバー側で計算済みの固定値で、レセ負担金の
+            // 入力に応じてこの2つだけをその場で再計算する。
+            const claimBase = Number(claimSpan.dataset.dailySummaryReceiptClaimBase) || 0;
+            const diffBase = Number(diffSpan.dataset.dailySummaryReceiptDiffBase) || 0;
+            const toNumber = (value) => Number(String(value ?? '').replace(/,/g, '')) || 0;
+
+            burdenInput.addEventListener('input', () => {
+                const burden = toNumber(burdenInput.value);
+                claimSpan.textContent = (claimBase - burden).toLocaleString('en-US');
+                diffSpan.textContent = (diffBase - burden).toLocaleString('en-US');
             });
         });
 

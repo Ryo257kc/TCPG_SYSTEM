@@ -1674,20 +1674,25 @@ class StoreDailyReportController extends Controller
                 return;
             }
 
+            // 時刻・新患・患者名は保存対象から外した（画面側もinputを外し表示のみにしたので、
+            // この一覧から消して既存値をそのまま残す）。保険請求・差額も画面では直接入力させず、
+            // レセ負担金だけを入力項目にしている（2026-08-20、ユーザー要望）。
+            // 保険請求 = 請求金額計 − レセ負担金、差額 = 保険負担計 − レセ負担金
+            // （8/3 ひなた・石田翼の実例：請求金額1227 − レセ負担金370 = 保険請求857、
+            //   保険負担800 − レセ負担金370 = 差額430、で確認）。
+            // 請求金額計・保険負担計はpatient.保険証の値やT_先生別日報の内容で変わるため、
+            // 保険証・detail_rowsの保存を終えたあとにpatientReceiptTotals()で計算し直す。
+            $receiptBurden = $this->moneyToDatabaseValue($request->input('レセ負担金')) ?? 0.0;
+
             DB::connection('sqlsrv_dailyreport')
                 ->table('dbo.T_患者名日報')
                 ->where('No', $patientDailyReportNo)
                 ->update([
-                    '新患' => $this->blankToNull($request->input('新患')),
-                    '時刻' => $this->normalizeDateTimeValue($request->input('日付'), $request->input('時刻')),
-                    '患者名' => $this->blankToNull($request->input('患者名')),
                     '割合' => $this->blankToNull($request->input('割合')),
                     '保険証' => $this->blankToNull($request->input('保険証')),
                     '回収日' => $this->normalizeDateValue($request->input('回収日')),
-                    'レセ負担金' => $this->moneyToDatabaseValue($request->input('レセ負担金')),
+                    'レセ負担金' => $receiptBurden,
                     '負担金ch' => $this->checkboxToDatabaseValue($request->input('負担金ch')),
-                    '保険請求' => $this->moneyToDatabaseValue($request->input('保険請求')),
-                    '差額' => $this->moneyToDatabaseValue($request->input('差額')),
                     '日報備考' => $this->blankToNull($request->input('日報備考')),
                 ]);
 
@@ -1747,6 +1752,20 @@ class StoreDailyReportController extends Controller
                     ->table('dbo.T_先生別日報')
                     ->insert($teacherData + ['患者No_t' => $patientNo]);
             }
+
+            $targetDate = trim((string) $request->input('日付', ''));
+            $targetStore = trim((string) $request->input('店舗', ''));
+            $totals = $this->patientReceiptTotals($patientNo, $targetDate, $targetStore);
+            $receiptClaim = $totals['請求金額計'] - $receiptBurden;
+            $receiptDiff = $totals['保険負担計'] - $receiptBurden;
+
+            DB::connection('sqlsrv_dailyreport')
+                ->table('dbo.T_患者名日報')
+                ->where('No', $patientDailyReportNo)
+                ->update([
+                    '保険請求' => $receiptClaim,
+                    '差額' => $receiptDiff,
+                ]);
         });
 
         return redirect()
@@ -1867,6 +1886,40 @@ class StoreDailyReportController extends Controller
             'patient.店舗',
             'teacher.自費',
         ]);
+    }
+
+    /**
+     * レセ金額欄の保険請求・差額の計算に使う、患者1人分の請求金額計・保険負担計の合計。
+     * dailySummaryDetail()の一覧表示と同じ集計条件（dailySummaryDetailSelects()の
+     * 請求金額計・保険負担計）を、対象患者1人分に絞って再利用する。
+     * 保存時（saveDailySummaryDetail()）はdetail_rows保存直後に呼び、その時点のT_先生別日報を
+     * 元に計算し直す（画面のJS計算をそのまま信用しない）。
+     *
+     * @return array{請求金額計: float, 保険負担計: float}
+     */
+    private function patientReceiptTotals(string $patientNo, string $targetDate, string $targetStore): array
+    {
+        $normalRowsQuery = $this->dailySummaryDetailBaseQuery()
+            ->select($this->dailySummaryDetailSelects(false))
+            ->whereDate('patient.日付', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->where('patient.患者No', $patientNo)
+            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
+
+        $insuranceCardRowsQuery = $this->dailySummaryDetailBaseQuery()
+            ->select($this->dailySummaryDetailSelects(true))
+            ->whereDate('patient.回収日', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->where('patient.保険証', 2)
+            ->where('patient.患者No', $patientNo)
+            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
+
+        $rows = $normalRowsQuery->union($insuranceCardRowsQuery)->get();
+
+        return [
+            '請求金額計' => (float) $rows->sum(fn($row): float => (float) ($row->{'請求金額計'} ?? 0)),
+            '保険負担計' => (float) $rows->sum(fn($row): float => (float) ($row->{'保険負担計'} ?? 0)),
+        ];
     }
 
     private function buildMonthlyWindowPrintData(string $targetMonthStart, string $targetMonthEnd, string $selectedStore, array $receiptBurdenInputs = []): array
@@ -2369,27 +2422,45 @@ class StoreDailyReportController extends Controller
             ->first();
     }
 
+    /**
+     * 月次解除で消してよいのは、店舗日報の月次処理（dailySummaryMonthlyJournalPayloads()）
+     * が作った仕訳だけ。月次は往診・売上（店舗日報）・小口現金など複数系統があり、
+     * それぞれ別のjournal_breakdownプレフィックスで仕訳を作る。
+     *
+     * 以前はここ（窓口の枝）だけjournal_breakdownの絞り込みが漏れていて、勘定科目・品目名
+     * （現金／窓口収入／保険窓口負担）が同じレセプト請求機能（EntryController、
+     * journal_breakdown="{YYYYMM}レセ窓口..."）側の仕訳まで一緒に削除してしまっていた
+     * （2026-08-20、ユーザー報告「往診分も一緒に消えてる気がする」で発覚）。
+     * dailySummaryMonthlyJournalPayloads()が作るjournal_breakdownは必ず
+     * "{YYYYMM}窓口/経費/自費{店舗名}"の形なので、削除側もその接頭辞に完全一致する行だけを
+     * 対象にする（「〜以外」ではなく「自分が作った形そのもの」で絞る方が、他の月次系統が
+     * 将来増えても安全）。
+     */
     private function deleteDailySummaryMonthlyJournalEntries(Carbon $targetMonthStart): int
     {
+        $yearMonth = $targetMonthStart->format('Ym');
+
         return DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
             ->whereDate('month_date', $targetMonthStart->format('Y-m-d'))
             ->where('summary_text', $targetMonthStart->format('n') . '月売上')
-            ->where(function ($query): void {
-                $query->where(function ($query): void {
+            ->where(function ($query) use ($yearMonth): void {
+                $query->where(function ($query) use ($yearMonth): void {
                     $query->where('debit_account_title', '現金')
                         ->where('credit_account_title', '窓口収入')
-                        ->where('credit_item_name', '保険窓口負担');
-                })->orWhere(function ($query) use ($targetMonthStart): void {
+                        ->where('credit_item_name', '保険窓口負担')
+                        ->where('journal_breakdown', 'like', $yearMonth . '窓口%');
+                })->orWhere(function ($query) use ($yearMonth): void {
                     $query->where('debit_account_title', '現金')
                         ->where('credit_account_title', '自費収入')
                         ->where('credit_item_name', '自費')
-                        ->where('journal_breakdown', 'not like', $targetMonthStart->format('Ym') . 'レセ%');
-                })->orWhere(function ($query): void {
+                        ->where('journal_breakdown', 'like', $yearMonth . '自費%');
+                })->orWhere(function ($query) use ($yearMonth): void {
                     $query->where('debit_account_title', '消耗品費')
                         ->where('debit_item_name', '店舗経費')
                         ->where('credit_account_title', '現金')
-                        ->where('credit_item_name', '店舗経費');
+                        ->where('credit_item_name', '店舗経費')
+                        ->where('journal_breakdown', 'like', $yearMonth . '経費%');
                 });
             })
             ->delete();
@@ -2511,8 +2582,23 @@ class StoreDailyReportController extends Controller
             ->groupBy('patient.店舗')
             ->get();
 
+        // 窓口で現金返金した分（T_先生別日報.メニュー=返金）はpatient.レセ負担金に反映されない
+        // ため、buildMonthlyWindowPrintData()と同じ調整をここにも入れる（2026-08-20、
+        // この月次締め入力側だけ調整が漏れていて返金分が保険負担に残ってしまっていた不具合を修正）。
+        $refundRows = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_患者名日報 as patient')
+            ->join('dbo.T_先生別日報 as teacher', 'patient.患者No', '=', 'teacher.患者No_t')
+            ->select([
+                'patient.店舗',
+                DB::raw("SUM(CASE WHEN patient.保険証 = 0 AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END) as amount"),
+            ])
+            ->where('patient.日付', '>=', $targetMonthStart->format('Y-m-d'))
+            ->where('patient.日付', '<', $targetMonthNext->format('Y-m-d'))
+            ->groupBy('patient.店舗')
+            ->get();
+
         $totals = [];
-        foreach ($normalRows->merge($collectionRows) as $row) {
+        foreach ($normalRows->merge($collectionRows)->merge($refundRows) as $row) {
             $storeName = trim((string) ($row->{'店舗'} ?? ''));
             if ($storeName === '') {
                 continue;
