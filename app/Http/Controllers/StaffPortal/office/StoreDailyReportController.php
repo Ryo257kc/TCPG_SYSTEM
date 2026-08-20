@@ -141,6 +141,18 @@ class StoreDailyReportController extends Controller
         $targetMonthStart = sprintf('%04d-%02d-01', $targetYear, $targetMonthNo);
         $targetMonthEnd = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
 
+        // 先生別日報を日報詳細（1日単位の画面）から開いた場合は、target_dateでその1日だけに
+        // 絞る。Accessでは日別セルを開くとその日だけプレビューされていた挙動に合わせた
+        // （2026-08-20、ユーザー要望。月一覧側の「先生別日報」選択肢は不要と確認済みのため撤去、
+        // 日報詳細側にこのリンクを追加）。
+        $targetDate = trim((string) $request->query('target_date', ''));
+        $teacherDailyRangeStart = $targetMonthStart;
+        $teacherDailyRangeEnd = $targetMonthEnd;
+        if ($printType === 'teacher_daily_report' && $targetDate !== '') {
+            $teacherDailyRangeStart = $targetDate;
+            $teacherDailyRangeEnd = date('Y-m-d', strtotime($targetDate . ' +1 day'));
+        }
+
         $viewName = match ($printType) {
             'monthly_window_report' => 'monthly_window_print',
             'teacher_monthly_report' => 'teacher_monthly_print',
@@ -154,7 +166,7 @@ class StoreDailyReportController extends Controller
                 'hinata' => $this->moneyToDatabaseValue($request->query('hinata_receipt_burden_amount')),
             ]),
             'teacher_monthly_report' => $this->buildTeacherMonthlyPrintData($targetMonthStart, $targetMonthEnd, $selectedStore),
-            'teacher_daily_report' => $this->buildTeacherDailyPrintData($targetMonthStart, $targetMonthEnd, $selectedStore),
+            'teacher_daily_report' => $this->buildTeacherDailyPrintData($teacherDailyRangeStart, $teacherDailyRangeEnd, $selectedStore),
             default => $this->buildMonthlyDailyPrintData($targetMonthStart, $targetMonthEnd, $selectedStore),
         };
 
@@ -648,7 +660,14 @@ class StoreDailyReportController extends Controller
 
                 return $moneyTextToFloat($row['レセ負担金'] ?? null);
             });
+        // 担当者別集計（自費計・保険負担計・請求金額計）は、先生別日報
+        // （buildTeacherDailyPrintData()）と同じ「teacher.自費/保険負担/請求金額の生値を
+        // 先生別外=0の行だけ合計する」に統一する。以前は自費計等のCASE集計値
+        // （dailySummaryDetailSelects()、計算外・保険証の条件で0円化される・先生別外は見ない）を
+        // 使っていて、正しいはずの先生別日報の値と一致しなかった（2026-08-20、6/4さくら・
+        // 井上さんの自費が先生別日報3,260円に対しここでは-990円になっていた不具合で発覚）。
         $staffSummaryRows = $dailyDetailRowsCollection
+            ->filter(fn(array $row): bool => trim((string) ($row['先生別外'] ?? '')) !== '1')
             ->groupBy(fn(array $row): string => trim((string) ($row['担当者ID'] ?? '')))
             ->map(function ($rows, string $担当者ID) use ($moneyTextToFloat): array {
                 $firstRow = $rows->first() ?? [];
@@ -658,10 +677,10 @@ class StoreDailyReportController extends Controller
                     '担当者ID' => $担当者ID,
                     '担当者名' => $staffDisplayName !== '' ? $staffDisplayName : $担当者ID,
                     '件数' => $this->formatNumberValue($rows->count()),
-                    '自費計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['自費計'] ?? null))),
-                    '保険負担計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['保険負担計'] ?? null))),
+                    '自費計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['自費'] ?? null))),
+                    '保険負担計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['保険負担'] ?? null))),
                     'レセ差額' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['レセ差額'] ?? null))),
-                    '請求金額計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['請求金額計'] ?? null))),
+                    '請求金額計' => $this->formatMoneyValue($rows->sum(fn(array $row): float => $moneyTextToFloat($row['請求金額'] ?? null))),
                 ];
             })
             ->filter(fn(array $row): bool => trim((string) ($row['担当者名'] ?? '')) !== '')

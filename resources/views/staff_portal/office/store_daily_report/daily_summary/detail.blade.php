@@ -284,6 +284,11 @@
                         class="btn"
                         target="_blank"
                         rel="noopener">修正日報</a>
+                    <a
+                        href="{{ route('office.store_daily_report.daily_summary.monthly_print', ['target_month' => substr($targetDate, 0, 7), '日報集計店舗' => $dailySummary['日報集計店舗'], 'print_type' => 'teacher_daily_report', 'target_date' => $targetDate]) }}"
+                        class="btn"
+                        target="_blank"
+                        rel="noopener">先生別日報</a>
                 </div>
             </div>
 
@@ -299,6 +304,10 @@
             @php
             $isDailySummaryConfirmed = ($dailySummary['確定'] ?? '') !== '';
             $canSaveDailySummaryDetail = !$isDailySummaryConfirmed || ($isPaymentCheck ?? false);
+            // 月次処理済みは経理権限・管理者に関わらず全員編集不可（$canSaveDailySummaryDetail
+            // だけでは月次締めを見ておらず、月次締め後の患者別編集欄が「保存ボタンは無いのに
+            // 入力欄だけ残る」状態になっていた。2026-08-20、ユーザー報告で発覚）。
+            $canEditDailySummaryDetailFields = $canSaveDailySummaryDetail && !($isDailySummaryMonthlyClosed ?? false);
             $canSaveDailySummaryExpense = ($isPaymentCheck ?? false)
             ? !($isDailySummaryMonthlyClosed ?? false)
             : !$isDailySummaryConfirmed;
@@ -732,7 +741,7 @@
                                                         <tr>
                                                             <th>保険証</th>
                                                             <td>
-                                                                @if ($canSaveDailySummaryDetail)
+                                                                @if ($canEditDailySummaryDetailFields)
                                                                 割合
                                                                 <select name="割合">
                                                                     <option value=""></option>
@@ -754,7 +763,7 @@
                                                         <tr>
                                                             <th>回収日</th>
                                                             <td>
-                                                                @if ($canSaveDailySummaryDetail)
+                                                                @if ($canEditDailySummaryDetailFields)
                                                                 <input type="text" name="回収日" value="{{ $row['回収日'] }}">
                                                                 @else
                                                                 {{ $row['回収日'] }}
@@ -772,7 +781,7 @@
                                                         <tr>
                                                             <th>レセ負担金</th>
                                                             <td class="daily-summary-receipt-burden-cell">
-                                                                @if ($canSaveDailySummaryDetail)
+                                                                @if ($canEditDailySummaryDetailFields)
                                                                 <input type="text" name="レセ負担金" value="{{ $row['レセ負担金'] }}" data-daily-summary-receipt-burden><input type="checkbox" name="負担金ch" value="1" @checked($isCheckedValue($row['負担金ch'] ?? null))>
                                                                 @else
                                                                 {{ $row['レセ負担金'] }}
@@ -800,7 +809,7 @@
                                                     <tbody>
                                                         <tr>
                                                             <td>
-                                                                @if ($canSaveDailySummaryDetail)
+                                                                @if ($canEditDailySummaryDetailFields)
                                                                 <textarea class="daily-summary-remarks-textarea" name="日報備考" rows="4">{{ $row['日報備考'] }}</textarea>
                                                                 @else
                                                                 {{ $row['日報備考'] }}
@@ -870,6 +879,7 @@
                                             <tbody data-daily-summary-detail-body>
                                                 @forelse ($detailRows as $detailRow)
                                                 <tr data-daily-summary-detail-input-row>
+                                                    @if ($canEditDailySummaryDetailFields)
                                                     <td>
                                                         <input type="hidden" name="detail_rows[{{ $loop->index }}][先生別No]" value="{{ $detailRow['先生別No'] }}">
                                                         <input type="hidden" name="detail_rows[{{ $loop->index }}][_delete]" value="0" data-daily-summary-detail-delete>
@@ -910,6 +920,25 @@
                                                     <td class="text-center"><input type="checkbox" name="detail_rows[{{ $loop->index }}][ch]" value="1" @checked((bool) ($detailRow['ch'] ?? false))></td>
                                                     @if (!$isDailySummaryConfirmed)
                                                     <td><button type="button" class="btn_small" data-daily-summary-delete-detail>×</button></td>
+                                                    @endif
+                                                    @else
+                                                    <td>{{ $detailRow['メニュー集計'] }}</td>
+                                                    <td>{{ $detailRow['回数表示'] }}</td>
+                                                    <td>{{ $detailRow['備考'] }}</td>
+                                                    <td class="text-center"><input type="checkbox" @checked((bool) ($detailRow['チャージ'] ?? false)) disabled></td>
+                                                    <td>{{ $detailRow['自費'] }}</td>
+                                                    <td>{{ $detailRow['保険負担'] }}</td>
+                                                    <td>{{ $detailRow['レセ差額'] }}</td>
+                                                    <td>{{ $detailRow['請求金額'] }}</td>
+                                                    <td>{{ $detailRow['カード手数料'] }}</td>
+                                                    <td>{{ $staffOptions[$detailRow['担当者ID'] ?? ''] ?? ($detailRow['担当者ID'] ?? '') }}</td>
+                                                    <td>{{ $detailRow['項目'] }}</td>
+                                                    <td class="text-center"><input type="checkbox" @checked((bool) ($detailRow['計算外'] ?? false)) disabled></td>
+                                                    <td class="text-center"><input type="checkbox" @checked((bool) ($detailRow['先生別外'] ?? false)) disabled></td>
+                                                    <td class="text-center"><input type="checkbox" @checked((bool) ($detailRow['ch'] ?? false)) disabled></td>
+                                                    @if (!$isDailySummaryConfirmed)
+                                                    <td></td>
+                                                    @endif
                                                     @endif
                                                 </tr>
                                                 @empty
