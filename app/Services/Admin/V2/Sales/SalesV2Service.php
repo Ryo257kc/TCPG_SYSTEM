@@ -163,31 +163,14 @@ class SalesV2Service
     }
 
     /**
-     * @return array{stores: list<array<string, mixed>>, target_month: string, company_id: string, grand_total: float}
+     * @return array{rows: list<array<string, mixed>>, target_month: string, company_id: string, grand_total: float}
      */
     public function pdfSummary(string $targetMonth, string $companyId): array
     {
         $summary = $this->summary($targetMonth, $companyId);
 
-        $stores = [];
-        foreach ($summary['rows'] as $row) {
-            $storeName = trim((string) ($row['store_name'] ?? ''));
-            $groupKey = $storeName !== '' ? $storeName : '店舗未設定';
-
-            if (!array_key_exists($groupKey, $stores)) {
-                $stores[$groupKey] = [
-                    'store_name' => $groupKey,
-                    'rows' => [],
-                    'store_total' => 0.0,
-                ];
-            }
-
-            $stores[$groupKey]['rows'][] = $row;
-            $stores[$groupKey]['store_total'] += (float) ($row['total_amount'] ?? 0);
-        }
-
         return [
-            'stores' => array_values($stores),
+            'rows' => $summary['rows'],
             'target_month' => $summary['target_month'],
             'company_id' => $summary['company_id'],
             'grand_total' => $summary['grand_total'],

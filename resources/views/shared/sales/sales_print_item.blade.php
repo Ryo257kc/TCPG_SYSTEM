@@ -19,11 +19,10 @@ if (preg_match('/^(\d{4})-(\d{2})$/', $targetMonthText, $matches)) {
     </header>
 
     <div class="department-grid">
-        @foreach (($stores ?? []) as $store)
-        @foreach (($store['rows'] ?? []) as $row)
+        @foreach (($rows ?? []) as $row)
         <article class="department-card">
             <div class="department-head">
-                <div class="store-name">{{ $store['store_name'] }}</div>
+                <div class="store-name">{{ $row['store_name'] }}</div>
                 <div class="department-name">{{ $row['department_name'] }}</div>
             </div>
 
@@ -72,7 +71,6 @@ if (preg_match('/^(\d{4})-(\d{2})$/', $targetMonthText, $matches)) {
                 </tbody>
             </table>
         </article>
-        @endforeach
         @endforeach
     </div>
 </div>

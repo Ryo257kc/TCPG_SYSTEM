@@ -12,7 +12,7 @@
 <body>
     <button type="button" class="print-button" onclick="window.print()">このページを印刷する</button>
     @include('shared.sales.sales_print_item', [
-    'stores' => $stores ?? [],
+    'rows' => $rows ?? [],
     'targetMonth' => $targetMonth ?? '',
     'grandTotal' => $grandTotal ?? 0,
     'companyName' => $companyName ?? '',

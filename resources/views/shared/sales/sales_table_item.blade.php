@@ -54,7 +54,6 @@
                     <th>会社</th>
                     <th>保険請求額</th>
                     <th>保険窓口負担</th>
-                    <th>個人振込分</th>
                     <th>自費</th>
                     <th>合計金</th>
                     <th>店舗経費</th>
@@ -63,11 +62,12 @@
             </thead>
             <tbody>
                 @foreach (($companyTotals ?? []) as $row)
+                {{-- 会社別合計のみ、個人振込分を保険窓口負担へ合算して表示する（個人振込分の列は非表示）。
+                     合計金・銀行入金額は元々個人振込分を含んだ集計値なので、ここでは変更しない。 --}}
                 <tr>
                     <td>{{ $row['company_name'] }}</td>
                     <td class="num">{{ number_format((float) $row['insurance_amount']) }}</td>
-                    <td class="num">{{ number_format((float) $row['counter_amount']) }}</td>
-                    <td class="num">{{ number_format((float) $row['personal_transfer_amount']) }}</td>
+                    <td class="num">{{ number_format((float) $row['counter_amount'] + (float) $row['personal_transfer_amount']) }}</td>
                     <td class="num">{{ number_format((float) $row['self_pay_amount']) }}</td>
                     <td class="num">{{ number_format((float) $row['total_amount']) }}</td>
                     <td class="num">{{ number_format((float) $row['expense_amount']) }}</td>

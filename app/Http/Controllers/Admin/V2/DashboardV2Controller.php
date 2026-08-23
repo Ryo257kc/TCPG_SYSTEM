@@ -77,7 +77,7 @@ class DashboardV2Controller extends Controller
         }
 
         return view('staff_portal.office.sales.print', [
-            'stores' => $summary['stores'],
+            'rows' => $summary['rows'],
             'targetMonth' => $summary['target_month'],
             'selectedCompanyId' => $summary['company_id'],
             'grandTotal' => $summary['grand_total'],
@@ -90,10 +90,33 @@ class DashboardV2Controller extends Controller
     {
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         $companyId = trim((string) $request->query('company_id', ''));
+
+        // 会社を絞り込まないと、freeeへ全社分が混ざったまま誤って取り込まれる事故に
+        // つながるため、URLを直接叩かれた場合の保険としてサーバー側でも弾く
+        // （通常はindex.blade.php側で会社未選択時にCSV DLボタン自体を出さない）。
+        abort_if($companyId === '', 422, '会社を選択してからCSVをダウンロードしてください。');
+
         $csv = $this->salesService->freeeJournalCsv($targetMonth, $companyId);
         $yyyymm = str_replace('-', '', $csv['target_month']);
-        $downloadName = 'TC_freee振伝_売上' . $yyyymm . '.csv';
-        $fallbackName = 'TC_freee_sales_' . $yyyymm . '.csv';
+
+        // ファイル名の頭に会社を表す略称を付ける（プレッジ=PG、トータルケア=TC）。
+        // 会社を絞り込まずに全社分をDLした場合は略称を付けない。
+        $companyRows = $this->companyService->list('')['rows'] ?? [];
+        $companyName = '';
+        foreach ($companyRows as $companyRow) {
+            if (trim((string) ($companyRow['company_id'] ?? '')) === $csv['company_id']) {
+                $companyName = trim((string) ($companyRow['company_name'] ?? ''));
+                break;
+            }
+        }
+        $prefix = match (true) {
+            str_contains($companyName, 'プレッジ') => 'PG_',
+            str_contains($companyName, 'トータルケア') => 'TC_',
+            default => '',
+        };
+
+        $downloadName = $prefix . 'freee振伝_売上' . $yyyymm . '.csv';
+        $fallbackName = $prefix . 'freee_sales_' . $yyyymm . '.csv';
 
         return response($csv['content'], 200, [
             'Content-Type' => 'text/csv; charset=Shift_JIS',

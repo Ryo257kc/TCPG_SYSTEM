@@ -128,9 +128,13 @@
                         class="btn"
                         target="_blank"
                         rel="noopener noreferrer">印刷</a>
+                    @if (!empty($selectedCompanyId))
                     <a
-                        href="{{ url('/admin/sales/csv') . '?' . http_build_query(['target_month' => ($targetMonth ?? now()->format('Y-m')), 'company_id' => ($selectedCompanyId ?? '')]) }}"
+                        href="{{ url('/admin/sales/csv') . '?' . http_build_query(['target_month' => ($targetMonth ?? now()->format('Y-m')), 'company_id' => $selectedCompanyId]) }}"
                         class="btn">CSV DL</a>
+                    @else
+                    <span class="btn" aria-disabled="true" title="会社を選択するとCSV DLできます" style="opacity:0.5;cursor:not-allowed;pointer-events:none;">CSV DL</span>
+                    @endif
                 </div>
             </form>
 
