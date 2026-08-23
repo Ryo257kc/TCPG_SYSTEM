@@ -142,8 +142,10 @@ https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1177.htm で確認済み
 | 120万円超123万円以下 | 3万円 |
 
 保存先は`mx_nen_tyo.tokutei_shinzoku_tokubetsu_koujo`（2026-08-15、Payroll_DEVに追加。
-`database/sql/2026_08_add_tokutei_shinzoku_tokubetsu_koujo_to_mx_nen_tyo.sql`）。
-本番Payrollへの反映と、源泉徴収票等の帳票表示はまだ未実装。
+`database/sql/2026_08_add_tokutei_shinzoku_tokubetsu_koujo_to_mx_nen_tyo.sql`。
+**本番Payrollには未反映**、反映時は同じ列を本番にも追加すること）。
+源泉徴収票（`writeGensenHyouPreview()`、x=40.5,y=70、要調整）には表示済み。
+**源泉徴収簿等の他帳票への表示はまだ未実装。**
 
 ## 基礎控除申告書「区分Ⅰ」（kiso_bunrui）・「区分Ⅱ」（haigu_bunrui）
 

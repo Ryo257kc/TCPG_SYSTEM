@@ -4,17 +4,51 @@
     - sectionKey: string  (id生成用、セクション内で一意)
     - title: string
     - currentItems: array<int, array{label:string, value:string}>  現在の登録値（読み取り専用）
-    - changedFieldName: string  変更有無チェックボックスのname
-    - changedChecked: bool
+    - changedFieldName: string  変更有無チェックボックス（またははい/いいえ）のname
+    - changedChecked: bool|null  requireAnswer時はtrue/false/null（null=未回答、はい/いいえどちらも選ばせない）
+    - requireAnswer: bool (省略可、既定false)  trueならチェックボックスではなく必須のはい/いいえラジオにする
+      （未回答のまま保存できないようにするため。次のセクションへ進む唯一の手段が「答えて保存する」に
+      なるよう、答え忘れたまま保存ボタンを押しても通らないようにする用途）
     - fields: array<int, array{name:string, label:string, value:string, maxlength?:int, type?:string, options?:array<string,string>, checked?:bool}>
       type: text(既定)/number/date/select/checkbox/file。selectはoptions（value=>label）、checkboxはchecked(bool)、
       fileはvalue（現在のファイル名の表示用、空なら非表示）とaccept（省略可）を使う。
     - editable: bool
     - toggleLabel: string (省略時「変わった」)
+    - rowMode: bool (省略可、既定false)  trueなら、タイトルと同じ行の右側に「編集」ボタン
+      （＋deleteFieldNameがあれば「削除」ボタン）を並べる。既存の一覧行（扶養親族・保険料控除）用。
+    - deleteFieldName: string|null  rowMode時、削除チェックボックスのname（省略時は削除ボタンなし）
+    - deleteDisabled: bool (省略可)
+    - deleteDisabledReason: string|null (省略可)  削除できない理由の補足
+    - missingAttachmentWarning: string|null (省略可)  非空ならタイトル行に赤字で表示（添付漏れ警告）
 --}}
 <div class="year-end-section">
-    @if (!empty($title))
+    @if (!empty($title) && empty($rowMode))
     <h3 class="year-end-section-title">{{ $title }}</h3>
+    @endif
+
+    @if (!empty($rowMode))
+    <div class="year-end-row-header">
+        <div class="year-end-row-header-title">
+            @if (!empty($title))
+            <h3 class="year-end-section-title">{{ $title }}</h3>
+            @endif
+            @if (!empty($missingAttachmentWarning))
+            <p class="year-end-attachment-warning">⚠ {{ $missingAttachmentWarning }}</p>
+            @endif
+        </div>
+        <div class="year-end-row-actions">
+            <label class="year-end-row-action-btn" for="year-end-toggle-{{ $sectionKey }}">編集</label>
+            @if (!empty($deleteFieldName))
+            <label class="year-end-row-action-btn year-end-row-action-btn-danger year-end-row-delete-label">
+                <span class="year-end-row-delete-label-text">削除</span>
+                <input type="checkbox" class="year-end-row-delete-checkbox" name="{{ $deleteFieldName }}" value="1" {{ (!empty($deleteDisabled) || empty($editable)) ? 'disabled' : '' }} style="display:none;">
+            </label>
+            @if (!empty($deleteDisabled) && !empty($deleteDisabledReason))
+            <p class="year-end-note">{{ $deleteDisabledReason }}</p>
+            @endif
+            @endif
+        </div>
+    </div>
     @endif
 
     @php
@@ -32,6 +66,33 @@
     @endif
 
     <div class="year-end-toggle">
+        @if (!empty($requireAnswer))
+        <div class="year-end-required-choice">
+            <label class="year-end-field-label">{{ $toggleLabel ?? '変わった' }}</label>
+            <div class="year-end-required-choice-options">
+                <label class="year-end-required-choice-option">
+                    <input
+                        type="radio"
+                        class="year-end-toggle-input"
+                        name="{{ $changedFieldName }}"
+                        value="1"
+                        {{ $changedChecked === true ? 'checked' : '' }}
+                        {{ $editable ? 'required' : 'disabled' }}>
+                    はい
+                </label>
+                <label class="year-end-required-choice-option">
+                    <input
+                        type="radio"
+                        class="year-end-toggle-input-no"
+                        name="{{ $changedFieldName }}"
+                        value="0"
+                        {{ $changedChecked === false ? 'checked' : '' }}
+                        {{ $editable ? 'required' : 'disabled' }}>
+                    いいえ
+                </label>
+            </div>
+        </div>
+        @else
         <input
             type="checkbox"
             class="year-end-toggle-input"
@@ -39,8 +100,12 @@
             name="{{ $changedFieldName }}"
             value="1"
             {{ $changedChecked ? 'checked' : '' }}
-            {{ $editable ? '' : 'disabled' }}>
+            {{ $editable ? '' : 'disabled' }}
+            @if(!empty($rowMode)) style="display:none;" @endif>
+        @if (empty($rowMode))
         <label for="year-end-toggle-{{ $sectionKey }}" class="year-end-toggle-label">{{ $toggleLabel ?? '変わった' }}</label>
+        @endif
+        @endif
 
         <div class="year-end-toggle-fields">
             @foreach ($fields as $field)

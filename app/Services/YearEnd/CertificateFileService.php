@@ -27,6 +27,9 @@ class CertificateFileService
         if ($extension === 'pdf' || $mime === 'application/pdf') {
             $fileName = $baseName . '.pdf';
             $storedPath = $file->storeAs($directory, $fileName, self::DISK);
+        } elseif ($extension === 'xml' || in_array($mime, ['text/xml', 'application/xml'], true)) {
+            $fileName = $baseName . '.xml';
+            $storedPath = $file->storeAs($directory, $fileName, self::DISK);
         } else {
             $compressed = $this->compressImage($file->getRealPath());
             if ($compressed !== null) {
@@ -69,6 +72,11 @@ class CertificateFileService
     public function extension(string $path): string
     {
         return strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    }
+
+    public function getContents(string $path): string
+    {
+        return (string) Storage::disk(self::DISK)->get($path);
     }
 
     /** @return \Symfony\Component\HttpFoundation\StreamedResponse */

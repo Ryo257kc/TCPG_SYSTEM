@@ -789,11 +789,21 @@
                             </label>
                             <label class="year-end-hoken-field">
                                 区分
-                                <input type="text" name="category" value="{{ $category }}" maxlength="20">
+                                <select name="category">
+                                    <option value="">選択</option>
+                                    @foreach (['一般保険', '介護保険', '社会保険', '地震保険', '年金保険', '小規模企業共済（機構）', '企業型年金（DC）', '個人型年金（iDeCo）'] as $categoryOption)
+                                    <option value="{{ $categoryOption }}" {{ $category === $categoryOption ? 'selected' : '' }}>{{ $categoryOption }}</option>
+                                    @endforeach
+                                </select>
                             </label>
                             <label class="year-end-hoken-field">
                                 適用制度
-                                <input type="text" name="applied_system" value="{{ $system }}" maxlength="20">
+                                <select name="applied_system">
+                                    <option value="">選択</option>
+                                    @foreach (['新制度', '旧制度'] as $systemOption)
+                                    <option value="{{ $systemOption }}" {{ $system === $systemOption ? 'selected' : '' }}>{{ $systemOption }}</option>
+                                    @endforeach
+                                </select>
                             </label>
                             <label class="year-end-hoken-field year-end-hoken-field-narrow">
                                 申告額
@@ -854,7 +864,13 @@
 
             <div class="year-end-hoken-add">
                 <h3>保険情報を追加</h3>
-                <form method="post" action="{{ route('admin.work.year_end_adjustments.hoken.create', ['applicationId' => $applicationId]) }}" enctype="multipart/form-data" class="year-end-hoken-form">
+                <label class="year-end-hoken-field year-end-hoken-field-wide">
+                    電子的控除証明書（XML）から自動入力
+                    <input type="file" id="admin-hoken-xml-input" accept=".xml,text/xml,application/xml">
+                </label>
+                <p class="year-end-note" id="admin-hoken-xml-status"></p>
+                <p class="year-end-note">保険会社等から届いた証明書がXML形式の場合、ここに選択すると内容を読み取ります（証明書が本人ではなく事務所へ直接届いた場合用）。契約が1件なら下のフォームに自動入力するので内容を確認して「追加」を押してください。複数契約が入っている場合は、確認を挟まずまとめて全件登録します。</p>
+                <form method="post" action="{{ route('admin.work.year_end_adjustments.hoken.create', ['applicationId' => $applicationId]) }}" enctype="multipart/form-data" class="year-end-hoken-form" id="admin-hoken-add-form">
                     @csrf
                     <div class="year-end-hoken-edit-grid">
                         <label class="year-end-hoken-field">
@@ -867,11 +883,21 @@
                         </label>
                         <label class="year-end-hoken-field">
                             区分
-                            <input type="text" name="category" maxlength="20">
+                            <select name="category">
+                                <option value="">選択</option>
+                                @foreach (['一般保険', '介護保険', '社会保険', '地震保険', '年金保険', '小規模企業共済（機構）', '企業型年金（DC）', '個人型年金（iDeCo）'] as $categoryOption)
+                                <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                                @endforeach
+                            </select>
                         </label>
                         <label class="year-end-hoken-field">
                             適用制度
-                            <input type="text" name="applied_system" maxlength="20">
+                            <select name="applied_system">
+                                <option value="">選択</option>
+                                @foreach (['新制度', '旧制度'] as $systemOption)
+                                <option value="{{ $systemOption }}">{{ $systemOption }}</option>
+                                @endforeach
+                            </select>
                         </label>
                         <label class="year-end-hoken-field year-end-hoken-field-narrow">
                             申告額
@@ -1113,6 +1139,143 @@
                         lockBtn.disabled = false;
                     });
             });
+        })();
+
+        (function() {
+            var xmlInput = document.getElementById('admin-hoken-xml-input');
+            var xmlStatus = document.getElementById('admin-hoken-xml-status');
+            var addForm = document.getElementById('admin-hoken-add-form');
+            if (!xmlInput || !xmlStatus || !addForm) return;
+
+            var parseUrl = @json(route('admin.work.year_end_adjustments.hoken.parse_xml', ['applicationId' => $applicationId]));
+            var createUrl = @json(route('admin.work.year_end_adjustments.hoken.create', ['applicationId' => $applicationId]));
+            var csrf = @json(csrf_token());
+
+            xmlInput.addEventListener('change', function() {
+                var file = xmlInput.files && xmlInput.files[0];
+                if (!file) return;
+
+                xmlStatus.textContent = '読み込み中…';
+
+                var formData = new FormData();
+                formData.append('certificate_file', file);
+                formData.append('_token', csrf);
+
+                fetch(parseUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                }).then(function(res) {
+                    return res.json().then(function(data) {
+                        return { ok: res.ok, data: data };
+                    });
+                }).then(function(result) {
+                    if (!result.ok) {
+                        xmlStatus.textContent = (result.data && result.data.error) || '読み込みに失敗しました。';
+                        return;
+                    }
+
+                    var contracts = result.data.contracts || [];
+                    if (contracts.length === 0) {
+                        xmlStatus.textContent = '契約情報を読み取れませんでした。';
+                        return;
+                    }
+
+                    if (contracts.length === 1) {
+                        fillAddForm(contracts[0], file);
+                        xmlStatus.textContent = '内容を読み取り、自動入力しました。内容を確認して「追加」ボタンを押してください。';
+                        xmlInput.value = '';
+                        return;
+                    }
+
+                    // 複数契約：確認の手間より登録漏れを防ぐことを優先し、全件まとめて登録する。
+                    xmlStatus.textContent = contracts.length + '件の契約が見つかりました。まとめて登録しています…';
+                    registerAllContracts(contracts, file);
+                }).catch(function() {
+                    xmlStatus.textContent = '通信に失敗しました。時間をおいて再度お試しください。';
+                });
+            });
+
+            function registerAllContracts(contracts, file) {
+                var chain = Promise.resolve();
+                var succeeded = 0;
+                contracts.forEach(function(contract) {
+                    chain = chain.then(function() {
+                        return createHokenRow(contract, file).then(function() {
+                            succeeded++;
+                        });
+                    });
+                });
+                chain.then(function() {
+                    xmlStatus.textContent = succeeded + '件を登録しました。ページを再読み込みします…';
+                    location.reload();
+                }).catch(function(err) {
+                    xmlStatus.textContent = succeeded + '件登録した時点でエラーが発生しました（' + (err && err.message ? err.message : '不明なエラー') + '）。ページを再読み込みして内容を確認してください。';
+                });
+            }
+
+            function createHokenRow(contract, file) {
+                var formData = new FormData();
+                formData.append('_token', csrf);
+                formData.append('insurance_company', contract.insurance_company || '');
+                formData.append('category', contract.category || '');
+                formData.append('applied_system', contract.applied_system || '');
+                formData.append('declared_amount', contract.declared_amount || '');
+                formData.append('insurance_type', contract.insurance_type || '');
+                formData.append('policy_holder_name', contract.policy_holder_name || '');
+                formData.append('beneficiary_name', contract.beneficiary_name || '');
+                formData.append('beneficiary_relationship', contract.beneficiary_relationship || '');
+                if (contract.pension_payment_start_date) {
+                    formData.append('pension_payment_start_date', contract.pension_payment_start_date);
+                }
+                formData.append('year_end_insurance_note', contract.year_end_insurance_note || '');
+                formData.append('certificate_file', file);
+
+                return fetch(createUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                }).then(function(res) {
+                    if (!res.ok) {
+                        throw new Error('登録に失敗しました');
+                    }
+                    return res.json();
+                });
+            }
+
+            function fillAddForm(contract, file) {
+                setFieldValue('insurance_company', contract.insurance_company);
+                setFieldValue('category', contract.category);
+                setFieldValue('applied_system', contract.applied_system);
+                setFieldValue('declared_amount', contract.declared_amount);
+                setFieldValue('insurance_type', contract.insurance_type);
+                setFieldValue('policy_holder_name', contract.policy_holder_name);
+                setFieldValue('beneficiary_name', contract.beneficiary_name);
+                setFieldValue('beneficiary_relationship', contract.beneficiary_relationship);
+                setFieldValue('pension_payment_start_date', contract.pension_payment_start_date);
+                setFieldValue('year_end_insurance_note', contract.year_end_insurance_note);
+
+                var fileInput = addForm.querySelector('[name="certificate_file"]');
+                if (fileInput && typeof DataTransfer !== 'undefined') {
+                    var dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files;
+                }
+            }
+
+            function setFieldValue(name, value) {
+                if (value === null || value === undefined) return;
+                var el = addForm.querySelector('[name="' + name + '"]');
+                if (el) {
+                    el.value = value;
+                }
+            }
         })();
     </script>
 </body>

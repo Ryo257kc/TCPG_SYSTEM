@@ -169,6 +169,11 @@
             color: #5b21b6;
         }
 
+        .year-end-status-otsu {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
         .year-end-status-legacy-confirmed {
             background: #d1fae5;
             color: #065f46;
@@ -292,6 +297,10 @@
                     <div class="year-end-summary-label">退職済</div>
                     <div class="year-end-summary-value">{{ $statusCounts['retired'] }}</div>
                 </div>
+                <div class="year-end-summary-item">
+                    <div class="year-end-summary-label">乙欄</div>
+                    <div class="year-end-summary-value">{{ $statusCounts['otsu'] }}</div>
+                </div>
             </div>
 
             <div class="year-end-table-wrap">
@@ -301,6 +310,7 @@
                             <th>状態</th>
                             <th>スタッフID</th>
                             <th>氏名</th>
+                            <th>甲乙</th>
                             <th>入社/退社</th>
                             <th>提出日時</th>
                             <th>操作</th>
@@ -312,6 +322,7 @@
                             <td><span class="year-end-status year-end-status-{{ $row['status_badge_key'] }}">{{ $row['status_label'] }}</span></td>
                             <td>{{ $row['staff_id'] }}</td>
                             <td>{{ $row['staff_name'] !== '' ? $row['staff_name'] : '---' }}</td>
+                            <td>{{ $row['tax_amount'] !== '' ? $row['tax_amount'] : '---' }}</td>
                             <td>
                                 <div @if($row['nyu_date_in_target_year']) style="color:#d32f2f;font-weight:bold;" @endif>入 {{ $row['nyu_date'] !== '' ? $row['nyu_date'] : '---' }}</div>
                                 <div @if($row['tai_date_in_target_year']) style="color:#d32f2f;font-weight:bold;" @endif>退 {{ $row['tai_date'] !== '' ? $row['tai_date'] : '---' }}</div>

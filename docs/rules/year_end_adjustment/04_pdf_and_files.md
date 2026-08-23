@@ -1,20 +1,65 @@
 # 年末調整 PDF・ファイル
 
-## 【未着手・要件検討中】電子的控除証明書（XML）の自動入力
+## 電子的控除証明書（XML）の自動入力（生命保険料控除、実装済み・実データ未検証）
 
 2026-08-19、ユーザーから「電子的控除証明書のXMLをアップロードしたら該当項目に自動入力できるように
-したい」というアイデア。保険会社等が発行する国税庁標準フォーマットのXMLを読み込んで、
-`updateInsurance()`等の保険料控除申告フォームに値を自動反映するイメージ。まだ要件（対象証憑の
-種類、UI上のアップロード導線、XML署名検証をするか等）は詰めていない。着手前に必ずユーザーと
-スコープを確認すること。
+したい」というアイデアから実装。保険会社等が発行する国税庁標準フォーマットのXML（TEG800＝
+生命保険料控除証明書）を読み込んで、`hoken_add`（保険をもう一件追加）のフォームへ自動入力する。
 
-**現状**：`CertificateFileService`はPDF/画像の保存のみで、XMLの中身を解析する機能は無い。
+要件（ユーザーとの合意事項）：
+
+- アップロードされた元ファイル（XML）は必ず証憑として保持する。既存の`certificate_file_path`の
+  仕組みをそのまま使う（DataTransfer APIで同じFileオブジェクトを各行のcertificate_file inputへ
+  複製して割り当てる）。データだけ取り込んでファイル自体を残さない、という状態にはしない。
+- 1つのXMLに複数契約（最大100件、`WCE00000`が繰り返し）が入っている場合、契約ごとに
+  `hoken_add`の行を自動で複数生成する。1件目だけ自動、2件目以降は手入力、という差は作らない。
+- XMLは画像/PDFのようにブラウザでそのままプレビューできないため、admin側で人が読める形の
+  整形プレビューを作る（実装済み、下記参照）。
+
+**実装済みのファイル：**
+
+- `app/Services/YearEnd/LifeInsuranceCertificateXmlParser.php`：TEG800 XMLを`DOMDocument`+
+  `DOMXPath`（名前空間`http://xml.e-tax.nta.go.jp/XSD/kyotsu`）で読み、`WCE00000`明細ごとに
+  「証明額（12月期想定）」（`WCE00440`配下）の「申告額（参考）」がある区分だけを契約として
+  抽出する。証明期間中の実額（`WCE00190`配下）ではなく12月期想定額を使うのは、年末調整の
+  申告額としてはこちらが国税庁側の案内する参考額のため。証券番号・被保険者名など`mx_hoken`に
+  対応カラムが無い項目は`year_end_insurance_note`へ文字列で畳み込む。
+- `App\Http\Controllers\StaffPortal\YearEnd\YearEndApplicationController::parseInsuranceCertificateXml()`
+  （ルート`year_end_adjustment.insurance.parse_xml`、POST）：アップロードされたXMLを解析して
+  JSONで返すだけで、DBには何も書き込まない。実際の保存は既存の`updateInsurance()`が行う。
+- `resources/views/staff_portal/year_end/index.blade.php`：保険料控除セクションに
+  「電子的控除証明書（XML）から自動入力」というfile inputを追加。選択時にJS（同ファイル末尾の
+  `setupInsuranceXmlAutoFill()`）が上記エンドポイントへPOSTし、契約ごとに既存の
+  `hoken-add-more-btn`と同じ行追加ロジック（`makeRowAdder()`）を呼んで新しい行を作り、
+  返ってきた値をフィールドへ流し込み、証憑ファイル欄へは選択されたXMLファイル自体を
+  `DataTransfer`で複製して割り当てる。行の「この欄に保険を追加する」チェックと外側の
+  「保険料控除が増えましたか？」チェックも自動でONにする。
+- `app/Services/YearEnd/CertificateFileService.php`：`store()`に`.xml`拡張子/`text/xml`・
+  `application/xml`のMIMEタイプの分岐を追加（PDFと同様、圧縮せずそのまま保存）。生のXML文字列を
+  読み出す`getContents()`も追加（プレビュー生成用）。
+- admin側の整形プレビュー：`YearEndAdjustmentV2Controller::hokenCertificatePreview()`で、
+  拡張子が`xml`の場合は`LifeInsuranceCertificateXmlParser`で読み直し、
+  `certificate_preview.blade.php`側に`isXml`/`xmlParsed`を渡して証憑らしい見た目のテーブルで
+  表示する（生のXMLタグはユーザーに見せない）。パース失敗時は「元を開く」からのダウンロードに
+  フォールバックする。管理画面からの証憑再アップロード（`validateHokenValues()`）も
+  `.xml`を受け付けるよう`mimes`ルールを拡張済み。
+
+**現状の制約・未実装：**
+
+- **実際の保険会社発行のサンプルXMLでまだ検証していない。** パーサーはXSDスキーマの読解のみを
+  根拠にしている。本番投入前に、スタッフの誰かが電子発行の証明書を持っていれば必ず実物で
+  1回テストすること。
+- XMLの電子署名検証（`XMLDSIG050.xsd`）はしていない。改ざん検知が要る場合は要検討。
+- `WCE00030`（適用制度のkubun_CD: 1/2/3）は未使用。現状は新旧制度×一般/介護医療/年金の
+  ブロック構造（値が入っているかどうか）だけで区分を判定しており、実データで整合するか未確認。
+- TEG800（生命保険料控除証明書）のみ対応。地震保険料・寄附金・国民年金・小規模企業共済等の
+  他の証憑種類は未対応（下記スキーマは保存済みなので、対応する場合はパーサーを追加する形になる）。
 
 **国税庁公式スキーマを取得・保存済み**：`docs/reference/nta_certificate_xsd/`に、e-Taxが
 公開しているXMLスキーマ（XSD）を保存してある（2026-08-19、`https://www.e-tax.nta.go.jp/shiyo/download/kojo04.CAB`
 から取得・展開）。証憑の種類ごとに別ファイル（すべて`kyotsu/`配下）：
 
-- `TEG800-001.xsd`：生命保険料控除証明書（最優先で対応するならこれ）
+- `TEG800-001.xsd`：生命保険料控除証明書（対応済み）
 - `TEG810-001.xsd`：地震保険料控除証明書
 - `TEG820/821/822-001.xsd`：寄附金受領証明書（複数寄附対応版含む）
 - `TEG830-001.xsd`：寄附金控除に関する証明書
@@ -32,12 +77,7 @@
     （`WCE00220`旧制度〜`WCE00310`新制度配下、金額は`gen:kingaku`型）
 
 各TEGファイルの冒頭コメント（`<xsd:documentation>`）に様式名・versionが書いてあるので、
-実装時はそこから読み始めるとよい。
-
-**次にやること**：実装着手前に、ユーザーと一緒に (1) 対象証憑の種類（生命保険料だけで
-始めるか）、(2) スタッフ側アップロード画面のどこに導線を置くか、(3) XMLの電子署名検証を
-するか（`XMLDSIG050.xsd`が署名スキーマとして同梱されている）を決める。実際の保険会社から
-発行されたサンプルXMLが手に入ればスキーマとの突き合わせがより確実。
+他の証憑種類（地震保険料・寄附金等）に対応する場合はそこから読み始めるとよい。
 
 ## 対象帳票
 
