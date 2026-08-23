@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
 use App\Services\Admin\V2\YearEndAdjustment\YearEndCalculationService;
 use App\Services\YearEnd\CertificateFileService;
+use App\Services\YearEnd\LifeInsuranceCertificateXmlParser;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +21,7 @@ class YearEndApplicationController extends Controller
     public function __construct(
         private readonly CertificateFileService $certificateFileService,
         private readonly YearEndCalculationService $calculationService,
+        private readonly LifeInsuranceCertificateXmlParser $lifeInsuranceCertificateXmlParser,
     ) {}
 
     private const EDITABLE_STATUSES = ['draft', 'returned'];
@@ -39,10 +42,10 @@ class YearEndApplicationController extends Controller
         'retired' => '退職済',
     ];
 
-    public function index(Request $request): RedirectResponse|View
+    public function index(Request $request): RedirectResponse|View|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, $staffRow, $targetYear] = $context;
@@ -105,21 +108,27 @@ class YearEndApplicationController extends Controller
      * 「入社時に提出済み」フラグも同じmx_nen_tyoの行にまとめて書く（申告メタ情報用の
      * 別テーブルは持たない）。
      */
-    public function updatePreviousJob(Request $request): RedirectResponse
+    public function updatePreviousJob(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
         }
 
         $previous = (object) $nenTyo;
+
+        $request->validate([
+            'previous_job_withholding_changed' => ['required', 'in:0,1'],
+        ], [
+            'previous_job_withholding_changed.required' => '前職（当社以外の収入）の有無を選択してください。',
+        ]);
 
         // 二段階の確認：①今年、前職はあるか ②あるなら、源泉徴収票は入社時に提出済みか。
         // 提出済みなら事務所側に既に証憑があるはずなので、スタッフに重複入力・再添付させない。
@@ -173,7 +182,7 @@ class YearEndApplicationController extends Controller
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update($nenTyoValues);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '前職の申告内容を保存しました。');
+        return $this->sectionSaved($request, '前職の申告内容を保存しました。');
     }
 
     /**
@@ -181,16 +190,16 @@ class YearEndApplicationController extends Controller
      * 控除額をそのまま転記させるだけ（2年目以降は税務署から送付される証憑に金額が
      * 印字済みのため）。mx_nen_tyo.jyu_kari_kouへ直接書き込む。
      */
-    public function updateHousingLoan(Request $request): RedirectResponse
+    public function updateHousingLoan(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -232,7 +241,7 @@ class YearEndApplicationController extends Controller
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update($nenTyoValues);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '住宅ローン控除の申告内容を保存しました。');
+        return $this->sectionSaved($request, '住宅ローン控除の申告内容を保存しました。');
     }
 
     /**
@@ -240,16 +249,16 @@ class YearEndApplicationController extends Controller
      * （mx_hokenへ直接INSERT）。証憑は年ごとに再確認が必要なため引き継がない
      * （保存時に改めて添付必須）。今年分のmx_hokenが未作成のときの初期値作成用。
      */
-    public function copyPreviousYearInsurance(Request $request): RedirectResponse
+    public function copyPreviousYearInsurance(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -289,12 +298,13 @@ class YearEndApplicationController extends Controller
             ->table('dbo.mx_hoken')
             ->insert($insertRows);
 
-        DB::connection('sqlsrv_payroll')
-            ->table('dbo.mx_nen_tyo')
-            ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
-            ->update(['insurance_deduction_changed' => 1]);
+        // ここでinsurance_deduction_changedは更新しない。コピーしただけでは証憑が
+        // 空のまま・内容も未確認なので、このセクションを「保存済み」扱いにしてはいけない
+        // （アコーディオンの完了判定・提出時の完了チェックが、この時点でこのセクションを
+        // 素通りしてしまう事故を防ぐ。2026-08-21、証憑未添付のまま次のセクションへ進めて
+        // しまう不具合として発覚）。「保存して次へ」を押して初めて完了扱いにする。
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '前年の保険料控除データを' . $previousYearRows->count() . '件コピーしました。内容を確認し、証憑を添付して保存してください。');
+        return redirect()->route('year_end_adjustment')->with('statusMessage', '前年の保険料控除データを' . $previousYearRows->count() . '件コピーしました。内容を確認し、証憑を添付して「保存して次へ」を押してください。');
     }
 
     /**
@@ -302,18 +312,36 @@ class YearEndApplicationController extends Controller
      * テーブルのため、スタッフの直書きでも過去のデータは壊れない。事務所が確認すると
      * checked_flagが1になる（confirmApplication側）。変更するとchecked_flagは0に戻る。
      */
-    public function updateInsurance(Request $request): RedirectResponse
+    public function updateInsurance(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
+        }
+
+        $request->validate([
+            'insurance_engaged' => ['required', 'in:0,1'],
+        ], [
+            'insurance_engaged.required' => '保険料控除について、変更の有無を選択してください。',
+        ]);
+
+        if (!$request->boolean('insurance_engaged')) {
+            // 「いいえ」でも、既存行（前年コピー等）に証憑が無いまま素通りさせない。
+            $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+
+            DB::connection('sqlsrv_payroll')
+                ->table('dbo.mx_nen_tyo')
+                ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
+                ->update(['insurance_deduction_changed' => 0]);
+
+            return $this->sectionSaved($request, '保険料控除の申告内容を保存しました。');
         }
 
         $existingRows = DB::connection('sqlsrv_payroll')
@@ -403,12 +431,69 @@ class YearEndApplicationController extends Controller
             $anyChange = true;
         }
 
+        $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update(['insurance_deduction_changed' => $anyChange ? 1 : 0]);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '保険料控除の申告内容を保存しました。');
+        return $this->sectionSaved($request, '保険料控除の申告内容を保存しました。');
+    }
+
+    /**
+     * 保険会社発行の電子的控除証明書（国税庁標準フォーマットXML、TEG800＝生命保険料控除証明書）
+     * をアップロードした際、DBには何も書き込まず内容だけを読み取ってJSONで返す。
+     * 実際の保存は既存のupdateInsurance()（証憑ファイル自体も含めて）が行う。フロント側で
+     * この結果を使って保険をもう一件追加フォームへ自動入力する。
+     *
+     * 要確認：実際の保険会社発行のサンプルXMLでまだ検証していない。
+     */
+    public function parseInsuranceCertificateXml(Request $request): JsonResponse
+    {
+        $context = $this->requireContext($request);
+        if ($context instanceof RedirectResponse) {
+            return response()->json(['error' => 'ログインし直してください。'], 401);
+        }
+        [, , $targetYear] = $context;
+
+        $validated = Validator::make($request->all(), [
+            'certificate_file' => ['required', 'file', 'max:5120'],
+        ], [
+            'certificate_file.required' => 'XMLファイルを選択してください。',
+        ])->validate();
+
+        $file = $request->file('certificate_file');
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        if ($extension !== 'xml') {
+            return response()->json(['error' => 'XMLファイルを選択してください。'], 422);
+        }
+
+        try {
+            $result = $this->lifeInsuranceCertificateXmlParser->parse((string) file_get_contents($file->getRealPath()));
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        if (count($result['contracts']) === 0) {
+            return response()->json(['error' => 'このXMLから保険契約の情報を読み取れませんでした。金額欄が空の可能性があります。'], 422);
+        }
+
+        // 証明書の年（WCE00010）が今年の年末調整の対象年と違う場合は取り込ませない。
+        // 去年以前の証明書を誤って今年分にアップロードしても、ファイル名しか見えない
+        // 管理側では気づけないため、取り込み時点で弾く（2026-08-20、ユーザー確認の実例で発覚）。
+        $mismatchedYears = collect($result['contracts'])
+            ->pluck('certificate_year')
+            ->filter(fn($year) => $year !== null && (int) $year !== $targetYear)
+            ->unique()
+            ->values();
+        if ($mismatchedYears->isNotEmpty()) {
+            return response()->json([
+                'error' => 'この証明書は' . $mismatchedYears->implode('年・') . '年分のため、' . $targetYear . '年の年末調整には使用できません。',
+            ], 422);
+        }
+
+        return response()->json($result);
     }
 
     /**
@@ -525,16 +610,16 @@ class YearEndApplicationController extends Controller
      * 収入→所得の変換は保存の瞬間に計算してmx_nen_tyo.haigu_umu/haigu_shotokuへ
      * 直接書き込む（ステージングが無くなったため、反映待ちにせずその場で計算する）。
      */
-    public function updateSpouse(Request $request): RedirectResponse
+    public function updateSpouse(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -546,6 +631,12 @@ class YearEndApplicationController extends Controller
             ->whereIn('fuyo_relationship', self::SPOUSE_RELATIONSHIPS)
             ->first();
 
+        $request->validate([
+            'spouse_engaged' => ['required', 'in:0,1'],
+        ], [
+            'spouse_engaged.required' => '配偶者について、変更の有無を選択してください。',
+        ]);
+
         // 「変わった」（扶養親族の各行と同じ意味のトグル）がチェックされていなければ
         // 申告なし＝現状維持。
         $engaged = $request->boolean('spouse_engaged');
@@ -556,7 +647,7 @@ class YearEndApplicationController extends Controller
                 ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
                 ->update(['spouse_changed' => false]);
 
-            return redirect()->route('year_end_adjustment')->with('statusMessage', '配偶者の申告内容を保存しました。');
+            return $this->sectionSaved($request, '配偶者の申告内容を保存しました。');
         }
 
         $validated = $request->validate([
@@ -644,7 +735,7 @@ class YearEndApplicationController extends Controller
                 ]));
         }
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '配偶者の申告内容を保存しました（翌年分の扶養データも作成しました）。');
+        return $this->sectionSaved($request, '配偶者の申告内容を保存しました（翌年分の扶養データも作成しました）。');
     }
 
     /**
@@ -705,16 +796,16 @@ class YearEndApplicationController extends Controller
      * 本人状況フラグ（障害者・ひとり親・寡婦・勤労学生）は同じmx_nen_tyoの行へ
      * その場で直接書き込む（同じ1回の送信で1つの行にまとめて書く）。
      */
-    public function updatePersonalInfo(Request $request): RedirectResponse
+    public function updatePersonalInfo(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, $staffRow, $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
         }
@@ -723,6 +814,11 @@ class YearEndApplicationController extends Controller
         $currentStaffName = trim((string) ($staffRow['staff_name'] ?? ''));
         $previous = (object) $nenTyo;
 
+        $request->validate([
+            'personal_info_changed' => ['required', 'in:0,1'],
+        ], [
+            'personal_info_changed.required' => '本人情報について、変更の有無を選択してください。',
+        ]);
         $changed = $request->boolean('personal_info_changed');
         $nenTyoValues = ['personal_info_changed' => $changed];
 
@@ -821,7 +917,7 @@ class YearEndApplicationController extends Controller
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update($nenTyoValues);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '本人情報の申告内容を保存しました。');
+        return $this->sectionSaved($request, '本人情報の申告内容を保存しました。');
     }
 
     private function deleteCertificateIfPresent(?string $path): void
@@ -874,18 +970,33 @@ class YearEndApplicationController extends Controller
      * スタッフは削除できない（既存行のdeduction_targetを外すのみ）。削除は
      * システムマスタが管理側画面から行う。
      */
-    public function updateDependents(Request $request): RedirectResponse
+    public function updateDependents(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
+        }
+
+        $request->validate([
+            'dependents_engaged' => ['required', 'in:0,1'],
+        ], [
+            'dependents_engaged.required' => '扶養親族について、変更の有無を選択してください。',
+        ]);
+
+        if (!$request->boolean('dependents_engaged')) {
+            DB::connection('sqlsrv_payroll')
+                ->table('dbo.mx_nen_tyo')
+                ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
+                ->update(['dependents_changed' => 0]);
+
+            return $this->sectionSaved($request, '扶養の申告内容を保存しました。');
         }
 
         $existingRows = DB::connection('sqlsrv_payroll')
@@ -969,21 +1080,72 @@ class YearEndApplicationController extends Controller
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
             ->update(['dependents_changed' => $anyChange ? 1 : 0]);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '扶養の申告内容を保存しました。');
+        return $this->sectionSaved($request, '扶養の申告内容を保存しました。');
     }
 
-    public function submit(Request $request): RedirectResponse
+    /**
+     * 各セクションが一度も保存されていない（=changed系カラムが全部NULLのまま）状態での
+     * 提出を防ぐ。押し忘れ・見落としの根本対策として、提出ボタンより前にここで必ず塞ぐ。
+     *
+     * @var array<string, string>
+     */
+    private const SUBMIT_REQUIRED_SECTIONS = [
+        'personal_info_changed' => '本人情報',
+        'spouse_changed' => '配偶者',
+        'dependents_changed' => '扶養親族',
+        'insurance_deduction_changed' => '保険料控除',
+        'previous_job_withholding_changed' => '前職',
+        'housing_loan_changed' => '住宅ローン控除',
+    ];
+
+    public function submit(Request $request): RedirectResponse|JsonResponse
     {
         $context = $this->requireContext($request);
-        if ($context instanceof RedirectResponse) {
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
             return $context;
         }
         [$staffId, , $targetYear] = $context;
 
         $nenTyo = $this->findOrCreateNenTyoRow($staffId, $targetYear);
-        $blocked = $this->blockIfNotEditable($nenTyo);
+        $blocked = $this->blockIfNotEditable($nenTyo, $request);
         if ($blocked !== null) {
             return $blocked;
+        }
+
+        $unansweredSections = [];
+        foreach (self::SUBMIT_REQUIRED_SECTIONS as $column => $label) {
+            if (($nenTyo[$column] ?? null) === null) {
+                $unansweredSections[] = $label;
+            }
+        }
+
+        if ($unansweredSections !== []) {
+            $message = implode('・', $unansweredSections) . 'のセクションがまだ保存されていません。それぞれのセクションを開いて「保存」してから、改めて提出してください。';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message, 'unanswered_sections' => $unansweredSections], 422);
+            }
+            return redirect()->route('year_end_adjustment')->with('errorMessage', $message);
+        }
+
+        // 添付漏れの最終防波堤。保険料控除は毎年再添付必須の仕様（前年コピーで
+        // 証憑なしの行が残り得る）なので、ここでも全行確認する。扶養親族の障害者手帳は
+        // 一度確認したら毎年再添付が必要なものではない（去年からの継続分は対象外、
+        // 新規追加分は追加時のバリデーションで既にチェック済み）ため、ここでは確認しない。
+        $missingInsuranceCertificates = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_hoken')
+            ->where('insurance_staff_no', $staffId)
+            ->whereYear('insurance_year', $targetYear)
+            ->where(function ($query): void {
+                $query->whereNull('certificate_file_path')->orWhere('certificate_file_path', '');
+            })
+            ->exists();
+
+        if ($missingInsuranceCertificates) {
+            $message = '保険料控除で証憑ファイルが添付されていない項目があります。保険料控除のセクションを確認してください。';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+            return redirect()->route('year_end_adjustment')->with('errorMessage', $message);
         }
 
         DB::connection('sqlsrv_payroll')
@@ -994,14 +1156,17 @@ class YearEndApplicationController extends Controller
                 'submitted_at' => now(),
             ]);
 
-        return redirect()->route('year_end_adjustment')->with('statusMessage', '提出しました。事務所の確認をお待ちください。');
+        return $this->sectionSaved($request, '提出しました。事務所の確認をお待ちください。');
     }
 
-    /** @return array{0: string, 1: array<string, mixed>, 2: int}|RedirectResponse */
-    private function requireContext(Request $request): array|RedirectResponse
+    /** @return array{0: string, 1: array<string, mixed>, 2: int}|RedirectResponse|JsonResponse */
+    private function requireContext(Request $request): array|RedirectResponse|JsonResponse
     {
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'セッションが切れました。ページを再読み込みしてログインし直してください。'], 401);
+            }
             return $this->redirectToStaffPortalLogin();
         }
 
@@ -1013,12 +1178,60 @@ class YearEndApplicationController extends Controller
         return [$staffId, $staffRow ?? [], (int) date('Y')];
     }
 
-    private function blockIfNotEditable(array $nenTyo): ?RedirectResponse
+    private function blockIfNotEditable(array $nenTyo, ?Request $request = null): RedirectResponse|JsonResponse|null
     {
         if (in_array($this->applicationStatus($nenTyo), self::EDITABLE_STATUSES, true)) {
             return null;
         }
 
+        if ($request !== null && $request->wantsJson()) {
+            return response()->json(['message' => '提出済みのため編集できません。'], 422);
+        }
+
         return redirect()->route('year_end_adjustment')->with('errorMessage', '提出済みのため編集できません。');
+    }
+
+    /**
+     * セクション保存の成功応答。Ajax経由（fetchでAccept: application/jsonを送る）なら
+     * ページ遷移せずJSONで返す。通常のフォーム送信（JS無効時のフォールバック）は
+     * 今まで通りリダイレクトする。
+     */
+    private function sectionSaved(Request $request, string $message): RedirectResponse|JsonResponse
+    {
+        if ($request->wantsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return redirect()->route('year_end_adjustment')->with('statusMessage', $message);
+    }
+
+    /**
+     * 「変わった/いいえ」のどちらを選んでも、今この時点で残っている全行
+     * （前年コピー等、個別に「編集」で触ってない行も含む）に証憑が付いているか確認する。
+     * ここで弾かれれば「保存して次へ」が通らない＝次のセクションへ進めない
+     * （2026-08-21、「いいえ」を選んだ時にこのチェック自体を素通りしてしまう抜けが
+     * 見つかったため、はい/いいえ両方の分岐から必ず呼ぶ形にした）。
+     */
+    private function assertNoMissingInsuranceCertificates(string $staffId, int $targetYear): void
+    {
+        $missingCertificateRows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_hoken')
+            ->where('insurance_staff_no', $staffId)
+            ->whereYear('insurance_year', $targetYear)
+            ->where(function ($query): void {
+                $query->whereNull('certificate_file_path')->orWhere('certificate_file_path', '');
+            })
+            ->get(['insurance_company', 'category']);
+
+        if ($missingCertificateRows->isEmpty()) {
+            return;
+        }
+
+        $names = $missingCertificateRows
+            ->map(fn($row): string => trim((string) $row->insurance_company) . '（' . trim((string) $row->category) . '）')
+            ->implode('・');
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'insurance_engaged' => $names . 'の証憑ファイルが添付されていません。各行の「編集」から証憑を添付してください。',
+        ]);
     }
 }
