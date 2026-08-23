@@ -20,12 +20,15 @@ class MyPageController extends Controller
         $staffRow = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
-            ->first(['mail', 'password', 'staff_name']);
+            ->first(['mail', 'password', 'staff_name', 'is_admin']);
 
         return view('staff_portal.mypage.index', [
             'displayName' => $this->resolveDisplayName($staffRow === null ? null : (array) $staffRow, $staffId),
             'selectedRow' => $staffRow === null ? [] : (array) $staffRow,
             'needsProfileRequestAttention' => $this->hasReturnedProfileRequest($staffId),
+            // 個人情報変更申請は想定と違う形で先に実装されていたため作り直すまで非公開
+            // （2026-08-24、システムマスタのみ表示）。
+            'isAdmin' => $this->isAdmin($staffRow === null ? null : (array) $staffRow),
         ]);
     }
 

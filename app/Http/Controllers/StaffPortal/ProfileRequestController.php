@@ -43,8 +43,22 @@ class ProfileRequestController extends Controller
         'reflected' => '反映済',
     ];
 
+    /**
+     * 未公開機能（想定と違う形で先に実装されていたため、作り直すまで非公開にする、
+     * 2026-08-24）。MyPage側もボタンを管理者以外に表示しない対応をしたが、それだけだと
+     * URL直叩きで素通りしてしまうため、こちらにもガードを入れる。
+     */
+    private function requireAdminOnly(Request $request): void
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isAdmin($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+    }
+
     public function index(Request $request): RedirectResponse|View
     {
+        $this->requireAdminOnly($request);
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
@@ -84,6 +98,7 @@ class ProfileRequestController extends Controller
 
     public function updatePersonalInfo(Request $request): RedirectResponse
     {
+        $this->requireAdminOnly($request);
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
@@ -178,6 +193,7 @@ class ProfileRequestController extends Controller
      */
     public function updateDependents(Request $request): RedirectResponse
     {
+        $this->requireAdminOnly($request);
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
@@ -279,6 +295,7 @@ class ProfileRequestController extends Controller
 
     public function submit(Request $request): RedirectResponse
     {
+        $this->requireAdminOnly($request);
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();

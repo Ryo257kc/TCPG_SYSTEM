@@ -148,7 +148,7 @@
 
             <p class="notice center">変更する項目の編集ボタンを押して、変更後に保存してください。</p>
 
-            @if (!empty($needsProfileRequestAttention))
+            @if (!empty($isAdmin) && !empty($needsProfileRequestAttention))
             <div class="error"><a href="{{ route('profile_request') }}">個人情報変更申請が差し戻されました。内容を確認してください。</a></div>
             @endif
 
@@ -185,12 +185,14 @@
                 <!-- </div> -->
             </div>
 
+            @if (!empty($isAdmin))
             <div class="table-wrap width_edit mypage-form">
                 <p class="mypage-field-label" style="padding:0 14px;">氏名・住所・世帯主・通勤経路・扶養の変更は、こちらから申請してください。</p>
                 <div style="padding:0 14px 14px;">
                     <a href="{{ route('profile_request') }}" class="btn btn-primary">個人情報変更申請</a>
                 </div>
             </div>
+            @endif
 
             <div class="back-row">
                 <a href="{{ route('dashboard') }}" class="btn btn_back">戻る</a>
