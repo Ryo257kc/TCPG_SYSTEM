@@ -57,11 +57,11 @@
             </form>
 
             <div class="table-wrap staff-viewport-list-wrap">
-                <table class="data-table f_size14">
+                <table class="data-table f_size13">
                     <colgroup>
-                        <col style="width: 40px;">
-                        <col style="width: 30px;">
-                        <col style="width: 150px;">
+                        <col style="width: 35px;">
+                        <col style="width: 35px;">
+                        <col style="width: 130px;">
                         <col style="width: 30px;">
                         <col style="width: 20px;">
                         <col style="width: 50px;">
