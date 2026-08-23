@@ -134,11 +134,16 @@ class AttendanceV2BulkReflectService
                     continue;
                 }
 
-                DB::connection('sqlsrv_payroll')
+                $affected = DB::connection('sqlsrv_payroll')
                     ->table('dbo.mx_kyuyo_shou')
                     ->where('kyuyo_sho_no', (int) $payrollRow->kyuyo_sho_no)
                     ->update($payload);
-                $updated++;
+
+                if ($affected > 0) {
+                    $updated++;
+                } else {
+                    $missing++;
+                }
             }
         }
 

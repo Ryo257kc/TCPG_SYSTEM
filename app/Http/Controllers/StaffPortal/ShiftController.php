@@ -24,11 +24,14 @@ class ShiftController extends Controller
     public function adminShiftChange(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isStoreManager($staffRow)) {
+            abort(403);
+        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
         $monthStart = Carbon::create($year, $month, 1, 0, 0, 0, 'Asia/Tokyo')->toDateString();
-        $staffRow = $this->staffPortalStaffRow($staffId);
         $canSelectBasicShiftStaff = $this->canSelectBasicShiftStaff($staffRow);
         $staffOptions = $canSelectBasicShiftStaff ? $this->staffOptions($monthStart) : [];
 
@@ -102,6 +105,7 @@ class ShiftController extends Controller
 
         return view('staff_portal.office.attendance.index', [
             'displayName' => $this->resolveDisplayName($staffId),
+            'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'selectedMonth' => $selectedMonth,
             'selectedStaffId' => $selectedStaffId,
             'selectedStaffName' => $selectedStaffName,
@@ -118,6 +122,9 @@ class ShiftController extends Controller
     public function officeAttendance(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -126,6 +133,7 @@ class ShiftController extends Controller
 
         return view('staff_portal.admin.shift.change', [
             'displayName' => $displayName,
+            'statusMessage' => (string) $request->session()->get('statusMessage', ''),
             'selectedMonth' => $selectedMonth,
             'selectedStaffId' => $staffId,
             'selectedStaffName' => $displayName,
@@ -149,6 +157,17 @@ class ShiftController extends Controller
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
         $selectedStaffId = trim((string) $request->input('staff_id', ''));
+
+        $timeCardExists = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->where('time_no', $timeNo)
+            ->exists();
+        if (!$timeCardExists) {
+            return redirect()
+                ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+                ->with('statusMessage', '対象の勤怠データが見つかりません。画面を更新してから再度お試しください。');
+        }
+
         if ($this->isTimeCardConfirmed($timeNo)) {
             return redirect()
                 ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
@@ -171,7 +190,7 @@ class ShiftController extends Controller
             }
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards')
             ->where('time_no', $timeNo)
             ->update($action === 'clear'
@@ -192,15 +211,37 @@ class ShiftController extends Controller
                     'work_store' => $payload['shop_code'],
                 ]);
 
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+                ->with('statusMessage', '保存に失敗しました。画面を更新してから再度お試しください。');
+        }
+
         return redirect()
-            ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId]);
+            ->route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+            ->with('statusMessage', '保存しました');
     }
 
     public function officeAttendanceUpdate(Request $request, int $timeNo): RedirectResponse
     {
         $staffId = $this->sessionStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
+
+        $timeCardExists = DB::connection('sqlsrv')
+            ->table('dbo.mx_time_cards')
+            ->where('time_no', $timeNo)
+            ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
+            ->exists();
+        if (!$timeCardExists) {
+            return redirect()
+                ->route('office.attendance', ['month' => $selectedMonth])
+                ->with('statusMessage', '対象の勤怠データが見つかりません。画面を更新してから再度お試しください。');
+        }
+
         if ($this->isTimeCardConfirmed($timeNo, $staffId)) {
             return redirect()
                 ->route('office.attendance', ['month' => $selectedMonth])
@@ -223,7 +264,7 @@ class ShiftController extends Controller
             }
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards')
             ->where('time_no', $timeNo)
             ->whereRaw('LTRIM(RTRIM(staff_name)) = ?', [$staffId])
@@ -245,18 +286,28 @@ class ShiftController extends Controller
                     'work_store' => $payload['shop_code'],
                 ]);
 
+        if ($affected === 0) {
+            return redirect()
+                ->route('office.attendance', ['month' => $selectedMonth])
+                ->with('statusMessage', '保存に失敗しました。画面を更新してから再度お試しください。');
+        }
+
         return redirect()
-            ->route('office.attendance', ['month' => $selectedMonth]);
+            ->route('office.attendance', ['month' => $selectedMonth])
+            ->with('statusMessage', '保存しました');
     }
 
     public function adminBasicShift(Request $request): RedirectResponse|View
     {
         $staffId = $this->sessionStaffId($request);
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->canManageBasicShift($staffRow)) {
+            abort(403);
+        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
         $monthStart = Carbon::create($year, $month, 1, 0, 0, 0, 'Asia/Tokyo')->toDateString();
-        $staffRow = $this->staffPortalStaffRow($staffId);
         $canManageBasicShift = $this->canManageBasicShift($staffRow);
         $canSelectBasicShiftStaff = $this->canSelectBasicShiftStaff($staffRow);
         $staffOptions = $canSelectBasicShiftStaff ? $this->staffOptions($monthStart) : [];
@@ -358,7 +409,7 @@ class ShiftController extends Controller
             }
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_kihon_shifts')
             ->where('shift_no', $shiftNo)
             ->update($action === 'clear'
@@ -376,6 +427,12 @@ class ShiftController extends Controller
                     'shift_out' => $payload['shift_end'],
                     'section' => $payload['shop_code'],
                 ]);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+                ->with('statusMessage', '対象の基本シフトが見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])

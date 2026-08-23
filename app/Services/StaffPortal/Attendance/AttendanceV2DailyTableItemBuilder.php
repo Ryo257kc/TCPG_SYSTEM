@@ -176,10 +176,13 @@ class AttendanceV2DailyTableItemBuilder
             ]);
 
             $rawChangeScheduled = trim((string) ($card->change_scheduled ?? ''));
+            // 休みの日（有休・有半・振休・欠勤）で変更打刻が無い場合、シフト予定時間へ
+            // フォールバックせず空欄にする（管理側 AttendanceV2DailyTableItemBuilder と同じ判定、2026-08-23）。
+            $isRestDay = $this->monthlySummaryService->isRestCategory((string) ($card->work_type ?? ''));
 
             $displayChangeScheduled = $rawChangeScheduled !== ''
                 ? $this->formatNumber($rawChangeScheduled)
-                : ($hasChangeRecord ? $changeScheduled : $shiftScheduled);
+                : ($hasChangeRecord ? $changeScheduled : ($isRestDay ? '' : $shiftScheduled));
 
             $rows[] = [
                 'time_no' => (string) ($card->time_no ?? ''),

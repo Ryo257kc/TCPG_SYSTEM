@@ -26,7 +26,7 @@ class AttendanceController extends Controller
         $selectedMonth = $this->resolveMonth((string) $request->input('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
 
-        $builder = new AttendanceV2DailyTableItemBuilder(new AttendanceV2MonthlySummaryService());
+        $builder = app(AttendanceV2DailyTableItemBuilder::class);
         $dailyTableData = $builder->build([$staffId], $year, $month, false);
         $latestAppliedAt = collect($dailyTableData['dailyRows'])
             ->pluck('staff_request')
@@ -256,7 +256,7 @@ class AttendanceController extends Controller
             $paid_leave_requested_at = Carbon::now('Asia/Tokyo')->format('Y-m-d H:i:s');
         }
 
-        (new AttendanceV2DailyEditService())->update([
+        $affected = (new AttendanceV2DailyEditService())->update([
             'time_card_key' => trim((string) ($card->staff_name ?? '')),
             'work_date' => date('Y-m-d', strtotime((string) $card->work_date)),
             'attendance_category' => (string) $attendanceCategory,
@@ -269,6 +269,10 @@ class AttendanceController extends Controller
             'overtime' => (string) $overtime,
             'timecard_note' => (string) $timecardNote,
         ]);
+
+        if ($affected === 0) {
+            return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '保存に失敗しました。画面を更新してから再度お試しください。');
+        }
 
         return redirect()->route('attendance.monthly', ['month' => $month])->with('statusMessage', '保存しました');
     }
@@ -349,6 +353,10 @@ class AttendanceController extends Controller
     public function punchList(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isPaymentCheck($staffRow) && !$this->isStoreManager($staffRow)) {
+            abort(403);
+        }
 
         $selectedDate = $this->resolveDate((string) $request->query('date', now('Asia/Tokyo')->format('Y-m-d')));
 
@@ -491,6 +499,9 @@ class AttendanceController extends Controller
     public function paidLeave(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isStoreManager($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $selectedMonth = $this->resolveMonth((string) $request->query('month', now('Asia/Tokyo')->format('Y-m')));
         [$year, $month] = $this->splitMonth($selectedMonth);
@@ -587,6 +598,7 @@ class AttendanceController extends Controller
                 $holidayKubun = trim((string) ($item['holiday_kubun'] ?? ''));
                 $attendanceKubun = trim((string) ($item['attendance_kubun'] ?? ''));
                 $isHoliday = $holidayKubun !== '' && (mb_strpos($holidayKubun, '休日') !== false || mb_strpos($holidayKubun, '法休') !== false);
+                $isRestDay = (new AttendanceV2MonthlySummaryService())->isRestCategory($attendanceKubun);
                 $rawChangeScheduled = trim((string) ($item['change_scheduled'] ?? ''));
                 if ($isHoliday && $attendanceKubun === '') {
                     $rawChangeScheduled = '';
@@ -631,10 +643,15 @@ class AttendanceController extends Controller
                         $item['shift_irisitu'],
                         $item['shift_syugyo'],
                     ];
-                    $timesForSchedule = AttendanceTime::hasAnyTimeValue($changeTimes) ? $changeTimes : $shiftTimes;
-                    $item['change_scheduled'] = AttendanceTime::hasAnyTimeValue($timesForSchedule)
-                        ? AttendanceTime::formatNumber(AttendanceTime::scheduledHours(...$timesForSchedule))
-                        : '';
+                    // 休みの日（有休・有半・振休・欠勤）で変更打刻が無い場合、シフト予定時間へ
+                    // フォールバックせず空欄にする（管理側 AttendanceV2DailyTableItemBuilder と同じ判定、2026-08-23）。
+                    $hasChangeTime = AttendanceTime::hasAnyTimeValue($changeTimes);
+                    $timesForSchedule = $hasChangeTime ? $changeTimes : $shiftTimes;
+                    $item['change_scheduled'] = (!$hasChangeTime && $isRestDay)
+                        ? ''
+                        : (AttendanceTime::hasAnyTimeValue($timesForSchedule)
+                            ? AttendanceTime::formatNumber(AttendanceTime::scheduledHours(...$timesForSchedule))
+                            : '');
                 }
 
                 return $item;

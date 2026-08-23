@@ -24,6 +24,9 @@
             <div class="content-head">
                 <h2 class="content-title">シフト変更</h2>
             </div>
+            @if (($statusMessage ?? '') !== '')
+            <div class="status">{{ $statusMessage }}</div>
+            @endif
             <form method="get" class="filter-row">
                 <label for="month">月</label>
                 <input id="month" type="month" name="month" value="{{ $selectedMonth }}">
