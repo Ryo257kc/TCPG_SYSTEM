@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - シフト変更</title>
-        <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/daily_table_item_plain.css') }}">
 </head>
@@ -17,6 +17,10 @@
         $isSelfOnly = (bool) ($isSelfOnly ?? false);
         $updateRouteName = (string) ($updateRouteName ?? 'admin.shift.inline_update');
         $confirmedMessage = '勤怠確定済';
+        // 基本シフトの「戻る」は、来た側（店舗管理側/事務所側）へ戻す必要がある。固定で
+        // admin.shift.change に戻していたため、事務所側（isPaymentCheckのみ・isStoreManager
+        // 権限なし）から来た人が「戻る」を押すと403になっていた（2026-08-24発覚）。
+        $basicShiftBackRoute = $updateRouteName === 'office.attendance.update' ? 'office.attendance' : 'admin.shift.change';
         @endphp
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
 
@@ -44,7 +48,7 @@
             @if ($selectedStaffName !== '')
             <div class="staff-title-row">
                 <div class="staff-title">氏名: {{ $selectedStaffName }}</div>
-                <a class="btn staff-basic-btn" href="{{ route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId]) }}">基本シフト</a>
+                <a class="btn staff-basic-btn" href="{{ route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId, 'back_route' => $basicShiftBackRoute]) }}">基本シフト</a>
             </div>
             @endif
 
@@ -57,18 +61,18 @@
                         <col style="width: 60px;">
                         <col style="width: 60px;">
                         @if ($showPunchColumns)
-                        <col style="width: 40px;">
-                        <col style="width: 40px;">
-                        <col style="width: 40px;">
-                        <col style="width: 40px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
                         @endif
-                        <col style="width: 60px;">
-                        <col style="width: 60px;">
-                        <col style="width: 60px;">
-                        <col style="width: 60px;">
-                        <col style="width: 60px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
+                        <col style="width: 50px;">
+                        <col style="width: 40px;">
                         <col style="width: 80px;">
-                        <col style="width: 100px;">
+                        <col style="width: 110px;">
                     </colgroup>
 
                     <thead>

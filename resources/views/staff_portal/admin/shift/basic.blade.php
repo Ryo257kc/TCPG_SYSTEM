@@ -25,9 +25,11 @@
             @php
             $canManageBasicShift = (bool) ($canManageBasicShift ?? false);
             $canSelectBasicShiftStaff = (bool) ($canSelectBasicShiftStaff ?? false);
+            $backRoute = (string) ($backRoute ?? 'admin.shift.change');
             @endphp
 
             <form method="get" class="filter-row">
+                <input type="hidden" name="back_route" value="{{ $backRoute }}">
                 <label for="month">月:</label>
                 <input id="month" type="month" name="month" value="{{ $selectedMonth }}">
                 @if ($canSelectBasicShiftStaff)
@@ -120,6 +122,7 @@
                                     @csrf
                                     <input type="hidden" name="month" value="{{ $selectedMonth }}">
                                     <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
+                                    <input type="hidden" name="back_route" value="{{ $backRoute }}">
                                 </form>
                                 <button type="button" class="btn edit-trigger">編集</button>
                                 <button form="{{ $formId }}" type="submit" name="_action" value="register" class="btn edit-only">登録</button>
@@ -134,7 +137,7 @@
             </div>
             @endif
             <div>
-                <a href="{{ route('admin.shift.change', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId]) }}" class="btn btn_back">戻る</a>
+                <a href="{{ route($backRoute, ['month' => $selectedMonth, 'staff_id' => $selectedStaffId]) }}" class="btn btn_back">戻る</a>
             </div>
         </section>
 

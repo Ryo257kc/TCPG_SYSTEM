@@ -141,7 +141,9 @@ class ShiftController extends Controller
             'storeOptions' => $this->storeOptions(),
             'rows' => $rows,
             'rowCount' => count($rows),
-            'showPunchColumns' => true,
+            // シフトは未来の予定であって、実績（打刻）と並べて出す必要はない
+            // （2026-08-24、ユーザー確認）。
+            'showPunchColumns' => false,
             'isSelfOnly' => true,
             'updateRouteName' => 'office.attendance.update',
         ]);
@@ -305,6 +307,8 @@ class ShiftController extends Controller
             abort(403);
         }
 
+        $backRoute = $this->resolveBasicShiftBackRoute($request->query('back_route', ''));
+
         $selectedMonth = $this->resolveMonth((string) $request->query('month', ''));
         [$year, $month] = $this->splitMonth($selectedMonth);
         $monthStart = Carbon::create($year, $month, 1, 0, 0, 0, 'Asia/Tokyo')->toDateString();
@@ -381,7 +385,21 @@ class ShiftController extends Controller
             'rowCount' => count($rows),
             'canManageBasicShift' => $canManageBasicShift,
             'canSelectBasicShiftStaff' => $canSelectBasicShiftStaff,
+            'backRoute' => $backRoute,
         ]);
+    }
+
+    /**
+     * 基本シフトの「戻る」先。店舗管理側(admin.shift.change)からも事務所側(office.attendance)
+     * からも入れる作りなのに、戻り先をadmin.shift.changeへ固定していたため、事務所側
+     * （isPaymentCheckのみでisStoreManager権限が無い人）が「戻る」を押すと403になっていた
+     * （2026-08-24発覚）。許可した2つのルート名以外は受け付けない。
+     */
+    private function resolveBasicShiftBackRoute(string $backRoute): string
+    {
+        return in_array($backRoute, ['office.attendance', 'admin.shift.change'], true)
+            ? $backRoute
+            : 'admin.shift.change';
     }
 
     public function adminBasicShiftUpdate(Request $request, int $shiftNo): RedirectResponse
@@ -394,18 +412,20 @@ class ShiftController extends Controller
 
         $selectedMonth = $this->resolveMonth((string) $request->input('month', ''));
         $selectedStaffId = trim((string) $request->input('staff_id', ''));
+        $backRoute = $this->resolveBasicShiftBackRoute((string) $request->input('back_route', ''));
+        $redirectParams = ['month' => $selectedMonth, 'staff_id' => $selectedStaffId, 'back_route' => $backRoute];
         $action = (string) $request->input('_action', 'register');
         $payload = $this->extractShiftPayload($request);
 
         if ($action !== 'clear') {
             if ($payload['has_any_time'] && $payload['shop_code'] === null) {
-                return redirect()->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])->with('statusMessage', 'Store is required.');
+                return redirect()->route('admin.basic-shift', $redirectParams)->with('statusMessage', 'Store is required.');
             }
             if ($payload['shift_start'] !== null && $payload['shift_end'] === null) {
-                return redirect()->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])->with('statusMessage', 'End time is required.');
+                return redirect()->route('admin.basic-shift', $redirectParams)->with('statusMessage', 'End time is required.');
             }
             if ($payload['shift_exit'] !== null && $payload['shift_in_out'] === null) {
-                return redirect()->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])->with('statusMessage', 'Break time is required.');
+                return redirect()->route('admin.basic-shift', $redirectParams)->with('statusMessage', 'Break time is required.');
             }
         }
 
@@ -430,12 +450,12 @@ class ShiftController extends Controller
 
         if ($affected === 0) {
             return redirect()
-                ->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+                ->route('admin.basic-shift', $redirectParams)
                 ->with('statusMessage', '対象の基本シフトが見つかりません。画面を更新してから再度お試しください。');
         }
 
         return redirect()
-            ->route('admin.basic-shift', ['month' => $selectedMonth, 'staff_id' => $selectedStaffId])
+            ->route('admin.basic-shift', $redirectParams)
             ->with('statusMessage', $action === 'clear' ? 'Basic shift cleared.' : '保存しました');
     }
 
