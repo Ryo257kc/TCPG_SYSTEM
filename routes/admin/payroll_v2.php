@@ -4,6 +4,9 @@ use App\Http\Controllers\Admin\V2\PayrollV2Controller;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/payroll', [PayrollV2Controller::class, 'index'])->name('admin.payroll.index');
+Route::get('/payroll/journal-csv', [PayrollV2Controller::class, 'journalCsv'])->name('admin.payroll.journal-csv');
+Route::get('/bonus/journal-csv', [PayrollV2Controller::class, 'bonusJournalCsv'])->name('admin.bonus.journal-csv');
+Route::get('/payroll/outsource-journal-csv', [PayrollV2Controller::class, 'outsourceJournalCsv'])->name('admin.payroll.outsource-journal-csv');
 Route::get('/bonus', [PayrollV2Controller::class, 'bonusIndex'])->name('admin.bonus.index');
 Route::get('/payroll/transfer-list', [PayrollV2Controller::class, 'transferList'])->name('admin.payroll.transfer-list');
 Route::get('/payroll/wage-ledger', [PayrollV2Controller::class, 'wageLedger'])->name('admin.payroll.wage-ledger');

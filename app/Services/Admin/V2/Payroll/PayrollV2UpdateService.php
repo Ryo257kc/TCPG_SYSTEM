@@ -386,8 +386,13 @@ class PayrollV2UpdateService
         return $totals;
     }
 
-    /** @param array<string,mixed> $row */
-    private function socialInsuranceSum(array $row): float
+    /**
+     * 社保合計(健保+介護+子ども・子育て拠出金+厚年+雇用)の正本。
+     * PayrollV2IncomeTaxServiceも同じ式を使うため、ここに1本化している。
+     *
+     * @param array<string,mixed> $row
+     */
+    public function socialInsuranceSum(array $row): float
     {
         return $this->num($row['kenpo'] ?? 0)
             + $this->num($row['kaigo'] ?? 0)

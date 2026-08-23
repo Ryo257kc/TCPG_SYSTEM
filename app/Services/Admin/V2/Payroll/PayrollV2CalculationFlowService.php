@@ -34,6 +34,10 @@ class PayrollV2CalculationFlowService
      */
     public function recalculateMonthly(string $staffId, int $year, int $month, ?string $companyName = null): int
     {
+        if ($this->isLocked($staffId, $year, $month, false)) {
+            return 0;
+        }
+
         if ($this->isOutsource($staffId)) {
             return (int) $this->recalculateService->recalculatePayrollMasterOnly($staffId, $year, $month, $companyName);
         }
@@ -57,6 +61,10 @@ class PayrollV2CalculationFlowService
      */
     public function recalculateAmountsAfterInputChange(string $staffId, int $year, int $month, ?string $companyName = null): int
     {
+        if ($this->isLocked($staffId, $year, $month, false)) {
+            return 0;
+        }
+
         if ($this->isOutsource($staffId)) {
             return (int) $this->updateService->refreshTotals($staffId, $year, $month, $companyName);
         }
@@ -77,6 +85,10 @@ class PayrollV2CalculationFlowService
      */
     public function recalculateAfterAttendanceReflect(string $staffId, int $year, int $month, ?string $companyName = null): int
     {
+        if ($this->isLocked($staffId, $year, $month, false)) {
+            return 0;
+        }
+
         $updated = 0;
         $updated += (int) $this->recalculateService->refreshBasicSalaryFromAttendance($staffId, $year, $month, $companyName);
         if ($this->isOutsource($staffId)) {
@@ -92,6 +104,10 @@ class PayrollV2CalculationFlowService
 
     public function recalculateEmploymentInsurance(string $staffId, int $year, int $month, ?string $companyName = null): int
     {
+        if ($this->isLocked($staffId, $year, $month, false)) {
+            return 0;
+        }
+
         if ($this->isOutsource($staffId)) {
             return (int) $this->updateService->refreshTotals($staffId, $year, $month, $companyName);
         }
@@ -113,6 +129,10 @@ class PayrollV2CalculationFlowService
      */
     public function recalculateIncomeTaxWithTrace(string $staffId, int $year, int $month, ?string $companyName = null): array
     {
+        if ($this->isLocked($staffId, $year, $month, false)) {
+            return ['updated' => 0, 'trace' => ['error' => 'edit-locked']];
+        }
+
         if ($this->isOutsource($staffId)) {
             $updated = (int) $this->updateService->refreshTotals($staffId, $year, $month, $companyName);
 
@@ -144,6 +164,10 @@ class PayrollV2CalculationFlowService
      */
     public function recalculateBonus(string $staffId, int $year, int $month, string $paymentDate): int
     {
+        if ($this->isBonusLocked($staffId, $paymentDate)) {
+            return 0;
+        }
+
         $updated = 0;
         $updated += (int) $this->updateService->saveBonus($staffId, $year, $month, [
             'fuyo_sum' => $this->fuyoService->resolveByPaymentDate($staffId, $paymentDate),
@@ -160,6 +184,49 @@ class PayrollV2CalculationFlowService
         $updated += (int) $this->updateService->refreshBonusTotals($staffId, $year, $month);
 
         return $updated;
+    }
+
+    /**
+     * 確定済み（edit_lock=1）の給与は再計算で上書きしない。
+     * 画面側は再計算ボタンをグレーアウトしているが、それはUI側の防止だけで
+     * サーバー側には確認が無かった（2026-08-23発覚：確定済み行に対して
+     * サービスを直接呼ぶ経路が素通りしてしまっていた）。
+     */
+    private function isLocked(string $staffId, int $year, int $month, bool $bonus): bool
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '') {
+            return false;
+        }
+
+        $editLock = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', $bonus ? 1 : 0)
+            ->whereRaw('YEAR([supply_month]) = ?', [$year])
+            ->whereRaw('MONTH([supply_month]) = ?', [$month])
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+            ->orderByDesc('kyuyo_sho_no')
+            ->value('edit_lock');
+
+        return ((int) ($editLock ?? 0)) === 1;
+    }
+
+    private function isBonusLocked(string $staffId, string $paymentDate): bool
+    {
+        $staffId = trim($staffId);
+        if ($staffId === '' || $paymentDate === '') {
+            return false;
+        }
+
+        $editLock = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_kyuyo_shou')
+            ->where('bonus', 1)
+            ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
+            ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
+            ->orderByDesc('kyuyo_sho_no')
+            ->value('edit_lock');
+
+        return ((int) ($editLock ?? 0)) === 1;
     }
 
     private function isOutsource(string $staffId): bool

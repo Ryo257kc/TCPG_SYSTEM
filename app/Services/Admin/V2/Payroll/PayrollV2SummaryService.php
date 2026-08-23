@@ -103,6 +103,11 @@ class PayrollV2SummaryService
      * @param array<string, array<string, mixed>> $residentMap
      * @return list<array{staff_id:string,staff_name:string,division:string,store_code:string,store_name:string,company_name:string,summary:array<string, mixed>,summary_prev:array<string, mixed>,kihon:array<string, mixed>,staff_master:array<string, mixed>,shaho:array<string, mixed>,resident:array<string, mixed>}>
      */
+    /**
+     * @param array<string, array{store_name:string, company_name:string}> $storeCompanyMap
+     *   store_code -> 店舗名・会社名（PayrollV2StaffService::storeCompanyMap()）。
+     *   給与レコードに焼き付けたsection（その月時点の所属）から会社・店舗を引き直すのに使う。
+     */
     public function mergeRows(
         array $staffRows,
         array $summaryMap,
@@ -111,7 +116,8 @@ class PayrollV2SummaryService
         array $staffMasterMap,
         array $shahoMap,
         array $residentMap,
-        string $selectedStaffId
+        string $selectedStaffId,
+        array $storeCompanyMap = []
     ): array {
         $rows = [];
         foreach ($staffRows as $staff) {
@@ -119,14 +125,31 @@ class PayrollV2SummaryService
                 continue;
             }
 
+            $summary = $summaryMap[$staff['staff_id']] ?? [];
+
+            // 会社・部門は、給与レコード自身に焼き付けたsection（その月時点の所属）だけを見る。
+            // 今のmx_staffs.section（現在の所属）へのフォールバックはしない——転籍後に過去月を
+            // 見た時、転籍前の月なのに転籍後の会社で表示される事故につながる上、フォールバックは
+            // エラーを出さずに黙って処理してしまうため、sectionが未記録の抜けに誰も気づけなくなる。
+            // 焼き付けが無い（空欄の）レコードは会社・店舗を空のまま返す（画面側で空欄として見える）。
+            $recordSection = trim((string) ($summary['section'] ?? ''));
+            $storeCode = '';
+            $storeName = '';
+            $companyName = '';
+            if ($recordSection !== '' && isset($storeCompanyMap[$recordSection])) {
+                $storeCode = $recordSection;
+                $storeName = $storeCompanyMap[$recordSection]['store_name'];
+                $companyName = $storeCompanyMap[$recordSection]['company_name'];
+            }
+
             $rows[] = [
                 'staff_id' => $staff['staff_id'],
                 'staff_name' => $staff['staff_name'],
                 'division' => $staff['division'],
-                'store_code' => $staff['store_code'] ?? '',
-                'store_name' => $staff['store_name'],
-                'company_name' => $staff['company_name'],
-                'summary' => $summaryMap[$staff['staff_id']] ?? [],
+                'store_code' => $storeCode,
+                'store_name' => $storeName,
+                'company_name' => $companyName,
+                'summary' => $summary,
                 'summary_prev' => $previousSummaryMap[$staff['staff_id']] ?? [],
                 'kihon' => $kihonMap[$staff['staff_id']] ?? [],
                 'staff_master' => $staffMasterMap[$staff['staff_id']] ?? [],

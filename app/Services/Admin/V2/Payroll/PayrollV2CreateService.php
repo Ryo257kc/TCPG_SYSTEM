@@ -48,6 +48,7 @@ class PayrollV2CreateService
         $existingStaffIds = $this->existingStaffIds($staffIds, $paymentDate, $bonus);
         $staffIdsToCreate = array_values(array_diff($staffIds, $existingStaffIds));
         $fuyoSumByStaffId = $this->fuyoService->resolveByPaymentDateBulk($staffIdsToCreate, $paymentDate);
+        $sectionByStaffId = $this->resolveSectionBulk($staffIdsToCreate);
 
         foreach ($staffIds as $staffId) {
             if (in_array($staffId, $existingStaffIds, true)) {
@@ -64,6 +65,7 @@ class PayrollV2CreateService
                     'bonus' => $bonus ? 1 : 0,
                     'edit_lock' => 0,
                     'fuyo_sum' => $fuyoSumByStaffId[$staffId] ?? 0,
+                    'section' => $sectionByStaffId[$staffId] ?? null,
                 ]);
 
             // if (!$bonus) {
@@ -98,5 +100,27 @@ class PayrollV2CreateService
     private function isValidPaymentDate(string $paymentDate): bool
     {
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $paymentDate) === 1;
+    }
+
+    /**
+     * 給与データ作成時点でのmx_staffs.sectionを焼き付けて記録するための一括取得。
+     * 後から転籍等でmx_staffs.sectionが変わっても、この給与レコードが「作成された当時どこに
+     * 所属していたか」を保てるようにするため（過去分の再計算・帳票が現在の所属で書き換わらないように）。
+     *
+     * @param list<string> $staffIds
+     * @return array<string, string>
+     */
+    private function resolveSectionBulk(array $staffIds): array
+    {
+        if ($staffIds === []) {
+            return [];
+        }
+
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereIn(DB::raw('LTRIM(RTRIM([staff_id]))'), $staffIds)
+            ->pluck('section', 'staff_id')
+            ->mapWithKeys(fn ($section, $staffId) => [trim((string) $staffId) => trim((string) $section)])
+            ->all();
     }
 }

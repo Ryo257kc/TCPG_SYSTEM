@@ -44,7 +44,7 @@ class PayrollV2EmploymentInsuranceService
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
             ->first(['staff_division', 'koyou', 'section']);
 
-        $companyId = $this->resolveCompanyId($staffId);
+        $companyId = $this->resolveCompanyId(trim((string) ($current->section ?? '')));
 
         $rouhoQuery = $conn->table('dbo.mx_rouho')
             ->whereNotNull('rou_apply_date')
@@ -103,10 +103,10 @@ class PayrollV2EmploymentInsuranceService
         // 要確認：以前はstaffId==='001'も決め打ちで除外していたが、koyouフラグで
         // 既に正しく除外されている（001は役員でkoyou=0）ため冗長と判明し、
         // ユーザー承認済みで削除（2026-08-15）。
-        $isExcluded =
-            mb_strpos($division, '保育事業部') !== false
-            || mb_strpos($division, '鍼灸整骨院') !== false
-            || !$hasKoyou;
+        // 「保育事業部」「鍼灸整骨院」を含むdivisionの除外も同様に根拠不明のハードコードと判明
+        // （実在するstaff_divisionの値に一致するものが無く、ユーザーも使った覚えが無いとのこと）。
+        // ユーザー承認済みで削除（2026-08-23）。
+        $isExcluded = !$hasKoyou;
 
         $koyou = 0;
         $koyouOffice = 0;
@@ -182,7 +182,7 @@ class PayrollV2EmploymentInsuranceService
             ->whereRaw('LTRIM(RTRIM([staff_id])) = ?', [$staffId])
             ->first(['staff_division', 'koyou', 'section']);
 
-        $companyId = $this->resolveCompanyId($staffId);
+        $companyId = $this->resolveCompanyId(trim((string) ($current->section ?? '')));
 
         $paymentDateNext = date('Y-m-d 00:00:00', strtotime($paymentDate . ' +1 day'));
 
@@ -242,15 +242,12 @@ class PayrollV2EmploymentInsuranceService
                 ]);
         }
 
-        // 元は文字化けした文字列リテラルで判定しており「保育事業部」「鍼灸整骨院」に
-        // 一度も一致していなかった（recalculate()と同じ判定のはずが、賞与側だけ化けていた）。
-        // recalculate()と同じくhex2binで安全にエンコードする。
-        // 要確認：ここもstaffId==='001'の決め打ちがあったが、recalculate()と同じ理由
-        // （koyouフラグで既に正しく除外されるため冗長）でユーザー承認済みで削除（2026-08-15）。
-        $isExcluded =
-            mb_strpos($division, hex2bin('e4bf9de882b2e4ba8be6a5ade983a8')) !== false // 保育事業部
-            || mb_strpos($division, hex2bin('e98dbce781b8e695b4e9aaa8e999a2')) !== false // 鍼灸整骨院
-            || !$hasKoyou;
+        // 要確認：ここもstaffId==='001'の決め打ちがあったが、koyouフラグで既に正しく
+        // 除外されるため冗長と判明し、ユーザー承認済みで削除（2026-08-15）。
+        // 「保育事業部」「鍼灸整骨院」を含むdivisionの除外も、recalculate()と同じく
+        // 根拠不明のハードコード（実在するstaff_divisionに一致するものが無く、
+        // ユーザーも使った覚えが無いとのこと）と判明。ユーザー承認済みで削除（2026-08-23）。
+        $isExcluded = !$hasKoyou;
 
         $koyou = 0;
         $koyouOffice = 0;
@@ -312,15 +309,21 @@ class PayrollV2EmploymentInsuranceService
             || Schema::connection('sqlsrv_payroll')->hasColumn('dbo.' . $table, $column);
     }
 
-    private function resolveCompanyId(string $staffId): string
+    /**
+     * @param string $section 給与レコード作成時点で焼き付けたmx_kyuyo_shou.section（あれば優先）。
+     *   転籍後に古い月を再計算しても、その月時点の会社で計算されるようにするため、
+     *   常に今のmx_staffs.sectionへフォールバックしない。
+     */
+    private function resolveCompanyId(string $section): string
     {
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['st.company_id']);
+        if ($section === '') {
+            return '';
+        }
 
-        return trim((string) ($row->company_id ?? ''));
+        return trim((string) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores')
+            ->where('store_code', $section)
+            ->value('company_id') ?? ''));
     }
 
     /**

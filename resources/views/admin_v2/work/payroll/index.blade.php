@@ -50,17 +50,17 @@
           @endforeach
         </select>
 
-        <label for="staff_id">スタッフ</label>
+        <!-- <label for="staff_id"></label> -->
         <select id="staff_id" name="staff_id">
-          <option value=""></option>
+          <option value="">名前選択</option>
           @foreach ($staffRows as $staff)
           <option value="{{ $staff['staff_id'] }}" @selected($selectedStaffId===$staff['staff_id'])>{{ $staff['staff_id'] }} {{ $staff['staff_name'] }}</option>
           @endforeach
         </select>
 
-        <label for="report_type">帳票</label>
+        <!-- <label for="report_type"></label> -->
         <select id="report_type" name="report_type">
-          <option value=""></option>
+          <option value="">帳票選択</option>
           <option value="transfer-list">振込先一覧</option>
           <option value="wage-ledger">賃金台帳</option>
           <option value="personal-wage-ledger">個人賃金台帳</option>
@@ -69,6 +69,8 @@
           <option value="outsource-menu-sales">委託メニュー売上</option>
           <option value="home-visit-sales-detail">往診売上詳細</option>
           <option value="home-visit-sales">往診個人別売上</option>
+          <option value="journal-csv">給与仕訳CSV</option>
+          <option value="outsource-journal-csv">業務委託仕訳CSV</option>
         </select>
 
         <button class="btn btn-primary" type="submit">表示</button>

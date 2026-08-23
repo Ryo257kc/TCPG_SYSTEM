@@ -26,7 +26,7 @@ class PayrollV2BonusSocialInsuranceService
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
             ->whereRaw('CONVERT(date, [supply_month]) = ?', [$paymentDate])
             ->orderByDesc('kyuyo_sho_no')
-            ->first(['kyuyo_sho_no', 'bonus_amo']);
+            ->first(['kyuyo_sho_no', 'bonus_amo', 'section']);
 
         if (!$row || !isset($row->kyuyo_sho_no)) {
             return 0;
@@ -34,7 +34,7 @@ class PayrollV2BonusSocialInsuranceService
 
         $year = (int) substr($paymentDate, 0, 4);
         $month = (int) substr($paymentDate, 5, 2);
-        $companyId = $this->resolveCompanyId($staffId);
+        $companyId = $this->resolveCompanyId(trim((string) ($row->section ?? '')));
         $bonusRates = $this->loadBonusRates($companyId, $paymentDate);
         $birthday = $this->loadBirthday($staffId);
 
@@ -91,7 +91,7 @@ class PayrollV2BonusSocialInsuranceService
      */
     public function statementAmounts(string $staffId, string $paymentDate, int $kyuyoShoNo, array $summary): array
     {
-        $companyId = $this->resolveCompanyId($staffId);
+        $companyId = $this->resolveCompanyId(trim((string) ($summary['section'] ?? '')));
         $bonusRates = $this->loadBonusRates($companyId, $paymentDate);
         $birthday = $this->loadBirthday($staffId);
         $year = (int) substr($paymentDate, 0, 4);
@@ -313,15 +313,21 @@ class PayrollV2BonusSocialInsuranceService
         return $this->toDate($row->birthday ?? null);
     }
 
-    private function resolveCompanyId(string $staffId): string
+    /**
+     * @param string $section 給与レコードに焼き付けたmx_kyuyo_shou.section（あれば優先）。
+     *   転籍後に古い賞与月を再計算・表示しても、その月時点の会社になるようにするため、
+     *   今のmx_staffs.sectionへはフォールバックしない（空欄なら未解決を返す）。
+     */
+    private function resolveCompanyId(string $section): string
     {
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['st.company_id']);
+        if ($section === '') {
+            return '';
+        }
 
-        return trim((string) ($row->company_id ?? ''));
+        return trim((string) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores')
+            ->where('store_code', $section)
+            ->value('company_id') ?? ''));
     }
 
     private function hasPayrollColumn(string $table, string $column): bool

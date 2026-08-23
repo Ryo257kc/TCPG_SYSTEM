@@ -58,7 +58,7 @@ class AllowanceV2Service
         ];
     }
 
-    public function update(array $v): string
+    public function update(array $v): int
     {
         $allowanceNo = (int) ($v['allowance_no'] ?? 0);
         $payload = [
@@ -78,11 +78,9 @@ class AllowanceV2Service
             $payload['amount_column_key'] = trim((string) ($v['amount_column_key'] ?? ''));
         }
 
-        DB::connection('sqlsrv_payroll')
+        return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_allowance')
             ->where('allowance_no', $allowanceNo)
             ->update($payload);
-
-        return '更新しました。';
     }
 }

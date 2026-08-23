@@ -44,7 +44,9 @@ class AllowanceV2Controller extends Controller
             'koujyo_kiso' => ['nullable', 'in:1'],
         ]);
 
-        $status = $this->service->update(array_map(fn ($x) => is_string($x) ? $x : (string) $x, $v));
+        $affected = $this->service->update(array_map(fn ($x) => is_string($x) ? $x : (string) $x, $v));
+        $status = $affected > 0 ? '更新しました。' : '更新対象の手当が見つかりません。画面を更新してから再度お試しください。';
+
         return redirect()->route('admin.master.allowance', ['office_name' => (string) ($v['office_name_filter'] ?? '')])->with('status', $status);
     }
 }

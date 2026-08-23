@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollV2IncomeTaxService
 {
+    public function __construct(
+        private readonly PayrollV2UpdateService $updateService,
+    ) {}
+
     public function recalculate(string $staffId, int $year, int $month): int
     {
         return (int) ($this->recalculateWithTrace($staffId, $year, $month)['updated'] ?? 0);
@@ -64,7 +68,13 @@ class PayrollV2IncomeTaxService
         $taxationSum = (float) ($row->taxation_sum ?? 0);
         $fuyoNum = (int) ($row->fuyo_sum ?? 0);
 
-        $fieldSyahoSum = $kenpo + $kaigo + $childSupportFunds + $kounen + $koyou;
+        $fieldSyahoSum = $this->updateService->socialInsuranceSum([
+            'kenpo' => $kenpo,
+            'kaigo' => $kaigo,
+            'child_support_funds' => $childSupportFunds,
+            'kounen' => $kounen,
+            'koyou' => $koyou,
+        ]);
         $syahoSum = is_numeric($row->syaho_sum ?? null) ? (float) $row->syaho_sum : $fieldSyahoSum;
         $syahoDeductionSum = $taxationSum - $syahoSum;
         if ($syahoDeductionSum < 0) {

@@ -45,4 +45,26 @@ class PayrollV2StaffService
             ->values()
             ->all();
     }
+
+    /**
+     * store_code -> 店舗名・会社名の対応表。給与レコードに焼き付けたsection(その月時点の所属)から
+     * 会社・店舗を引き直すのに使う（今のmx_staffs.sectionに依存しないようにするため）。
+     *
+     * @return array<string, array{store_name:string, company_name:string}>
+     */
+    public function storeCompanyMap(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_stores as st')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
+            ->select(['st.store_code', 'st.store_name', 'c.company_name'])
+            ->get()
+            ->mapWithKeys(fn ($r) => [
+                trim((string) $r->store_code) => [
+                    'store_name' => trim((string) ($r->store_name ?? '')),
+                    'company_name' => trim((string) ($r->company_name ?? '')),
+                ],
+            ])
+            ->all();
+    }
 }

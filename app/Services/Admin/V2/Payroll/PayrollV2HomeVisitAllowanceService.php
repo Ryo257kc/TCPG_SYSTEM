@@ -29,7 +29,7 @@ class PayrollV2HomeVisitAllowanceService
         }
 
         $staff = $this->staff($staffId);
-        $payrollRows = $this->payrollRows($year, $month, $companyName);
+        $payrollRows = $this->payrollRows($year, $month);
         if (!isset($payrollRows[$staffId])) {
             return ['updated' => 0, 'commission_allowance' => 0, 'manager_allowance' => 0, 'home_visit_sales' => 0];
         }
@@ -61,10 +61,18 @@ class PayrollV2HomeVisitAllowanceService
             ->first() ?? []);
     }
 
-    /** @return array<string,array<string,mixed>> */
-    private function payrollRows(int $year, int $month, string $companyName): array
+    /**
+     * 管理手当(managerAllowance)の対象は往診スタッフ全員(会社をまたぐ)。会社では絞らない
+     * （2026-08-23、mx_staffsに「チーム」に相当する列が無く、会社単位の区切りに業務上の
+     * 裏付けが無いことをユーザー確認の上、絞り込みを撤廃した。実データでも絞る/絞らないで
+     * 計算結果に差が無いことを確認済み）。
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function payrollRows(int $year, int $month): array
     {
-        $query = DB::connection('sqlsrv_payroll')
+        $rows = [];
+        foreach (DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('bonus', 0)
             ->whereRaw('YEAR([supply_month]) = ?', [$year])
@@ -80,19 +88,8 @@ class PayrollV2HomeVisitAllowanceService
                 'yokoi_hari',
                 'own_cost',
                 'unpaid_amo',
-            ]);
-
-        $companyName = trim($companyName);
-        $companyStaffIds = $this->companyStaffIds($companyName);
-        if ($companyName !== '' && $companyStaffIds === []) {
-            return [];
-        }
-        if ($companyStaffIds !== []) {
-            $query->whereIn(DB::raw("RIGHT('000' + LTRIM(RTRIM(CAST(kyuyo_staff_id as nvarchar(50)))), 3)"), $companyStaffIds);
-        }
-
-        $rows = [];
-        foreach ($query->get() as $row) {
+            ])
+            ->get() as $row) {
             $id = trim((string) ($row->staff_id ?? ''));
             if ($id !== '') {
                 $rows[$id] = (array) $row;
@@ -100,27 +97,6 @@ class PayrollV2HomeVisitAllowanceService
         }
 
         return $rows;
-    }
-
-    /** @return list<string> */
-    private function companyStaffIds(string $companyName): array
-    {
-        $companyName = trim($companyName);
-        if ($companyName === '') {
-            return [];
-        }
-
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->where('c.company_name', $companyName)
-            ->whereNotNull('s.staff_id')
-            ->pluck('s.staff_id')
-            ->map(fn($value): string => $this->normalizeStaffId((string) $value))
-            ->filter(static fn(string $value): bool => $value !== '')
-            ->values()
-            ->all();
     }
 
     /** @param array<string,mixed> $row */

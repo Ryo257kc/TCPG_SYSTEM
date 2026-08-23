@@ -15,6 +15,7 @@ use App\Services\Admin\V2\Payroll\PayrollV2CreateService;
 use App\Services\Admin\V2\Payroll\PayrollV2DeleteService;
 use App\Services\Admin\V2\Payroll\PayrollV2HomeVisitAllowanceService;
 use App\Services\Admin\V2\Payroll\PayrollV2IncomeTaxService;
+use App\Services\Admin\V2\Payroll\PayrollV2JournalCsvService;
 use App\Services\Admin\V2\Payroll\PayrollV2KihonService;
 use App\Services\Admin\V2\Payroll\PayrollV2MonthService;
 use App\Services\Admin\V2\Payroll\PayrollV2OvertimeDeductionService;
@@ -30,6 +31,7 @@ use App\Services\Admin\V2\Payroll\PayrollV2UpdateService;
 use App\Support\JapaneseDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -60,6 +62,7 @@ class PayrollV2Controller extends Controller
         private readonly PayrollV2BonusSocialInsuranceService $bonusSocialInsuranceAmountService,
         private readonly PayrollV2OvertimeDeductionService $overtimeDeductionService,
         private readonly PayrollV2HomeVisitAllowanceService $homeVisitAllowanceService,
+        private readonly PayrollV2JournalCsvService $journalCsvService,
     ) {
     }
 
@@ -95,6 +98,57 @@ class PayrollV2Controller extends Controller
             'rows' => $rows,
             'allowanceEntries' => $allowanceEntries,
             'labelOverrides' => $labelOverrides,
+        ]);
+    }
+
+    public function journalCsv(Request $request): Response
+    {
+        return $this->buildJournalCsvResponse($request, false);
+    }
+
+    public function bonusJournalCsv(Request $request): Response
+    {
+        return $this->buildJournalCsvResponse($request, true);
+    }
+
+    public function outsourceJournalCsv(Request $request): Response
+    {
+        $pageData = $this->buildPageData($request, false);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $rows = (array) $pageData['rows'];
+
+        $csv = $this->journalCsvService->buildOutsource($rows, $selectedPaymentDate);
+
+        return $this->journalCsvResponse($csv, $selectedPaymentDate, (string) $pageData['selectedCompanyId'], '_業務委託仕訳');
+    }
+
+    private function buildJournalCsvResponse(Request $request, bool $bonus): Response
+    {
+        $pageData = $this->buildPageData($request, $bonus);
+        $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
+        $rows = (array) $pageData['rows'];
+
+        $csv = $this->journalCsvService->build($rows, $selectedPaymentDate);
+
+        return $this->journalCsvResponse($csv, $selectedPaymentDate, (string) $pageData['selectedCompanyId'], $bonus ? '_賞与仕訳' : '_給与仕訳');
+    }
+
+    /** @param array{content: string, row_count: int} $csv */
+    private function journalCsvResponse(array $csv, string $selectedPaymentDate, string $companyName, string $suffix): Response
+    {
+        // 会社を絞り込まないと2社分が1つのCSVに混ざって見分けが付かなくなるため、ファイル名の頭に略称を付ける
+        // （プレッジ=PG、トータルケア=TC）。会社未選択（全社）の時は略称を付けない。
+        $prefix = match (true) {
+            str_contains($companyName, 'プレッジ') => 'PG_',
+            str_contains($companyName, 'トータルケア') => 'TC_',
+            default => '',
+        };
+        $downloadName = $prefix . str_replace('/', '', $selectedPaymentDate) . $suffix . '.csv';
+
+        return response($csv['content'], 200, [
+            'Content-Type' => 'text/csv; charset=Shift_JIS',
+            'Content-Disposition' => "attachment; filename*=UTF-8''" . rawurlencode($downloadName),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
     }
 
@@ -560,7 +614,11 @@ class PayrollV2Controller extends Controller
             } else {
                 $shaho = array_merge(
                     (array) ($row['shaho'] ?? []),
-                    $this->socialInsuranceAmountService->loadRatesForStaff($staffId, $selectedPaymentDate)
+                    $this->socialInsuranceAmountService->loadRatesForStaff(
+                        $staffId,
+                        $selectedPaymentDate,
+                        trim((string) ($summary['section'] ?? ''))
+                    )
                 );
                 $amounts = $this->socialInsuranceAmountService->statementAmounts(
                     $summary,
@@ -1840,7 +1898,11 @@ class PayrollV2Controller extends Controller
             $selectedCompanyId = '';
         }
 
-        $staffRows = $this->staffService->staffs($selectedCompanyId);
+        // 会社の絞り込みは今のmx_staffs.sectionではなく、mergeRows()が給与レコードに焼き付けた
+        // sectionから解決した会社名（マージ後の$row['company_name']）に対して行う。転籍者の過去月が
+        // 転籍後の会社で表示されるのを防ぐため（staffsは常に絞り込み無しで取得する）。
+        $staffRows = $this->staffService->staffs('');
+        $storeCompanyMap = $this->staffService->storeCompanyMap();
         $summaryMap = $this->summaryService->summaryMapByPaymentDate($selectedPaymentDate, $bonus);
         $previousSummaryMap = $this->summaryService->previousSummaryMapByPaymentDate($selectedPaymentDate, $bonus);
         $kihonMap = $this->kihonService->map($year, $month);
@@ -1865,8 +1927,21 @@ class PayrollV2Controller extends Controller
             $staffMasterMap,
             $shahoMap,
             $residentMap,
-            ''
+            '',
+            $storeCompanyMap
         );
+
+        if ($selectedCompanyId !== '') {
+            $rows = array_values(array_filter(
+                $rows,
+                static fn (array $row): bool => ($row['company_name'] ?? '') === $selectedCompanyId
+            ));
+            $rowStaffIds = array_column($rows, 'staff_id');
+            $staffRows = array_values(array_filter(
+                $staffRows,
+                static fn (array $staff): bool => in_array($staff['staff_id'], $rowStaffIds, true)
+            ));
+        }
 
         $attendanceRecordExistsMap = $this->attendanceRecordExistsMap(
             array_column($staffRows, 'staff_id'),

@@ -6,20 +6,24 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollV2SocialInsuranceAmountService
 {
-    /** @var array<string,int> staffId => company_id */
+    /** @var array<string,int> "staffId|section" => company_id */
     private array $companyIdCache = [];
 
     /** @var array<string,array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float}> "companyId|paymentDate" => rates */
     private array $ratesCache = [];
 
-    /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float} */
-    public function loadRatesForStaff(string $staffId, string $paymentDate): array
+    /**
+     * @param string $section 給与レコードに焼き付けたmx_kyuyo_shou.section（呼び出し元の$summary['section']）。
+     * @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float}
+     */
+    public function loadRatesForStaff(string $staffId, string $paymentDate, string $section): array
     {
-        if (!array_key_exists($staffId, $this->companyIdCache)) {
-            $this->companyIdCache[$staffId] = $this->resolveCompanyId($staffId);
+        $cacheKey = $staffId . '|' . $section;
+        if (!array_key_exists($cacheKey, $this->companyIdCache)) {
+            $this->companyIdCache[$cacheKey] = $this->resolveCompanyId($section);
         }
 
-        return $this->loadRates($this->companyIdCache[$staffId], $paymentDate);
+        return $this->loadRates($this->companyIdCache[$cacheKey], $paymentDate);
     }
 
     /** @return array{kenpo_rate:float,kaigo_rate:float,kounen_rate:float,jidou_rate:float,kodomo_shien:float} */
@@ -174,16 +178,21 @@ class PayrollV2SocialInsuranceAmountService
         ];
     }
 
-    private function resolveCompanyId(string $staffId): int
+    /**
+     * @param string $section 給与レコードに焼き付けたmx_kyuyo_shou.section（あれば優先）。
+     *   転籍後に古い月を再計算・表示しても、その月時点の会社の料率になるようにするため、
+     *   今のmx_staffs.sectionへはフォールバックしない（空欄なら0=未解決を返す）。
+     */
+    private function resolveCompanyId(string $section): int
     {
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [trim($staffId)])
-            ->first(['c.company_id']);
+        if ($section === '') {
+            return 0;
+        }
 
-        return (int) ($row->company_id ?? 0);
+        return (int) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores')
+            ->where('store_code', $section)
+            ->value('company_id') ?? 0);
     }
 
     public function toDate(mixed $value): ?\DateTimeImmutable

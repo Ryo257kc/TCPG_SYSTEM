@@ -39,7 +39,7 @@ class PayrollV2OvertimeDeductionService
         }
 
         $summary = (array) $row;
-        $companyName = $this->normalizeCompanyName($staffId, $companyName);
+        $companyName = $this->normalizeCompanyName($companyName, trim((string) ($row->section ?? '')));
 
         $staff = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
@@ -263,21 +263,27 @@ class PayrollV2OvertimeDeductionService
         ];
     }
 
-    private function normalizeCompanyName(string $staffId, ?string $companyName): string
+    /**
+     * @param string $section 給与レコードに焼き付けたmx_kyuyo_shou.section（あれば優先）。
+     *   転籍後に古い月を再計算しても、その月時点の会社になるようにするため、
+     *   今のmx_staffs.sectionへはフォールバックしない（空欄なら空文字を返す）。
+     */
+    private function normalizeCompanyName(?string $companyName, string $section): string
     {
         $name = trim((string) $companyName);
         if ($name !== '') {
             return $name;
         }
 
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['c.company_name']);
+        if ($section === '') {
+            return '';
+        }
 
-        return trim((string) ($row->company_name ?? ''));
+        return trim((string) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores as st')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
+            ->where('st.store_code', $section)
+            ->value('c.company_name') ?? ''));
     }
 
     /** @return list<string> */

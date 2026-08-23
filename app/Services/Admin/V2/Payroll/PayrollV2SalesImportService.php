@@ -229,8 +229,12 @@ class PayrollV2SalesImportService
                 continue;
             }
 
-            $this->updateService->save($staffId, $payrollYear, $payrollMonth, $summaries[$staffId], $companyName);
-            $result['updated']++;
+            $affected = $this->updateService->save($staffId, $payrollYear, $payrollMonth, $summaries[$staffId], $companyName);
+            if ($affected > 0) {
+                $result['updated']++;
+            } else {
+                $result['missing']++;
+            }
         }
 
         return $result;

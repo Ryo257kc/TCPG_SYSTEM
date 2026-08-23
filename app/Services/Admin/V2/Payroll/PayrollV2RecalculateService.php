@@ -31,11 +31,12 @@ class PayrollV2RecalculateService
             return 0;
         }
 
-        $companyId = $this->resolveCompanyId($staffId, $companyName);
-        $companyName = $this->normalizeCompanyName($staffId, $companyName);
+        $currentSummary = $this->loadCurrentSummary($staffId, $year, $month);
+        $section = trim((string) ($currentSummary['section'] ?? ''));
+        $companyId = $this->resolveCompanyId($section);
+        $companyName = $this->normalizeCompanyName($companyName, $section);
         $birthday = $this->loadBirthday($staffId);
         $paymentDate = $this->loadPaymentDate($staffId, $year, $month);
-        $currentSummary = $this->loadCurrentSummary($staffId, $year, $month);
 
         $kihon = $this->kihonService->map($year, $month)[$staffId] ?? [];
         $shaho = $this->shahoService->map($year, $month)[$staffId] ?? [];
@@ -73,9 +74,9 @@ class PayrollV2RecalculateService
             return 0;
         }
 
-        $companyName = $this->normalizeCompanyName($staffId, $companyName);
-        $paymentDate = $this->loadPaymentDate($staffId, $year, $month);
         $currentSummary = $this->loadCurrentSummary($staffId, $year, $month);
+        $companyName = $this->normalizeCompanyName($companyName, trim((string) ($currentSummary['section'] ?? '')));
+        $paymentDate = $this->loadPaymentDate($staffId, $year, $month);
         $kihon = $this->kihonService->map($year, $month)[$staffId] ?? [];
 
         $payload = array_merge(
@@ -115,7 +116,7 @@ class PayrollV2RecalculateService
             return 0;
         }
 
-        $companyName = $this->normalizeCompanyName($staffId, $companyName);
+        $companyName = $this->normalizeCompanyName($companyName, trim((string) ($currentSummary['section'] ?? '')));
 
         return (int) $this->updateService->save($staffId, $year, $month, $payload, $companyName);
     }
@@ -351,33 +352,39 @@ class PayrollV2RecalculateService
         ];
     }
 
-    private function normalizeCompanyName(string $staffId, ?string $companyName): string
+    /**
+     * @param string $section 給与レコードに焼き付けたmx_kyuyo_shou.section（あれば優先）。
+     *   $companyNameが明示的に渡されていればそれを最優先（呼び出し元が既に知っている値のため）。
+     *   どちらも無ければ空文字（今のmx_staffs.sectionへはフォールバックしない）。
+     */
+    private function normalizeCompanyName(?string $companyName, string $section): string
     {
         $name = trim((string) $companyName);
         if ($name !== '') {
             return $name;
         }
 
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['c.company_name']);
+        if ($section === '') {
+            return '';
+        }
 
-        return trim((string) ($row->company_name ?? ''));
+        return trim((string) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores as st')
+            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
+            ->where('st.store_code', $section)
+            ->value('c.company_name') ?? ''));
     }
 
-    private function resolveCompanyId(string $staffId, ?string $companyName): int
+    private function resolveCompanyId(string $section): int
     {
-        $row = DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs as s')
-            ->leftJoin('dbo.mx_stores as st', 'st.store_code', '=', 's.section')
-            ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->whereRaw('LTRIM(RTRIM(s.staff_id)) = ?', [$staffId])
-            ->first(['c.company_id']);
+        if ($section === '') {
+            return 0;
+        }
 
-        return (int) ($row->company_id ?? 0);
+        return (int) (DB::connection('sqlsrv')
+            ->table('dbo.mx_stores')
+            ->where('store_code', $section)
+            ->value('company_id') ?? 0);
     }
 
     private function loadBirthday(string $staffId): ?\DateTimeImmutable
@@ -402,7 +409,7 @@ class PayrollV2RecalculateService
             ->whereRaw('MONTH([supply_month]) = ?', [$month])
             ->whereRaw('LTRIM(RTRIM([kyuyo_staff_id])) = ?', [$staffId])
             ->orderByDesc('kyuyo_sho_no')
-            ->first(['work_in_num', 'work_time', 'overtime', 'work_time_num', 'allowance_amo_4', 'adjustment_cost', 'koujyo_1']) ?? []);
+            ->first(['work_in_num', 'work_time', 'overtime', 'work_time_num', 'allowance_amo_4', 'adjustment_cost', 'koujyo_1', 'section']) ?? []);
     }
 
     private function loadPaymentDate(string $staffId, int $year, int $month): string

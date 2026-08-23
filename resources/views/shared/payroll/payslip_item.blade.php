@@ -24,8 +24,12 @@ $makeValueItem = fn($label, $value) => [((string)$value === '' || (float)$value 
     @php
     $payTotal = $row['supply_sum'] ?? null;
     $deductTotal = $row['deduction_sum'] ?? null;
-    $otherTotal = (float)($row['cost_liquidation'] ?? 0) + (float)($row['company_advance_cost'] ?? 0)-(float)($row['adjustment_year_end'] ?? 0);
     $transfer = (float)($row['transfer_amount'] ?? 0);
+    // その他合計は cost_liquidation+company_advance_cost-adjustment_year_end の独自計算をせず、
+    // 保存済みの差引支給額(transfer_amount)から支給合計・控除合計を差し引いて逆算する。
+    // 常に「支給合計-控除合計+その他合計=差引支給額」が一致する状態を保つ（正本はPayrollV2SummaryService::transferAmount()、
+    // 表示側で内訳を再計算しない）。
+    $otherTotal = $transfer - ((float)($payTotal ?? 0) - (float)($deductTotal ?? 0));
 
     $attendanceItems = [
     $makeValueItem('出勤日数', $row['work_in_num'] ?? ''),

@@ -1,5 +1,72 @@
 # 給与・賞与 変更履歴
 
+## 2026-08-23 確定済み給与の再計算がサーバー側で防げていなかった問題を修正・社保合計の重複解消
+
+- `PayrollV2CalculationFlowService`（給与計算ボタンの通り道を1本化するService）の
+  `recalculateMonthly()`/`recalculateAmountsAfterInputChange()`/`recalculateAfterAttendanceReflect()`/
+  `recalculateEmploymentInsurance()`/`recalculateIncomeTaxWithTrace()`/`recalculateBonus()`は、
+  対象が確定済み（`edit_lock=1`）でもサーバー側で止める処理が無かった。画面の「再計算」等の
+  ボタンは`isPayrollConfirmed`で正しくグレーアウトされていたが、それは画面側だけの防止で、
+  サービスを直接呼べば素通りしてしまう状態だった（`PayrollV2IncomeTaxService::recalculateWithTrace()`を
+  動作確認のつもりでtinkerから直接呼んだ際に実際に発生：確定済みの041・2026年8月分に書き込みが
+  走った。書き込まれた値は健保・介護・厚年・雇用・子ども子育て拠出金という触っていない列から
+  再計算しても同じ値になることを確認済みで、実害は無かったが、経路自体は本物の穴だった）。
+  各メソッドの先頭で対象行の`edit_lock`を確認し、確定済みなら何もせず`0`を返すよう修正。
+  `00_global.md`の「過去データの保護」ルールに合わせた。
+- `PayrollV2UpdateService::socialInsuranceSum()`（社保合計＝健保+介護+子ども子育て拠出金+厚年+雇用）が
+  `private`だったため、同じ式を`PayrollV2IncomeTaxService`が独立して再実装していた
+  （`docs/rules/payroll_bonus/10_calculation_basis.md`が正本と明記してるのに、実際には
+  共有できない作りになっていた）。`public`にして`PayrollV2IncomeTaxService`から呼ぶよう統一。
+- 給与明細（`resources/views/shared/payroll/payslip_item.blade.php`、管理側・スタッフポータル
+  共通）の「その他合計」欄が`cost_liquidation+company_advance_cost-adjustment_year_end`を
+  Blade側で独自計算していた。正本は`PayrollV2SummaryService::transferAmount()`で、この式の
+  一部を切り出したもの。保存済みの差引支給額(`transfer_amount`)から支給合計・控除合計を
+  差し引いて逆算する形に変更し、「支給合計-控除合計+その他合計=差引支給額」が常に一致する
+  ようにした（内訳が増えても表側の再計算は不要）。実データ5件で旧計算と新計算が完全一致する
+  ことを確認済み。
+
+## 2026-08-23 保存確認漏れ（手当マスタ・往診売上反映）修正
+
+041実運用の監査を機に管理側も横断監査した結果、2件見つかった。
+
+- `AllowanceV2Service::update()`（手当マスタ、`mx_allowance`）：`update()`の戻り値を見ず、
+  DBに実際反映されたかに関わらず固定文字列`'更新しました。'`を返していた。影響行数を
+  返すよう変更し、コントローラー側で0件ならエラーメッセージを出すよう修正。このテーブルは
+  `tax_target`/`rou_target`/`syaho_target`/`kotei_wage`等、給与計算の対象判定フラグを
+  持つため、無言で反映されないと計算結果に波及する。
+- `PayrollV2SalesImportService::reflect()`（往診売上の給与反映）：`PayrollV2UpdateService::save()`
+  は影響行数を`int`で返す設計なのに、呼び出し側で戻り値を捨てて`$result['updated']++`を
+  無条件に加算していた。戻り値を見て0件なら`missing`（対象給与行なし、と同じ扱い）に
+  カウントするよう修正。
+
+## 2026-08-23 給与仕訳CSV追加・転籍時に過去月の会社が変わるバグ修正・根拠不明ハードコード削除
+
+### 給与仕訳CSV・業務委託仕訳CSV(取引インポート形式)
+
+- `PayrollV2JournalCsvService`を新規作成。`mx_kyuyo_shou`から freee の取引インポート形式(振替伝票ではなく取引仕訳)で未払計上のCSVを作る。`/admin/payroll`の帳票選択に「給与仕訳CSV」「業務委託仕訳CSV」を追加(ルート: `admin.payroll.journal-csv`/`admin.bonus.journal-csv`/`admin.payroll.outsource-journal-csv`)。
+- 金額の対応関係は実物の仕訳(journal_breakdown=6043037)、およびユーザーが手で組み直したサンプルの両方と完全一致することを検証済み。詳細はサービスのdocblock参照。
+- `staff_division='業務委託'`は給与CSVの対象外(賃金台帳と同じ判定)。業務委託仕訳CSVは逆に業務委託のみを対象に、人ごと1行(勘定科目は全て「業務委託料」、税区分「課対仕入（控80）10%」、supply_sum+cost_liquidationの全額)で出す。取引先列は使わない(freeeは1取引=1取引先の制約があるため、スタッフ名は備考列へ)。
+- ファイル名の頭に会社の略称(プレッジ=PG、トータルケア=TC)を付ける。全社選択時は略称なし。
+
+### 転籍者の過去月が今の所属会社で表示される不具合
+
+- `PayrollV2CreateService::create()`が新規給与データ作成時に`mx_kyuyo_shou.section`を書き込んでいなかった（2015年〜2026年7月分はAccess同期起因で埋まっていたが、Laravelのこの作成経路自体は一度も書いていない）。そのため`/admin/payroll`の会社・部門の判定(`PayrollV2StaffService::staffs()`)は常に**今の**`mx_staffs.section`を見ており、転籍者の過去月を表示すると転籍後の会社になっていた（一覧・賃金台帳・会社負担一覧・振込一覧・CSV全部が対象）。
+- 修正: `create()`で作成時点の`mx_staffs.section`を`mx_kyuyo_shou.section`へ焼き付けるようにした。`PayrollV2SummaryService::mergeRows()`は、その給与レコード自身の`section`（焼き付け値）を`PayrollV2StaffService::storeCompanyMap()`で会社・店舗名に引き直す方式に変更、`PayrollV2Controller::buildPageData()`の会社フィルタも焼き付け値ベースの結果に対して行うよう変更。
+- **今のmx_staffs.sectionへのフォールバックは一切しない**（フォールバックはエラーを出さずに黙って処理するため、sectionが未記録の抜けに気づけなくなる）。焼き付けが無い（空欄の）レコードは会社・店舗名を空のまま返す。2026年8月分の一部レコード（作成時点でこの修正が無かったため空欄）は、今の所属で埋め直すかどうか別途判断。
+- 同じ理由で`PayrollV2EmploymentInsuranceService::resolveCompanyId()`（雇用保険・労災の料率選択に使う会社判定）も、給与レコードの焼き付け`section`を最優先し、無ければ空扱い（フォールバックしない）に変更。
+- 同じ穴が`PayrollV2RecalculateService`（「再計算」ボタンの本体、`recalculate()`/`recalculatePayrollMasterOnly()`/`refreshBasicSalaryFromAttendance()`）と`PayrollV2SocialInsuranceAmountService::loadRatesForStaff()`（会社負担一覧の保険料率取得元）にもあった。前者は`$companyName`という引数を受け取っていながら内部で一切使っていなかった（渡す意味がなかった）。両方とも`loadCurrentSummary()`で取得した給与レコード自身の`section`を最優先し、フォールバックしない形に修正。`loadCurrentSummary()`のSELECT列に`section`を追加。
+- 同じ穴を`PayrollV2OvertimeDeductionService::normalizeCompanyName()`（残業・欠勤控除の再計算）、`PayrollV2BonusSocialInsuranceService::resolveCompanyId()`（賞与の社保再計算・会社負担一覧賞与版）でも修正。
+- `PayrollV2CreateCandidatesService`は新規給与データ作成の対象者選定用で、まだ給与レコードが存在しない段階のため今の所属を見るのが正しい。修正不要と判断。
+
+### 往診の管理手当(managerAllowance)から会社の絞り込みを撤廃
+
+- `PayrollV2HomeVisitAllowanceService`の管理手当計算（`MANAGER_IDS`＝002・013固定の2名が、他の往診スタッフの売上合計の2%を上乗せで受け取る仕組み）は、対象スタッフを`companyStaffIds()`で会社ごとに絞り込んでいた。`mx_staffs`に「チーム」に相当する列は存在せず、この会社単位の区切りに業務上の裏付けが無いことをユーザー確認済み（「チーム分けとかしてたっけ？」「管理手当は会社関係なくない？」）。実データ（2026年7月、002・013両名）で絞る/絞らないで計算結果に差が無いことも確認した上で、`companyStaffIds()`ごと削除し、`payrollRows()`は往診スタッフ全員（会社をまたぐ）を対象にするよう変更。将来チーム分けが必要になった場合は、意味のある形（実データに基づく専用の区分）で改めて実装すること。
+
+### 根拠不明ハードコードの追加削除
+
+- `PayrollV2EmploymentInsuranceService::recalculate()`/`recalculateBonus()`の除外条件に、`staff_division`が「保育事業部」「鍼灸整骨院」を含む場合を除外する判定があった。実在する`staff_division`の値（アルバイト/パート/管理責任者/業務委託/契約社員/兼務役員/正社員/役員）にどちらも一致するものが無く、ユーザーも「そんな除外判定使ったことない」と明言。両方削除（`koyou`フラグのみの判定に統一）。
+- 賞与側は元々この文字列判定が文字化けしており一度も一致していなかった（後に`hex2bin()`で「修正」されて実際に効くようになっていた）。中身を検証せず文字化けだけ直したことで、意図せず新しい除外が有効化されていた可能性がある。
+
 ## 2026-08-18
 
 ### 賃金台帳・委託報酬台帳の通勤費表示を統一
@@ -56,6 +123,12 @@
   Accessの実データ・スクショと数値が一致するまで作り直した。
 - 賞与版（`bonusCompanyBurdenPrint()`）を追加。月給版と共通のテンプレート・集計ロジックを使い、
   会社負担側の計算だけ`PayrollV2BonusSocialInsuranceService::statementAmounts()`に切り替える。
+
+### sqlsrv_payroll接続の既定スキーマ不具合
+
+- `sqlsrv_payroll`接続(`Payroll`/`Payroll_DEV`)のアカウントで、本番DB閲覧用に権限変更した際の副作用と思われる形で、既定スキーマ(DEFAULT_SCHEMA)が`dbo`ではなく`db_datareader`になってしまっていた。
+- `StaffV2Service::tableRows()`が`Schema::connection('sqlsrv_payroll')->getColumnListing($table)`をスキーマ無しで呼んでおり、SQL Serverの`schema_name()`(ログインの既定スキーマ)に暗黙的に頼っていたため、列一覧が常に空配列になり`kihonRows()`/`shahoRows()`/`residentRows()`/`fuyoRows()`(スタッフ編集画面の給与マスタ・社保・住民税・扶養タブ)が常に空を返していた。`DB::table('dbo.xxx')`のようにスキーマを明示してるクエリは影響を受けず、データ自体は正常だった。
+- DB側でアカウントの既定スキーマを`dbo`に修正して解決。本番閲覧用にDBアカウントの権限を変更する時は、既定スキーマ等の副作用が無いか確認すること。
 
 ## 2026-08-17
 
