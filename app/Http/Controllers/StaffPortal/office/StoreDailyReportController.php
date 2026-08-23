@@ -17,14 +17,28 @@ class StoreDailyReportController extends Controller
     private const DAILY_SUMMARY_MONTHLY_CLOSING_AUTHORITY = '日報';
     private const DAILY_SUMMARY_MONTHLY_INPUT_AUTHORITY = '日報入力';
 
+    // 店舗日報（isDailyReport||isAdmin）権限が必要な画面共通のガード。
+    // ダッシュボードのメニューでは非表示にしていたが、コントローラー側のURL直叩き制限が
+    // 無かった（2026-08-23発覚）。
+    private function requireDailyReport(Request $request): void
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isDailyReport($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
+    }
+
     public function index(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         return view('staff_portal.office.store_daily_report.index', $this->commonViewData($request, []));
     }
 
     // 日報集計
     public function dailySummary(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $staffRow = $this->staffPortalStaffRow($staffId);
@@ -128,6 +142,8 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryMonthlyPrint(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('日報集計店舗', ''));
@@ -180,6 +196,8 @@ class StoreDailyReportController extends Controller
     // 修正依頼
     public function requestHistory(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $selectedStatus = $request->has('status_filter')
             ? trim((string) $request->query('status_filter', ''))
             : trim((string) $request->query('状況', '依頼中'));
@@ -224,6 +242,8 @@ class StoreDailyReportController extends Controller
     // 返戻ノート
     public function returnNote(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $targetYear = (int) $request->query('target_year', now()->format('Y'));
         if ($targetYear < 2000 || $targetYear > 2100) {
             $targetYear = (int) now()->format('Y');
@@ -301,6 +321,8 @@ class StoreDailyReportController extends Controller
 
     public function saveReturnNote(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
+
         $henrei_no = trim((string) $request->input('henrei_no', ''));
         $入金日 = $this->normalizeDateValue($request->input('入金日'));
         $事務所備考 = trim((string) $request->input('事務所備考', ''));
@@ -317,13 +339,19 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '保存対象が確認できません。');
         }
 
-        DB::connection('sqlsrv_dailyreport')
+        $affected = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_返戻')
             ->where('henrei_no', $henrei_no)
             ->update([
                 '入金日' => $入金日,
                 '事務所備考' => $事務所備考 === '' ? null : $事務所備考,
             ]);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('office.store_daily_report.return_note', $redirectQuery)
+                ->with('errorMessage', '保存に失敗しました。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('office.store_daily_report.return_note', $redirectQuery)
@@ -333,6 +361,8 @@ class StoreDailyReportController extends Controller
     // その他一覧
     public function otherList(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('レジ店舗', ''));
@@ -397,6 +427,8 @@ class StoreDailyReportController extends Controller
 
     public function otherListPrint(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('レジ店舗', ''));
@@ -452,6 +484,8 @@ class StoreDailyReportController extends Controller
     // 項目別集計
     public function itemSummary(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         [$targetYear, $targetMonthNo] = $this->parseTargetMonth($targetMonth);
         $selectedStore = trim((string) $request->query('店舗', ''));
@@ -523,6 +557,8 @@ class StoreDailyReportController extends Controller
 
     public function saveRequestHistory(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
+
         $依頼No = trim((string) $request->input('依頼No', ''));
         $状況 = trim((string) $request->input('状況', ''));
         $事務所コメント = trim((string) $request->input('事務所コメント', ''));
@@ -533,13 +569,19 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '保存対象が確認できません。');
         }
 
-        DB::connection('sqlsrv_dailyreport')
+        $affected = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_依頼履歴')
             ->where('依頼No', $依頼No)
             ->update([
                 '状況' => $状況 === '' ? null : $状況,
                 '事務所コメント' => $事務所コメント === '' ? null : $事務所コメント,
             ]);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('office.store_daily_report.request_history', ['status_filter' => $状況 !== '' ? $状況 : '依頼中'])
+                ->with('errorMessage', '保存に失敗しました。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('office.store_daily_report.request_history', ['status_filter' => $状況 !== '' ? $状況 : '依頼中'])
@@ -548,6 +590,8 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryDetail(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
             return redirect()->route('office.store_daily_report.daily_summary');
@@ -641,6 +685,7 @@ class StoreDailyReportController extends Controller
                 'レセ差額' => $this->formatMoneyValue($row->{'レセ差額'} ?? null),
                 '請求金額計' => $this->formatMoneyValue($row->{'請求金額計'} ?? null),
                 '回収日' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y/m/d'),
+                '回収日_raw' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y-m-d'),
                 'レセ負担金' => $this->formatMoneyValue($row->{'レセ負担金'} ?? null),
                 '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
                 '保険請求' => $this->formatMoneyValue($row->{'保険請求'} ?? null),
@@ -807,6 +852,8 @@ class StoreDailyReportController extends Controller
 
     public function dailySummaryPrint(Request $request): RedirectResponse|View
     {
+        $this->requireDailyReport($request);
+
         $dailySummaryId = trim((string) $request->query('daily_summary_id', ''));
         if ($dailySummaryId === '') {
             return redirect()->route('office.store_daily_report.daily_summary');
@@ -1101,6 +1148,7 @@ class StoreDailyReportController extends Controller
 
     public function saveDailySummaryHeader(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
@@ -1156,6 +1204,7 @@ class StoreDailyReportController extends Controller
 
     public function saveDailySummarySummary(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
@@ -1213,6 +1262,7 @@ class StoreDailyReportController extends Controller
 
     public function saveDailySummaryExpense(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
@@ -1281,12 +1331,18 @@ class StoreDailyReportController extends Controller
 
             if (!empty($expenseRow['_delete'])) {
                 if ($registerNo !== '') {
-                    DB::connection('sqlsrv_dailyreport')
+                    $affected = DB::connection('sqlsrv_dailyreport')
                         ->table('dbo.T_レジ詳細')
                         ->where('レジＮｏ', $registerNo)
                         ->whereDate('日付', $targetDate)
                         ->where('レジ店舗', $targetStore)
                         ->delete();
+
+                    if ($affected === 0) {
+                        return redirect()
+                            ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                            ->with('errorMessage', '削除に失敗しました。画面を更新してから再度お試しください。（レジＮｏ: ' . $registerNo . '）');
+                    }
 
                     $savedCount++;
                 }
@@ -1315,12 +1371,18 @@ class StoreDailyReportController extends Controller
             ];
 
             if ($registerNo !== '') {
-                DB::connection('sqlsrv_dailyreport')
+                $affected = DB::connection('sqlsrv_dailyreport')
                     ->table('dbo.T_レジ詳細')
                     ->where('レジＮｏ', $registerNo)
                     ->whereDate('日付', $targetDate)
                     ->where('レジ店舗', $targetStore)
                     ->update($payload);
+
+                if ($affected === 0) {
+                    return redirect()
+                        ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                        ->with('errorMessage', '保存に失敗しました。画面を更新してから再度お試しください。（レジＮｏ: ' . $registerNo . '）');
+                }
             } else {
                 DB::connection('sqlsrv_dailyreport')
                     ->table('dbo.T_レジ詳細')
@@ -1343,6 +1405,8 @@ class StoreDailyReportController extends Controller
 
     public function saveMonthlyWindowInput(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
+
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
             'sakura_receipt_burden_amount' => ['nullable', 'string'],
@@ -1382,6 +1446,8 @@ class StoreDailyReportController extends Controller
     // 日報の月次処理を登録する
     public function closeDailySummaryMonthly(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
+
         $data = $request->validate([
             'daily_summary_id' => ['required', 'string'],
             'target_month' => ['required', 'date_format:Y-m'],
@@ -1501,6 +1567,8 @@ class StoreDailyReportController extends Controller
 
     public function addDailySummaryPatient(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
+
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
         $targetDate = $this->normalizeDateValue($request->input('日付'));
         $targetStore = trim((string) $request->input('店舗', ''));
@@ -1558,6 +1626,7 @@ class StoreDailyReportController extends Controller
 
     public function bulkCheckDailySummaryDetail(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
@@ -1604,7 +1673,7 @@ class StoreDailyReportController extends Controller
                 ->with('errorMessage', '日付または店舗が確認できません。');
         }
 
-        DB::connection('sqlsrv_dailyreport')->update(
+        $affected = DB::connection('sqlsrv_dailyreport')->update(
             'UPDATE dbo.T_先生別日報
                 SET ch = 1
              FROM dbo.T_先生別日報
@@ -1619,11 +1688,12 @@ class StoreDailyReportController extends Controller
 
         return redirect()
             ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
-            ->with('statusMessage', '一括chを更新しました。');
+            ->with('statusMessage', $affected > 0 ? '一括chを更新しました。（' . $affected . '件）' : '更新対象がありませんでした。');
     }
 
     public function saveDailySummaryDetail(Request $request): RedirectResponse
     {
+        $this->requireDailyReport($request);
         $staffId = $this->staffPortalStaffId($request);
 
         $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
@@ -1635,6 +1705,19 @@ class StoreDailyReportController extends Controller
             return redirect()
                 ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
                 ->with('errorMessage', '保存対象が確認できません。');
+        }
+
+        // 要確認：更新対象(T_患者名日報.No)が実在するかのチェックが元々無く、
+        // 古いページからの送信・他端末での削除等でNoが一致しない場合、update()が
+        // 0件ヒットで何も書き込まないのに「保存しました」と表示していた（2026-08-23追加）。
+        $patientExists = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_患者名日報')
+            ->where('No', $patientDailyReportNo)
+            ->exists();
+        if (!$patientExists) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '保存対象の患者が見つかりません。画面を更新してから再度お試しください。');
         }
 
         $staffRow = $this->staffPortalStaffRow($staffId);
@@ -1670,6 +1753,21 @@ class StoreDailyReportController extends Controller
             }
         }
 
+        try {
+            $this->saveDailySummaryDetailTransaction($request, $patientDailyReportNo, $patientNo, $action);
+        } catch (\RuntimeException $e) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '保存に失敗しました。画面を更新してから再度お試しください。（' . $e->getMessage() . '）');
+        }
+
+        return redirect()
+            ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+            ->with('statusMessage', $action === 'delete_patient' ? '削除しました。' : '保存しました。');
+    }
+
+    private function saveDailySummaryDetailTransaction(Request $request, string $patientDailyReportNo, string $patientNo, string $action): void
+    {
         DB::connection('sqlsrv_dailyreport')->transaction(function () use ($request, $patientDailyReportNo, $patientNo, $action): void {
             $detailRows = $request->input('detail_rows', []);
 
@@ -1759,10 +1857,16 @@ class StoreDailyReportController extends Controller
                 }
 
                 if ($先生別No !== '') {
-                    DB::connection('sqlsrv_dailyreport')
+                    // 要確認：更新対象(T_先生別日報.先生別No)が実在しない場合、update()が0件
+                    // ヒットで何も書き込まずに処理が先へ進んでいた。0件なら例外でトランザクション
+                    // ごとロールバックし、保存失敗として扱う（2026-08-23追加）。
+                    $affected = DB::connection('sqlsrv_dailyreport')
                         ->table('dbo.T_先生別日報')
                         ->where('先生別No', $先生別No)
                         ->update($teacherData);
+                    if ($affected === 0) {
+                        throw new \RuntimeException('先生別日報の更新対象が見つかりません（先生別No: ' . $先生別No . '）。');
+                    }
 
                     continue;
                 }
@@ -1786,10 +1890,6 @@ class StoreDailyReportController extends Controller
                     '差額' => $receiptDiff,
                 ]);
         });
-
-        return redirect()
-            ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
-            ->with('statusMessage', $action === 'delete_patient' ? '削除しました。' : '保存しました。');
     }
 
     private function dailySummaryDetailBaseQuery()
@@ -1962,7 +2062,7 @@ class StoreDailyReportController extends Controller
                 // 反映されず記録が先生別側にしか残らない。レジの実額(T_日報集計.レジ)は
                 // この返金を差し引いた額と一致するため、保険負担計にも同様に反映する
                 // （2026-08-18、7/17さくらの保険負担が4,400円多く出る不具合で発覚）。
-                DB::raw("SUM(CASE WHEN patient.保険証 = 0 AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END) as 返金保険負担計"),
+                DB::raw($this->refundInsuranceBurdenSql() . ' as 返金保険負担計'),
                 DB::raw('0 as レセ差額計'),
                 DB::raw('MAX(CASE WHEN patient.保険証 = 0 THEN COALESCE(patient.レセ負担金, 0) ELSE 0 END) as レセ負担金計'),
                 DB::raw('SUM(CASE WHEN patient.保険証 = 2 THEN COALESCE(teacher.レセ差額, 0) ELSE 0 END) as レセ差額減算'),
@@ -2576,6 +2676,17 @@ class StoreDailyReportController extends Controller
 
         return $totals;
     }
+    /**
+     * 窓口で現金返金した分（T_先生別日報.メニュー=返金）の保険負担調整式の正本。
+     * buildMonthlyWindowPrintData()とdailySummaryMonthlyWindowInsuranceTotals()の
+     * 2箇所に同じSQL文字列がそのままコピーされていて、片方だけ直され食い違ったことがある
+     * （2026-08-20、7/17さくらで保険負担が4,400円多く出る不具合）。ここへ1本化する。
+     */
+    private function refundInsuranceBurdenSql(): string
+    {
+        return "SUM(CASE WHEN patient.保険証 = 0 AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END)";
+    }
+
     private function dailySummaryMonthlyWindowInsuranceTotals(Carbon $targetMonthStart, Carbon $targetMonthNext): array
     {
         $normalRows = DB::connection('sqlsrv_dailyreport')
@@ -2609,7 +2720,7 @@ class StoreDailyReportController extends Controller
             ->join('dbo.T_先生別日報 as teacher', 'patient.患者No', '=', 'teacher.患者No_t')
             ->select([
                 'patient.店舗',
-                DB::raw("SUM(CASE WHEN patient.保険証 = 0 AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END) as amount"),
+                DB::raw($this->refundInsuranceBurdenSql() . ' as amount'),
             ])
             ->where('patient.日付', '>=', $targetMonthStart->format('Y-m-d'))
             ->where('patient.日付', '<', $targetMonthNext->format('Y-m-d'))

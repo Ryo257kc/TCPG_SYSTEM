@@ -16,6 +16,9 @@ class HighMedicalController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
         $selectedStore = $this->selectedStore($request);
         $selectedStatus = trim((string) $request->query('payment_status', 'unpaid'));
         $selectedSubjectName = trim((string) $request->query('subject_name', ''));
@@ -160,6 +163,9 @@ class HighMedicalController extends Controller
     public function save(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],

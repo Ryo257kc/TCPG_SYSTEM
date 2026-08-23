@@ -50,6 +50,13 @@ patient.レセ負担金側に既に反映されている前提。
 **同じ調整が複数箇所に必要な計算は、今後1箇所に共通化するか、修正時に他の集計箇所も
 grepで洗い出すこと**（`COALESCE(patient.レセ負担金`で検索すると該当箇所が見つかる）。
 
+**2026-08-23、実際に1箇所へ共通化**：上記の返金調整SQL（`SUM(CASE WHEN patient.保険証 = 0
+AND teacher.メニュー = N'返金' THEN COALESCE(teacher.保険負担, 0) ELSE 0 END)`）は
+`buildMonthlyWindowPrintData()`と`dailySummaryMonthlyWindowInsuranceTotals()`の2箇所に
+文字列としてそのままコピーされたままだった。`refundInsuranceBurdenSql()`という共有メソッドへ
+1本化し、両方がこれを呼ぶよう変更（実データ2026年7月で554,010円と一致することを再確認済み）。
+今後この調整式を変える時は`refundInsuranceBurdenSql()`だけ直せばよい。
+
 ## 時刻カラムの日付部分は必ずAccess基準日（1899-12-30）
 
 `T_患者名日報.時刻`はDATETIME型だが実質「時刻だけ」の列。既存データは全てAccess由来の

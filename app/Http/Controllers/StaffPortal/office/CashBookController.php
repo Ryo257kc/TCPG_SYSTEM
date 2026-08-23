@@ -22,6 +22,9 @@ class CashBookController extends Controller
     {
         $staffId = $this->staffPortalStaffId($request);
         $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isPaymentCheck($staffRow)) {
+            abort(403);
+        }
         $is_admin = $this->isAdmin($staffRow);
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $vault_name = trim((string) $request->query('vault_name', ''));
@@ -292,6 +295,9 @@ class CashBookController extends Controller
     public function closeMonthly(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
@@ -439,6 +445,9 @@ class CashBookController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'journal_entry_id' => ['nullable', 'integer'],
@@ -580,6 +589,9 @@ class CashBookController extends Controller
     public function delete(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'journal_entry_id' => ['required', 'integer'],

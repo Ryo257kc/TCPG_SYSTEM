@@ -16,6 +16,9 @@ class InsurersController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $search = trim((string) $request->query('search', ''));
         $depositNameFilter = trim((string) $request->query('deposit_name_display', 'all'));
@@ -128,6 +131,9 @@ class InsurersController extends Controller
     public function save(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate(
             [
@@ -199,6 +205,9 @@ class InsurersController extends Controller
     public function delete(Request $request): RedirectResponse
     {
         $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'original_insurer_number' => ['required', 'string', 'max:8'],

@@ -18,6 +18,7 @@
             $receiptLinks = [
             ['label' => '現金出納帳', 'sub' => '小口現金の入力', 'route' => 'office.office_menu.cash_book'],
             ['label' => '宛名ラベル', 'sub' => '封筒・ハガキの宛名印刷', 'route' => 'office.office_menu.address'],
+            ['label' => 'レシートスキャン', 'sub' => '撮影して補正、そのまま保存', 'route' => 'tools.receipt_scan'],
             ];
             @endphp
 

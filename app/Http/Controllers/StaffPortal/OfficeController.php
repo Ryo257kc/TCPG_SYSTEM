@@ -22,6 +22,8 @@ class OfficeController extends Controller
 
     public function salesMenu(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         return view('staff_portal.office.sales.index', $this->commonViewData($request, [
             'companyOptions' => $this->companyOptions(),
         ]));
@@ -30,6 +32,8 @@ class OfficeController extends Controller
     // 売上一覧
     public function sales(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
         $companyId = trim((string) $request->query('company_id', ''));
         $summary = $this->salesService->summary($targetMonth, $companyId);
@@ -45,6 +49,8 @@ class OfficeController extends Controller
 
     public function salesPrint(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         $companyOptions = $this->companyOptions();
 
         $targetMonth = trim((string) $request->query('target_month', now()->format('Y-m')));
@@ -60,7 +66,7 @@ class OfficeController extends Controller
         }
 
         return view('staff_portal.office.sales.print', [
-            'stores' => $summary['stores'],
+            'rows' => $summary['rows'],
             'targetMonth' => $summary['target_month'],
             'selectedCompanyId' => $summary['company_id'],
             'grandTotal' => $summary['grand_total'],
@@ -71,6 +77,8 @@ class OfficeController extends Controller
     // 未収入金一覧
     public function uncollectedReceivables(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -157,6 +165,8 @@ class OfficeController extends Controller
     // 未収入金一覧　月別印刷
     public function uncollectedReceivablesPrint(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -244,6 +254,8 @@ class OfficeController extends Controller
     // 未収入金一覧　個別印刷
     public function uncollectedReceivablesDetailPrint(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         $paymentMonth = trim((string) $request->query('payment_month', now()->format('Y-m')));
         $selectedStoreCategory = trim((string) $request->query('store_category', ''));
         $selectedCompanyId = trim((string) $request->query('company_id', ''));
@@ -339,12 +351,27 @@ class OfficeController extends Controller
 
     public function receipt(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         return view('staff_portal.office.receipt.index', $this->commonViewData($request, []));
     }
 
     public function officeMenu(Request $request): RedirectResponse|View
     {
+        $this->requirePaymentCheck($request);
+
         return view('staff_portal.office.office_menu.index', $this->commonViewData($request, []));
+    }
+
+    // 事務所（isPaymentCheck||isAdmin）権限が必要な画面共通のガード。
+    // ダッシュボードのメニューでは非表示にしていたが、コントローラー側で
+    // URLを直接叩かれた場合の制限が無かった（2026-08-23発覚）。
+    private function requirePaymentCheck(Request $request): void
+    {
+        $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
     }
 
     /**

@@ -20,6 +20,9 @@ class HomeVisitCounterController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $targetMonth = $this->targetMonth($request);
         $selectedStore = trim((string) $request->query('store_name', ''));
@@ -198,6 +201,9 @@ class HomeVisitCounterController extends Controller
     public function save(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $is_admin = (int) (($this->staffPortalStaffRow($staffId) ?? [])['is_admin'] ?? 0) === 1;
 
@@ -303,6 +309,9 @@ class HomeVisitCounterController extends Controller
     public function delete(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],

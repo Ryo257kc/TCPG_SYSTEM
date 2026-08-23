@@ -22,6 +22,9 @@ class EntryController extends Controller
     {
         $staffId = (string) $request->session()->get('staff_id', '');
         $staffRow = $this->staffPortalStaffRow($staffId);
+        if (!$this->isPaymentCheck($staffRow)) {
+            abort(403);
+        }
         $is_admin = $this->isAdmin($staffRow);
 
         $targetMonth = $this->targetMonth($request);
@@ -204,6 +207,9 @@ class EntryController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate(
             [
@@ -294,10 +300,23 @@ class EntryController extends Controller
         $detailId = (int) ($data['insurance_claim_detail_id'] ?? 0);
 
         if ($detailId > 0) {
-            DB::connection('sqlsrv')
+            $affected = DB::connection('sqlsrv')
                 ->table('dbo.mx_insurance_claim_details')
                 ->where('insurance_claim_detail_id', $detailId)
                 ->update($payload);
+
+            if ($affected === 0) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => '保存対象が見つかりません。画面を更新してから再度お試しください。',
+                    ], 422);
+                }
+
+                return redirect()->route('office.receipt.entry', [
+                    'target_month' => $data['target_month'],
+                    'store_name' => trim((string) ($data['store_name'] ?? '')),
+                ])->with('errorMessage', '保存対象が見つかりません。画面を更新してから再度お試しください。');
+            }
         } else {
             $detailId = (int) DB::connection('sqlsrv')
                 ->table('dbo.mx_insurance_claim_details')
@@ -319,6 +338,9 @@ class EntryController extends Controller
     public function delete(Request $request): JsonResponse|RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],
@@ -340,10 +362,23 @@ class EntryController extends Controller
             ])->with('errorMessage', '月次処理済みのため削除できません。');
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details')
             ->where('insurance_claim_detail_id', (int) $data['insurance_claim_detail_id'])
             ->delete();
+
+        if ($affected === 0) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => '削除対象が見つかりません。画面を更新してから再度お試しください。',
+                ], 422);
+            }
+
+            return redirect()->route('office.receipt.entry', [
+                'target_month' => $data['target_month'],
+                'store_name' => trim((string) ($data['store_name'] ?? '')),
+            ])->with('errorMessage', '削除対象が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()->route('office.receipt.entry', [
             'target_month' => $data['target_month'],
@@ -354,6 +389,9 @@ class EntryController extends Controller
     public function closeMonthly(Request $request): RedirectResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'target_month' => ['required', 'date_format:Y-m'],
@@ -752,8 +790,17 @@ class EntryController extends Controller
 
 
     // 柔整取込インポート
+    // 管理側(admin.insurance.import)とスタッフ側(office.receipt.entry.import)の両方から
+    // 同じメソッドを呼ぶため、スタッフ側のstaff_idチェックは管理者セッションでは免除する。
     public function import(Request $request)
     {
+        if (!$request->session()->get('admin_logged_in')) {
+            $staffId = (string) $request->session()->get('staff_id', '');
+            if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+                abort(403);
+            }
+        }
+
         $request->validate([
             'csv_file' => ['required', 'file'],
             'sejutsu_month' => ['required', 'regex:/^\d{4}-\d{2}$/'],

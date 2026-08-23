@@ -19,6 +19,9 @@ class PaymentConfirmationController extends Controller
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $targetMonth = $this->targetMonth($request);
         $selectedBankAccount = trim((string) $request->query('bank_account', ''));
@@ -348,6 +351,9 @@ class PaymentConfirmationController extends Controller
     public function save(Request $request): RedirectResponse|JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'journal_entry_id' => ['nullable', 'integer'],
@@ -381,10 +387,16 @@ class PaymentConfirmationController extends Controller
         ];
 
         if ($detailId > 0) {
-            DB::connection('sqlsrv')
+            $affected = DB::connection('sqlsrv')
                 ->table('dbo.mx_insurance_claim_details')
                 ->where('insurance_claim_detail_id', $detailId)
                 ->update($payload);
+
+            if ($affected === 0) {
+                return response()->json([
+                    'message' => '保存対象が見つかりません。画面を更新してから再度お試しください。',
+                ], 422);
+            }
         } else {
             if ($sourceDetailId <= 0) {
                 return response()->json([
@@ -479,15 +491,24 @@ class PaymentConfirmationController extends Controller
     public function delete(Request $request): JsonResponse
     {
         $staffId = (string) $request->session()->get('staff_id', '');
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $data = $request->validate([
             'insurance_claim_detail_id' => ['required', 'integer'],
         ]);
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details')
             ->where('insurance_claim_detail_id', (int) $data['insurance_claim_detail_id'])
             ->delete();
+
+        if ($affected === 0) {
+            return response()->json([
+                'message' => '削除対象が見つかりません。画面を更新してから再度お試しください。',
+            ], 422);
+        }
 
         return response()->json([
             'deleted' => true,

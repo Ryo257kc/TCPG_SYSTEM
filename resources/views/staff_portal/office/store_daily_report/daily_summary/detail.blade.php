@@ -764,7 +764,7 @@
                                                             <th>回収日</th>
                                                             <td>
                                                                 @if ($canEditDailySummaryDetailFields)
-                                                                <input type="text" name="回収日" value="{{ $row['回収日'] }}">
+                                                                <input type="date" name="回収日" value="{{ $row['回収日_raw'] ?? '' }}">
                                                                 @else
                                                                 {{ $row['回収日'] }}
                                                                 @endif
