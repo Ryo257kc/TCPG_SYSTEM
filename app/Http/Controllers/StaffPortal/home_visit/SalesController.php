@@ -20,6 +20,9 @@ class SalesController extends Controller
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
         }
+        if (!$this->isAccounting($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $staff_name = trim((string) $request->query('staff_name', ''));

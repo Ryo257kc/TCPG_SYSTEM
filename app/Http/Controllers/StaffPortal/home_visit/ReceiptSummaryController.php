@@ -19,6 +19,9 @@ class ReceiptSummaryController extends Controller
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
         }
+        if (!$this->isVisitManagement($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $summary_type = trim((string) $request->query('summary_type', '保険'));

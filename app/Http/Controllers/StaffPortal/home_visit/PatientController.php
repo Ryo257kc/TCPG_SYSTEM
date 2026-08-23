@@ -49,6 +49,9 @@ class PatientController extends Controller
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
         }
+        if (!$this->canEditPatients($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $keyword  = trim((string) $request->input('q', ''));
         $shop     = trim((string) $request->input('shop', ''));

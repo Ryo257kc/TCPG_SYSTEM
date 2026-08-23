@@ -21,6 +21,7 @@ class StoreSalesController extends Controller
 
     public function index(Request $request): RedirectResponse|View
     {
+        $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
         return view('staff_portal.admin.sales.index', $this->commonViewData($request, []));
@@ -28,6 +29,7 @@ class StoreSalesController extends Controller
 
     public function personal(Request $request): RedirectResponse|View
     {
+        $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
         return view('staff_portal.admin.sales.personal', $this->commonViewData($request, $this->personalSalesViewData($request)));
@@ -35,6 +37,7 @@ class StoreSalesController extends Controller
 
     public function consignment(Request $request): RedirectResponse|View
     {
+        $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
         return view('staff_portal.admin.sales.consignment', $this->commonViewData($request, $this->consignmentSalesViewData($request)));
@@ -42,6 +45,7 @@ class StoreSalesController extends Controller
 
     public function daily(Request $request): RedirectResponse|View
     {
+        $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
         return view('staff_portal.admin.sales.daily', $this->commonViewData($request, $this->dailySalesViewData($request)));
@@ -49,9 +53,21 @@ class StoreSalesController extends Controller
 
     public function monthly(Request $request): RedirectResponse|View
     {
+        $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
         return view('staff_portal.admin.sales.monthly', $this->commonViewData($request, $this->monthlySalesViewData($request)));
+    }
+
+    // 店舗管理（isStoreManager||isAdmin）権限が必要な画面共通のガード。
+    // ダッシュボードのメニューでは非表示にしていたが、コントローラー側のURL直叩き制限が
+    // 無かった（2026-08-23発覚）。
+    private function requireStoreManager(Request $request): void
+    {
+        $staffId = $this->staffPortalStaffId($request);
+        if (!$this->isStoreManager($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
     }
 
     private function emptyMonthlySalesViewDataForMonth(string $selectedMonth): array

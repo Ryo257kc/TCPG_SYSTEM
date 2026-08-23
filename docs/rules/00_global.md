@@ -133,6 +133,35 @@ AIは1→2→3の順で判断する。
   名前の類推だけでどちらを使うか決めない。実際のテーブル定義と、他の機能がどちらへ
   保存しているかを確認してから参照する。
 
+## 権限・アクセス制御のルール（2026-08-23追記）
+
+- StaffPortal側の`staff.auth`ミドルウェア（`StaffPortalAuthenticate`）は「ログインしているか」
+  だけを見ていて、`is_payment_check_user`等の権限フラグは一切チェックしない。
+- ダッシュボード（`resources/views/staff_portal/dashboard/index.blade.php`）のメニュー出し分け
+  （`$isPaymentCheck`/`$isDailyReport`/`$isAccounting`/`$isVisitManagement`/`$isStoreManager`等）は
+  **画面上の表示・非表示だけ**で、対応するController側の権限チェックとは別物。メニューで隠れて
+  いるからといって、そのURLに直接アクセス・POSTした場合まで防げているとは限らない。
+- 2026-08-23の監査で、`office/*`配下の多くのController（`EntryController`・
+  `PaymentConfirmationController`・`CashBookController`・`AddressController`・
+  `HighMedicalController`・`InsurersController`・`HomeVisitCounterController`・
+  `StoreDailyReportController`の全メソッド、`OfficeController`の全メソッド、
+  `StoreSalesController`の全メソッド、`AttendanceController::punchList()`/`paidLeave()`、
+  `home_visit/PatientController::index()`、`home_visit/SalesController::index()`、
+  `home_visit/MonthlyVisitController::index()`/`print()`、
+  `home_visit/ReceiptSummaryController::index()`）が、対応する権限チェックを一切持たず、
+  ログインしてさえいればどの権限のスタッフでも直接URLを叩けば実行できる状態だった。
+  該当メソッドの先頭に`isXxx()`ヘルパー（`HandlesStaffPortalContext`）で
+  `abort(403)`するガードを追加して修正。
+- **新しいStaffPortal側のController・メソッドを追加する時は、対応するダッシュボード
+  メニューの`visible`条件と同じ権限チェックを、Controller側のメソッド冒頭にも必ず入れる**。
+  メニューを隠すだけで満足しない。
+- 1つの例外：`EntryController::import()`は管理画面(`admin.insurance.import`、
+  `admin.auth`ミドルウェア＝`admin_logged_in`セッション)とStaffPortal側
+  (`office.receipt.entry.import`、`staff.auth`ミドルウェア＝`staff_id`セッション)の
+  両方から同じメソッドを呼んでいる。片方のセッション形式だけを前提にした権限チェックを
+  無条件で入れると、もう片方の入口を壊す。ルートを`routes/web.php`で確認し、同じメソッドが
+  複数のミドルウェアグループから呼ばれていないか必ず確認してから権限チェックを追加すること。
+
 ## 管理側とスタッフ側の一致
 
 - 同じデータに対する計算式・表示ロジックは、管理側とスタッフ側で必ず同じにする。

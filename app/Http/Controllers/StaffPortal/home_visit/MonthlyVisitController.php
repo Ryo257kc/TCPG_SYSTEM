@@ -20,6 +20,9 @@ class MonthlyVisitController extends Controller
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
         }
+        if (!$this->isVisitManagement($this->staffPortalStaffRow($staffId))) {
+            abort(403);
+        }
 
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
         $switch_type = trim((string) $request->query('switch_type', '1'));
@@ -220,6 +223,9 @@ class MonthlyVisitController extends Controller
         $staffId = $this->staffPortalStaffId($request);
         if ($staffId === '') {
             return $this->redirectToStaffPortalLogin();
+        }
+        if (!$this->isVisitManagement($this->staffPortalStaffRow($staffId))) {
+            abort(403);
         }
 
         $target_month = trim((string) $request->query('target_month', now()->format('Y-m')));
