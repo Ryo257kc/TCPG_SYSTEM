@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Master\CompanyV2Service;
 use App\Services\Admin\V2\YearEndAdjustment\YearEndCalculationService;
 use App\Services\YearEnd\CertificateFileService;
+use App\Services\YearEnd\LifeInsuranceCertificateXmlParser;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -20,6 +22,7 @@ class YearEndAdjustmentV2Controller extends Controller
         private readonly YearEndCalculationService $calculationService,
         private readonly CompanyV2Service $companyService,
         private readonly CertificateFileService $certificateFileService,
+        private readonly LifeInsuranceCertificateXmlParser $lifeInsuranceCertificateXmlParser,
     ) {}
 
     /**
@@ -53,6 +56,7 @@ class YearEndAdjustmentV2Controller extends Controller
             'confirmed' => 0,
             'excluded' => 0,
             'retired' => 0,
+            'otsu' => 0,
             'other' => 0,
         ];
 
@@ -72,9 +76,9 @@ class YearEndAdjustmentV2Controller extends Controller
 
             foreach ($nenTyoRows as $nenTyo) {
                 $staffId = trim((string) ($nenTyo->staff_id ?? ''));
-                $staffDetail = $staffDetails[$staffId] ?? ['staff_name' => '', 'nyu_date' => '', 'tai_date' => ''];
+                $staffDetail = $staffDetails[$staffId] ?? ['staff_name' => '', 'nyu_date' => '', 'tai_date' => '', 'tax_amount' => ''];
 
-                $status = $this->resolveApplicationStatus($nenTyo);
+                $status = $this->resolveApplicationStatus($nenTyo, $staffDetail);
 
                 if (array_key_exists($status, $statusCounts)) {
                     $statusCounts[$status]++;
@@ -111,6 +115,7 @@ class YearEndAdjustmentV2Controller extends Controller
                     'staff_name' => $staffDetail['staff_name'],
                     'nyu_date' => $staffDetail['nyu_date'],
                     'tai_date' => $staffDetail['tai_date'],
+                    'tax_amount' => $staffDetail['tax_amount'] ?? '',
                     'nyu_date_in_target_year' => $nyuDateInTargetYear,
                     'tai_date_in_target_year' => $taiDateInTargetYear,
                     'status' => $status,
@@ -1690,15 +1695,13 @@ class YearEndAdjustmentV2Controller extends Controller
         // 何も表示されていなかった（2026-08-15判明）。y=205〜209の3行に収める。
         $pdf->SetTextColor(255, 0, 0);
 
-        // 摘要欄：ステータスが対象外／退職済の場合は「年調未済」と書く。
-        // application_statusが空の既存行はresolveApplicationStatus()と同じくedit_lockで補う。
+        // 摘要欄：年末調整をしない人（対象外／退職済／乙欄）は「年調未済」と書く。
+        // resolveApplicationStatus()と同じ判定を使う（mx_staffsのtai_date/tax_amountからの
+        // 自動判定も含めて一致させるため、ここだけの簡易判定を持たない）。
         // 定額減税・前職情報の文言はAccessの実物で確認中のため、摘要欄の実枠位置が
         // 確定するまでこのブロックにまとめて仮置きする。
-        $applicationStatusForGensen = trim((string) ($nenTyo['application_status'] ?? ''));
-        if ($applicationStatusForGensen === '') {
-            $applicationStatusForGensen = ((int) ($nenTyo['edit_lock'] ?? 0)) === 1 ? 'confirmed' : 'draft';
-        }
-        if (in_array($applicationStatusForGensen, ['excluded', 'retired'], true)) {
+        $applicationStatusForGensen = $this->resolveApplicationStatus((object) $nenTyo, $staff);
+        if (in_array($applicationStatusForGensen, ['excluded', 'retired', 'otsu'], true)) {
             $this->writePdfTextSized($pdf, 15, 75, '年調未済', 8, 60);
         }
 
@@ -2288,12 +2291,23 @@ class YearEndAdjustmentV2Controller extends Controller
             $extension = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
         }
 
+        $xmlParsed = null;
+        if ($extension === 'xml' && !$isExternal && $this->certificateFileService->exists($path)) {
+            try {
+                $xmlParsed = $this->lifeInsuranceCertificateXmlParser->parse($this->certificateFileService->getContents($path));
+            } catch (\RuntimeException) {
+                $xmlParsed = null;
+            }
+        }
+
         return view('admin_v2.work.year_end_adjustments.certificate_preview', [
             'fileUrl' => $fileUrl,
             'fileName' => trim((string) ($row->certificate_original_name ?? '')),
             'extension' => $extension,
             'isImage' => in_array($extension, ['jpg', 'jpeg', 'png'], true),
             'isPdf' => $extension === 'pdf',
+            'isXml' => $xmlParsed !== null,
+            'xmlParsed' => $xmlParsed,
             'hokenNo' => $hokenNo,
             'targetYear' => $targetYear,
         ]);
@@ -2616,11 +2630,17 @@ class YearEndAdjustmentV2Controller extends Controller
                 ->with('status', '選択された状態が正しくありません。');
         }
 
-        DB::connection('sqlsrv_payroll')
+        $affected = DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', (int) $values['application_id'])
             ->whereYear('year_end', $targetYear)
             ->update(['application_status' => $status]);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
+                ->with('status', '更新対象の年調申請が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
@@ -2654,14 +2674,44 @@ class YearEndAdjustmentV2Controller extends Controller
                 ->with('status', '提出済以降の対象者は削除できません。');
         }
 
+        // 保険料控除（mx_hoken）はほぼ年調専用のテーブルなので、対象者削除と一緒に消す
+        // （扶養mx_fuyoは給与計算等でも使う共通テーブルなので、ここでは絶対に触らない）。
+        // 事務所確認済み（checked_flag=1）の行だけは残す。スタッフ側の削除保護と同じ考え方。
+        $staffId = trim((string) $row->staff_id);
+        $hokenRowsToDelete = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_hoken')
+            ->where('insurance_staff_no', $staffId)
+            ->whereYear('insurance_year', $targetYear)
+            ->where(function ($query): void {
+                $query->whereNull('checked_flag')->orWhere('checked_flag', '!=', 1);
+            })
+            ->get(['hoken_no', 'certificate_file_path']);
+
+        foreach ($hokenRowsToDelete as $hokenRow) {
+            if (!empty($hokenRow->certificate_file_path)) {
+                $this->certificateFileService->delete($hokenRow->certificate_file_path);
+            }
+        }
+
+        DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_hoken')
+            ->whereIn('hoken_no', $hokenRowsToDelete->pluck('hoken_no'))
+            ->delete();
+
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', (int) $row->nen_tyo_no)
             ->delete();
 
+        $hokenDeletedCount = $hokenRowsToDelete->count();
+        $statusMessage = "{$targetYear}年の対象者からスタッフID {$row->staff_id} を削除しました。";
+        if ($hokenDeletedCount > 0) {
+            $statusMessage .= "（保険料控除 {$hokenDeletedCount}件も削除）";
+        }
+
         return redirect()
             ->route('admin.work.year_end_adjustments', ['target_year' => $targetYear])
-            ->with('status', "{$targetYear}年の対象者からスタッフID {$row->staff_id} を削除しました。");
+            ->with('status', $statusMessage);
     }
 
     public function calculateSingle(Request $request, int $applicationId): RedirectResponse
@@ -2728,7 +2778,52 @@ class YearEndAdjustmentV2Controller extends Controller
 
         return (float) str_replace(',', '', (string) $value);
     }
-    public function createHoken(Request $request, int $applicationId): RedirectResponse
+    /**
+     * スタッフ側と同じXML（電子的控除証明書、TEG800）を管理側からも読み込めるようにする。
+     * 証明書が本人ではなく直接事務所に届いた場合の入力経路として用意（2026-08-22追加）。
+     * DBには何も書き込まず内容だけ返す。実際の保存はcreateHoken()が行う。
+     */
+    public function parseHokenCertificateXml(Request $request, int $applicationId): JsonResponse
+    {
+        [, , $targetYear] = $this->hokenApplicationContext($applicationId);
+
+        $request->validate([
+            'certificate_file' => ['required', 'file', 'max:5120'],
+        ], [
+            'certificate_file.required' => 'XMLファイルを選択してください。',
+        ]);
+
+        $file = $request->file('certificate_file');
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        if ($extension !== 'xml') {
+            return response()->json(['error' => 'XMLファイルを選択してください。'], 422);
+        }
+
+        try {
+            $result = $this->lifeInsuranceCertificateXmlParser->parse((string) file_get_contents($file->getRealPath()));
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        if (count($result['contracts']) === 0) {
+            return response()->json(['error' => 'このXMLから保険契約の情報を読み取れませんでした。金額欄が空の可能性があります。'], 422);
+        }
+
+        $mismatchedYears = collect($result['contracts'])
+            ->pluck('certificate_year')
+            ->filter(fn($year) => $year !== null && (int) $year !== $targetYear)
+            ->unique()
+            ->values();
+        if ($mismatchedYears->isNotEmpty()) {
+            return response()->json([
+                'error' => 'この証明書は' . $mismatchedYears->implode('年・') . '年分のため、' . $targetYear . '年の年末調整には使用できません。',
+            ], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    public function createHoken(Request $request, int $applicationId): RedirectResponse|JsonResponse
     {
         [$application, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
 
@@ -2746,8 +2841,12 @@ class YearEndAdjustmentV2Controller extends Controller
             $this->saveHokenCertificate($request, $hokenNo, $staffId, $targetYear);
         }
 
+        if ($request->wantsJson()) {
+            return response()->json(['message' => '保険情報を追加しました。', 'hoken_no' => $hokenNo]);
+        }
+
         return redirect()
-            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $application->application_id])
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
             ->with('status', '保険情報を追加しました。');
     }
 
@@ -2777,7 +2876,7 @@ class YearEndAdjustmentV2Controller extends Controller
             ->update($payload);
 
         return redirect()
-            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $application->application_id])
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
             ->with('status', '保険情報を保存しました。');
     }
 
@@ -2796,7 +2895,7 @@ class YearEndAdjustmentV2Controller extends Controller
         $this->deleteHokenCertificateFile((string) ($row->certificate_file_path ?? ''));
 
         return redirect()
-            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $application->application_id])
+            ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
             ->with('status', '保険情報を削除しました。');
     }
 
@@ -3099,9 +3198,9 @@ class YearEndAdjustmentV2Controller extends Controller
             'beneficiary_relationship' => ['nullable', 'string', 'max:10'],
             'pension_payment_start_date' => ['nullable', 'date'],
             'year_end_insurance_note' => ['nullable', 'string'],
-            'certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'certificate_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,xml', 'max:10240'],
         ], [
-            'certificate_file.mimes' => '証明書はPDF、JPG、PNGで添付してください。HEICは使用できません。',
+            'certificate_file.mimes' => '証明書はPDF、JPG、PNG、電子的控除証明書（XML）で添付してください。HEICは使用できません。',
             'certificate_file.max' => '証明書は10MB以内で添付してください。',
         ]);
     }
@@ -3622,7 +3721,7 @@ class YearEndAdjustmentV2Controller extends Controller
         $rows = DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->whereIn('staff_id', $staffIds)
-            ->get(['staff_id', 'staff_name', 'nyu_date', 'tai_date']);
+            ->get(['staff_id', 'staff_name', 'nyu_date', 'tai_date', 'tax_amount']);
 
         foreach ($rows as $row) {
             $staffId = trim((string) ($row->staff_id ?? ''));
@@ -3634,6 +3733,7 @@ class YearEndAdjustmentV2Controller extends Controller
                 'staff_name' => trim((string) ($row->staff_name ?? '')),
                 'nyu_date' => $this->valueLabel($row->nyu_date ?? '', 'nyu_date'),
                 'tai_date' => $this->valueLabel($row->tai_date ?? '', 'tai_date'),
+                'tax_amount' => trim((string) ($row->tax_amount ?? '')),
             ];
         }
 
@@ -3708,11 +3808,31 @@ class YearEndAdjustmentV2Controller extends Controller
      * edit_lockから状態を補う。edit_lock=1（計算確定済み）を「未提出」扱いにしてしまうと
      * 実際は確定済みのレコードが未提出に見えてしまうため、必ずこちらを経由して判定する。
      */
-    private function resolveApplicationStatus(object $nenTyo): string
+    /**
+     * @param array{tai_date?: string, tax_amount?: string} $staffDetail
+     */
+    private function resolveApplicationStatus(object $nenTyo, array $staffDetail = []): string
     {
         $status = trim((string) ($nenTyo->application_status ?? ''));
-        if ($status !== '') {
+        if ($status !== '' && $status !== 'draft') {
             return $status;
+        }
+
+        // application_statusが未設定、または「draft」（createTargets()が対象者作成時に
+        // 一律で入れる初期値であり、管理側が何かを意図的に選んだ状態ではない）の場合のみ、
+        // mx_staffsの現在値から自動判定する。draft以外の値（submitted/returned/confirmed/
+        // excluded/retired/otsu等）は管理側が意図的に選んだ状態として常に優先する
+        // （上のreturnで既に確定している）。
+        $taiDate = trim((string) ($staffDetail['tai_date'] ?? ''));
+        if ($taiDate !== '') {
+            $taiTimestamp = strtotime($taiDate);
+            if ($taiTimestamp !== false && $taiTimestamp < time()) {
+                return 'retired';
+            }
+        }
+
+        if (trim((string) ($staffDetail['tax_amount'] ?? '')) === '乙欄') {
+            return 'otsu';
         }
 
         return (int) ($nenTyo->edit_lock ?? 0) === 1 ? 'confirmed' : 'draft';
@@ -3728,6 +3848,7 @@ class YearEndAdjustmentV2Controller extends Controller
             'confirmed' => '確認済',
             'excluded' => '対象外',
             'retired' => '退職済',
+            'otsu' => '乙欄',
         ];
     }
 

@@ -187,9 +187,9 @@ class BillingListV2Service
         return (int) $id;
     }
 
-    public function updateInvoice(int $invoiceId, array $values): void
+    public function updateInvoice(int $invoiceId, array $values): int
     {
-        DB::connection('sqlsrv')
+        return DB::connection('sqlsrv')
             ->table('dbo.mx_invoices')
             ->where('invoice_id', $invoiceId)
             ->update([
@@ -203,11 +203,11 @@ class BillingListV2Service
             ]);
     }
 
-    public function deleteInvoice(int $invoiceId): void
+    public function deleteInvoice(int $invoiceId): int
     {
-        DB::connection('sqlsrv')->transaction(function () use ($invoiceId): void {
+        return DB::connection('sqlsrv')->transaction(function () use ($invoiceId): int {
             DB::connection('sqlsrv')->table('dbo.mx_invoice_details')->where('invoice_id', $invoiceId)->delete();
-            DB::connection('sqlsrv')->table('dbo.mx_invoices')->where('invoice_id', $invoiceId)->delete();
+            return DB::connection('sqlsrv')->table('dbo.mx_invoices')->where('invoice_id', $invoiceId)->delete();
         });
     }
 
@@ -229,9 +229,9 @@ class BillingListV2Service
         $this->refreshInvoiceTotal($invoiceId);
     }
 
-    public function updateDetail(int $invoiceId, int $detailId, array $values): void
+    public function updateDetail(int $invoiceId, int $detailId, array $values): int
     {
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_invoice_details')
             ->where('invoice_id', $invoiceId)
             ->where('invoice_detail_id', $detailId)
@@ -248,17 +248,21 @@ class BillingListV2Service
             ]);
 
         $this->refreshInvoiceTotal($invoiceId);
+
+        return $affected;
     }
 
-    public function deleteDetail(int $invoiceId, int $detailId): void
+    public function deleteDetail(int $invoiceId, int $detailId): int
     {
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_invoice_details')
             ->where('invoice_id', $invoiceId)
             ->where('invoice_detail_id', $detailId)
             ->delete();
 
         $this->refreshInvoiceTotal($invoiceId);
+
+        return $affected;
     }
 
     /** @return array<string, mixed>|null */

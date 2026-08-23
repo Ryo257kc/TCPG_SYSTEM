@@ -43,7 +43,13 @@ class BillingListV2Controller extends Controller
     {
         $values = $this->validateInvoice($request);
         $invoiceId = (int) $request->input('invoice_id');
-        $this->service->updateInvoice($invoiceId, $values);
+        $affected = $this->service->updateInvoice($invoiceId, $values);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
+                ->with('status', '保存対象の請求書が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
@@ -56,7 +62,13 @@ class BillingListV2Controller extends Controller
             'invoice_id' => ['required', 'integer'],
         ]);
 
-        $this->service->deleteInvoice((int) $values['invoice_id']);
+        $affected = $this->service->deleteInvoice((int) $values['invoice_id']);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.work.billing_list')
+                ->with('status', '削除対象の請求書が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.work.billing_list')
@@ -79,7 +91,13 @@ class BillingListV2Controller extends Controller
         $invoiceId = (int) $request->input('invoice_id');
         $detailId = (int) $request->input('invoice_detail_id');
         $values = $this->validateDetail($request);
-        $this->service->updateDetail($invoiceId, $detailId, $values);
+        $affected = $this->service->updateDetail($invoiceId, $detailId, $values);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
+                ->with('status', '保存対象の明細が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
@@ -94,7 +112,13 @@ class BillingListV2Controller extends Controller
         ]);
 
         $invoiceId = (int) $values['invoice_id'];
-        $this->service->deleteDetail($invoiceId, (int) $values['invoice_detail_id']);
+        $affected = $this->service->deleteDetail($invoiceId, (int) $values['invoice_detail_id']);
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
+                ->with('status', '削除対象の明細が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])

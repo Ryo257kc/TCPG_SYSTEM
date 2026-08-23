@@ -895,8 +895,9 @@ class AccountingV2Controller extends Controller
         $deletedCount = 0;
         $skippedGroupCount = 0;
         $reviewNotes = [];
+        $missingNotes = [];
 
-        DB::connection('sqlsrv')->transaction(function () use ($staged, $selectedKeys, &$updatedCount, &$importedCount, &$deletedCount, &$skippedGroupCount, &$reviewNotes): void {
+        DB::connection('sqlsrv')->transaction(function () use ($staged, $selectedKeys, &$updatedCount, &$importedCount, &$deletedCount, &$skippedGroupCount, &$reviewNotes, &$missingNotes): void {
             foreach ($staged['groups'] as $groupKey => $group) {
                 if (!isset($selectedKeys[$groupKey])) {
                     $skippedGroupCount++;
@@ -916,10 +917,17 @@ class AccountingV2Controller extends Controller
                         // journal_entry_idを維持したままUPDATEすることで、入金確認
                         // （PaymentConfirmationController等）や分割割合などCSVに無い列が
                         // このIDに紐づいたまま残るようにする。
-                        DB::connection('sqlsrv')
+                        $affected = DB::connection('sqlsrv')
                             ->table('dbo.mx_journal_entries')
                             ->where('journal_entry_id', (int) $existingRow['journal_entry_id'])
                             ->update($payload);
+
+                        if ($affected === 0) {
+                            $missingNotes[] = $group['company_name_short'] . ' ' . $group['occurred_at'] . ' No.' . $group['journal_breakdown']
+                                . '（ID:' . $existingRow['journal_entry_id'] . '・更新対象が見つかりませんでした）';
+                            continue;
+                        }
+
                         $updatedCount++;
                         continue;
                     }
@@ -932,10 +940,17 @@ class AccountingV2Controller extends Controller
 
                     $manualLabels = $this->manualOnlyColumnLabels($existingRow);
                     if ($manualLabels === []) {
-                        DB::connection('sqlsrv')
+                        $affected = DB::connection('sqlsrv')
                             ->table('dbo.mx_journal_entries')
                             ->where('journal_entry_id', (int) $existingRow['journal_entry_id'])
                             ->delete();
+
+                        if ($affected === 0) {
+                            $missingNotes[] = $group['company_name_short'] . ' ' . $group['occurred_at'] . ' No.' . $group['journal_breakdown']
+                                . '（ID:' . $existingRow['journal_entry_id'] . '・削除対象が見つかりませんでした）';
+                            continue;
+                        }
+
                         $deletedCount++;
                     } else {
                         $reviewNotes[] = $group['company_name_short'] . ' ' . $group['occurred_at'] . ' No.' . $group['journal_breakdown']
@@ -960,6 +975,7 @@ class AccountingV2Controller extends Controller
         $message = '確認分の取込が完了しました。更新: ' . $updatedCount . '件 / 追加: ' . $importedCount . '件 / 削除: ' . $deletedCount . '件'
             . ($skippedGroupCount > 0 ? ' / 見送り（未チェック）: ' . $skippedGroupCount . '件' : '')
             . ($reviewNotes !== [] ? ' / 手動入力値が残っているため削除せず保持した仕訳: ' . implode('、', $reviewNotes) : '')
+            . ($missingNotes !== [] ? ' / 確認時から状態が変わり反映できなかった仕訳（再確認してください）: ' . implode('、', $missingNotes) : '')
             . ($pendingNewCount > 0 ? ' / まだ新規追加候補' . $pendingNewCount . '件が残っています。続けて反映してください' : '');
 
         if ($pendingNewCount > 0) {
@@ -1196,10 +1212,15 @@ class AccountingV2Controller extends Controller
         }
         $payload = array_intersect_key($payload, $columns);
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
             ->where('journal_entry_id', (int) $data['journal_entry_id'])
             ->update($payload);
+
+        if ($affected === 0) {
+            return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
+                ->with('errorMessage', '保存対象の仕訳が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
             ->with('statusMessage', '仕訳帳を保存しました。');
@@ -1281,15 +1302,22 @@ class AccountingV2Controller extends Controller
                     ]);
                     $payload = array_intersect_key($payload, $columns);
 
-                    DB::connection('sqlsrv')
+                    $affected = DB::connection('sqlsrv')
                         ->table('dbo.mx_journal_entries')
                         ->where('journal_entry_id', (int) $journalEntryId)
                         ->update($payload);
+
+                    if ($affected === 0) {
+                        throw new \RuntimeException('journal_entry_not_found:' . $journalEntryId);
+                    }
                 }
             });
         } catch (\InvalidArgumentException) {
             return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
                 ->with('errorMessage', '金額は数値で入力してください。');
+        } catch (\RuntimeException $e) {
+            return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
+                ->with('errorMessage', '保存対象の仕訳が見つかりません。画面を更新してから再度お試しください。（' . $e->getMessage() . '）');
         }
 
         return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
@@ -1302,10 +1330,15 @@ class AccountingV2Controller extends Controller
             'journal_entry_id' => ['required', 'integer'],
         ]);
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
             ->where('journal_entry_id', (int) $data['journal_entry_id'])
             ->delete();
+
+        if ($affected === 0) {
+            return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
+                ->with('errorMessage', '削除対象の仕訳が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
             ->with('statusMessage', '仕訳帳を削除しました。');
