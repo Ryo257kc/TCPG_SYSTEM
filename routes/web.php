@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\V2\YearEndAdjustmentV2Controller;
 
 // StaffPortal
 use App\Http\Controllers\StaffPortal\AttendanceController;
+use App\Http\Controllers\StaffPortal\ReceiptScanController;
 use App\Http\Controllers\StaffPortal\AuthController;
 use App\Http\Controllers\StaffPortal\DocumentsController;
 use App\Http\Controllers\StaffPortal\MyPageController;
@@ -127,6 +128,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/year-end-adjustments/{applicationId}/calculate', [YearEndAdjustmentV2Controller::class, 'calculateSingle'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.calculate');
         Route::post('/year-end-adjustments/{applicationId}/nen-tyo-update', [YearEndAdjustmentV2Controller::class, 'updateNenTyo'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.nen_tyo.update');
         Route::post('/year-end-adjustments/{applicationId}/nen-tyo-lock-toggle', [YearEndAdjustmentV2Controller::class, 'toggleNenTyoLock'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.nen_tyo.lock_toggle');
+        Route::post('/year-end-adjustments/{applicationId}/hoken/parse-xml', [YearEndAdjustmentV2Controller::class, 'parseHokenCertificateXml'])->whereNumber('applicationId')->name('admin.work.year_end_adjustments.hoken.parse_xml');
         Route::post('/year-end-adjustments/{applicationId}/hoken', [YearEndAdjustmentV2Controller::class, 'createHoken'])->name('admin.work.year_end_adjustments.hoken.create');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}', [YearEndAdjustmentV2Controller::class, 'updateHoken'])->name('admin.work.year_end_adjustments.hoken.update');
         Route::post('/year-end-adjustments/{applicationId}/hoken/{hokenNo}/delete', [YearEndAdjustmentV2Controller::class, 'deleteHoken'])->name('admin.work.year_end_adjustments.hoken.delete');
@@ -236,6 +238,13 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::get('/password/change', [AuthController::class, 'passwordChange'])->withoutMiddleware('staff.auth')->name('staff_portal.password_change');
     Route::post('/password/change', [AuthController::class, 'updatePassword'])->withoutMiddleware('staff.auth')->name('staff_portal.password_change.update');
 
+    // レシートスキャンツール（外部で個人開発している静的ツールをそのまま配信する窓口。本体は編集しない）
+    // index.htmlが相対パス（static/style.css等）でアセットを参照しているため、URLの末尾に
+    // スラッシュを付けて「フォルダ」として解決させる必要がある（末尾スラッシュ無しだと
+    // ブラウザがreceipt-scanをファイル名扱いして相対パスの解決先がズレる）。
+    Route::get('/tools/receipt-scan/', [ReceiptScanController::class, 'index'])->name('tools.receipt_scan');
+    Route::get('/tools/receipt-scan/static/{path}', [ReceiptScanController::class, 'asset'])->where('path', '.*')->name('tools.receipt_scan.asset');
+
     Route::get('/attendance/monthly', [AttendanceController::class, 'attendanceMonthly'])->name('attendance.monthly');
     Route::post('/attendance/monthly/apply', [AttendanceController::class, 'attendanceMonthlyApply'])->name('attendance.monthly.apply');
 
@@ -294,6 +303,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::post('/year-end-adjustment/dependents', [YearEndApplicationController::class, 'updateDependents'])->name('year_end_adjustment.dependents.update');
     Route::post('/year-end-adjustment/spouse', [YearEndApplicationController::class, 'updateSpouse'])->name('year_end_adjustment.spouse.update');
     Route::post('/year-end-adjustment/insurance', [YearEndApplicationController::class, 'updateInsurance'])->name('year_end_adjustment.insurance.update');
+    Route::post('/year-end-adjustment/insurance/parse-xml', [YearEndApplicationController::class, 'parseInsuranceCertificateXml'])->name('year_end_adjustment.insurance.parse_xml');
     Route::post('/year-end-adjustment/insurance/copy-previous-year', [YearEndApplicationController::class, 'copyPreviousYearInsurance'])->name('year_end_adjustment.insurance.copy_previous_year');
     Route::post('/year-end-adjustment/previous-job', [YearEndApplicationController::class, 'updatePreviousJob'])->name('year_end_adjustment.previous_job.update');
     Route::post('/year-end-adjustment/housing-loan', [YearEndApplicationController::class, 'updateHousingLoan'])->name('year_end_adjustment.housing_loan.update');

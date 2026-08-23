@@ -1,0 +1,251 @@
+:root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: #f2f4f7; color: #1f2933; }
+.app-shell { width: min(100%, 920px); margin: 0 auto; padding: 16px; }
+h1 { margin: 0 0 8px; font-size: 1.35rem; }
+.guide, .notice, #message { line-height: 1.5; }
+.camera-area { margin-top: 12px; }
+video, #cornerEditor, #correctedView { width: 100%; max-height: 72vh; background: #1f2328; border-radius: 8px; overflow: hidden; }
+video, #photoPreview, #correctedPreview { display: block; width: 100%; max-height: 72vh; object-fit: contain; }
+.live-camera-stage { position: relative; width: 100%; height: min(76vh, 720px); height: min(76dvh, 720px); min-height: 360px; overflow: hidden; border-radius: 8px; background: #1f2328; touch-action: manipulation; }
+.live-camera-stage video { width: 100%; height: 100%; max-height: none; border-radius: 0; cursor: pointer; object-fit: contain; }
+.finish-scanning-button { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 1; padding: 8px 11px; border-color: rgba(255, 255, 255, .8); background: rgba(31, 35, 40, .78); color: #fff; font-size: .9rem; }
+.live-capture-controls { position: absolute; right: 0; bottom: calc(12px + env(safe-area-inset-bottom)); left: 0; display: flex; justify-content: center; pointer-events: none; }
+.live-capture-controls #captureButton { width: min(88%, 300px); padding: 13px 18px; border-color: #087443; border-radius: 999px; background: #087443; color: #fff; box-shadow: 0 3px 12px rgba(0, 0, 0, .32); font-weight: 700; pointer-events: auto; }
+#cornerEditor { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+#cornerOverlay { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; overflow: visible; }
+#cornerPolygon { fill: rgba(0, 220, 115, .16); stroke: #00d977; stroke-width: 5; vector-effect: non-scaling-stroke; }
+.corner-handle { fill: #fff; stroke: #00c96b; stroke-width: 5; vector-effect: non-scaling-stroke; touch-action: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+button { padding: 10px 14px; border: 1px solid #b8c2cc; border-radius: 7px; background: #fff; color: #17212b; font: inherit; }
+button:disabled { opacity: .6; }
+.action-group { margin-top: 14px; padding: 12px; border: 1px solid #d7dde4; border-radius: 8px; background: #fff; }
+.action-group h2 { margin: 0 0 8px; font-size: 1rem; }
+.scan-status { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 0 0 10px; color: #52606d; font-size: .92rem; }
+#scanCount { font-weight: 700; color: #1f2933; }
+.action-row, .supplementary-actions, .batch-output-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.action-row button { flex: 1 1 120px; }
+.single-share-action { margin-top: 8px; }
+.single-share-action button { width: 100%; }
+.primary-action { display: block; width: 100%; margin-top: 10px; padding: 13px 16px; border-color: #087443; background: #087443; color: #fff; font-weight: 700; }
+.confirm-finish-button { display: block; width: 100%; margin-top: 8px; }
+.supplementary-actions { margin-top: 8px; }
+.supplementary-actions button { flex: 1 1 0; padding: 8px 10px; font-size: .92rem; }
+.batch-output-buttons button { flex: 1 1 180px; }
+.output-view, .completion-view { margin-top: 14px; padding: 16px; border: 1px solid #d7dde4; border-radius: 8px; background: #fff; }
+.output-view h2, .completion-view h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.output-count { margin: 0 0 14px; color: #52606d; font-weight: 700; }
+.output-format { display: flex; gap: 12px; margin: 0; padding: 10px; border: 1px solid #d7dde4; border-radius: 7px; }
+.output-format legend { padding: 0 4px; font-size: .9rem; }
+.output-format label { display: inline-flex; align-items: center; gap: 5px; }
+.pdf-filename-field { display: grid; gap: 6px; margin-top: 14px; font-weight: 700; }
+.pdf-filename-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; font-weight: 400; }
+.output-message { min-height: 1.5em; margin: 12px 0 0; color: #a23c17; }
+.output-actions { display: grid; gap: 8px; margin-top: 14px; }
+.output-actions .primary-action { margin-top: 0; }
+.completion-view { text-align: center; }
+.completion-view p { color: #52606d; }
+.completion-chappy { display: block; width: 144px; height: 144px; margin: 10px auto; object-fit: contain; }
+#saveFields { margin-top: 14px; padding: 12px; border-radius: 8px; background: #fff; }
+#saveFields h2 { margin: 0 0 8px; font-size: 1rem; }
+#saveFields label { display: grid; grid-template-columns: 4em 1fr; align-items: center; gap: 8px; margin: 8px 0; }
+input { min-width: 0; padding: 8px; border: 1px solid #b8c2cc; border-radius: 5px; font: inherit; }
+.notice { font-size: .88rem; color: #52606d; }
+.confirmed-scans { margin-top: 14px; padding: 12px; border: 1px solid #d7dde4; border-radius: 8px; background: #fff; }
+.confirmed-scans h2 { margin: 0 0 6px; font-size: 1rem; }
+#confirmedScanList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+#confirmedScanList li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid #edf0f2; }
+#confirmedScanList li:first-child { border-top: 0; }
+.confirmed-scan-details { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.confirmed-scan-thumbnail { width: 42px; height: 54px; flex: 0 0 auto; border-radius: 3px; background: #eef1f4; object-fit: contain; }
+.confirmed-scan-name { overflow-wrap: anywhere; font-size: .9rem; }
+.confirmed-scan-delete { padding: 6px 10px; }
+@media (max-width: 480px) { 
+    .app-shell { padding: 12px; } 
+    button { flex: 1 1 auto; } 
+    .live-camera-stage { height: calc(100vh - 118px - env(safe-area-inset-bottom)); height: calc(100dvh - 118px - env(safe-area-inset-bottom)); min-height: 320px; } 
+}
+
+/* ========================================
+   WANs
+   ======================================== */
+
+.wans-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.wans-chappy {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.wans-title {
+  min-width: 0;
+}
+
+.wans-title h1 {
+  margin: 0 0 6px;
+  line-height: 1.2;
+}
+
+.wans-title h1 span {
+  white-space: nowrap;
+}
+
+.wans-title .guide {
+  margin: 0;
+}
+
+.share-result-area {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.share-chappy {
+  display: block;
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  margin: 0 auto 4px;
+}
+
+.share-result-area p {
+  margin: 0;
+}
+
+.wans-footer {
+  margin-top: 26px;
+  padding-top: 14px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.58;
+}
+
+.wans-hq-button {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0.8;
+}
+
+.wans-hq-button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.wans-hq-button:active {
+  transform: scale(0.94);
+}
+
+.wans-modal[hidden] {
+  display: none;
+}
+
+.wans-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.wans-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 28, 36, 0.58);
+}
+
+.wans-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 360px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 16px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
+.wans-modal-hq {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+}
+
+.wans-modal-card h2 {
+  margin: 2px 0 10px;
+  font-size: 1.25rem;
+}
+
+.wans-president {
+  display: block;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.wans-president-title {
+  margin: 4px 0;
+  font-weight: 700;
+}
+
+.wans-president-message {
+  margin: 6px 0 14px;
+}
+
+.wans-division {
+  margin: 0 0 16px;
+  color: #697784;
+  font-size: 0.78rem;
+}
+
+.wans-modal-close {
+  min-width: 110px;
+}
+
+.wans-modal-open {
+  overflow: hidden;
+}
+
+/* WANs本社はスマホでも、しれっと勤務 */
+@media (max-width: 480px) {
+  .wans-hq-button {
+    display: block;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px;
+    min-height: 48px;
+    margin: 0 auto 4px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    flex: none;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+
+  .wans-hq-button img {
+    display: block;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    pointer-events: none;
+  }
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>レシートスキャン WANs</title>
+  <link rel="stylesheet" href="static/style.css?v=6">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="wans-header">
+      <img
+        src="static/images/chappy_001.png"
+        class="wans-chappy"
+        alt=""
+        aria-hidden="true"
+      >
+      <div class="wans-title">
+        <h1>レシートスキャン <span>WANs</span></h1>
+        <p class="guide">撮影して、綺麗に補正。そのまま保存。</p>
+      </div>
+    </header>
+
+    <section id="scanWorkflow">
+    <section class="camera-area" aria-live="polite">
+      <div id="liveCameraStage" class="live-camera-stage" hidden>
+        <video id="cameraPreview" autoplay playsinline muted hidden></video>
+        <button id="finishScanningButton" class="finish-scanning-button" type="button" hidden>撮影終了</button>
+        <div class="live-capture-controls">
+          <button id="captureButton" type="button" hidden>撮影</button>
+        </div>
+      </div>
+      <canvas id="capturedCanvas" hidden></canvas>
+
+      <div id="cornerEditor" hidden>
+        <img id="photoPreview" alt="撮影画像のプレビュー">
+        <svg id="cornerOverlay" aria-label="レシート四隅の枠を調整" role="img">
+          <polygon id="cornerPolygon"></polygon>
+          <circle class="corner-handle" data-index="0" r="18"></circle>
+          <circle class="corner-handle" data-index="1" r="18"></circle>
+          <circle class="corner-handle" data-index="2" r="18"></circle>
+          <circle class="corner-handle" data-index="3" r="18"></circle>
+        </svg>
+      </div>
+
+      <div id="correctedView" hidden>
+        <img id="correctedPreview" alt="台形補正後のレシート画像">
+      </div>
+
+      <section id="saveFields" hidden>
+        <h2>ファイル名（必要に応じて入力）</h2>
+        <label>店名<input id="storeCandidate" type="text" autocomplete="off"></label>
+        <label>日付<input id="dateCandidate" type="date" autocomplete="off"></label>
+        <label>金額<input id="amountCandidate" type="text" inputmode="numeric" autocomplete="off"></label>
+        <p>ファイル名候補: <output id="filenameCandidate">（候補なし）</output></p>
+
+      </section>
+
+      <p id="message">「撮影する」を押すとカメラを起動します。</p>
+    </section>
+
+    <section class="action-group current-scan-actions" aria-labelledby="currentScanActionsTitle">
+      <h2 id="currentScanActionsTitle">書類を撮影</h2>
+      <p class="scan-status" aria-live="polite">
+        <span id="scanCount">確定済み 0件</span>
+        <span id="currentScanStatus" hidden></span>
+      </p>
+      <div class="action-row">
+        <button id="startButton" type="button">撮影する</button>
+        <button id="correctButton" type="button" hidden>リネームする</button>
+      </div>
+      <button id="confirmNextButton" class="primary-action" type="button" hidden>確定して次を撮る</button>
+      <button id="confirmFinishButton" class="confirm-finish-button" type="button" hidden>確定して終了</button>
+      <div class="supplementary-actions">
+        <button id="backButton" type="button" hidden>戻って枠を調整</button>
+        <button id="retakeButton" type="button" hidden>撮り直す</button>
+      </div>
+    </section>
+    </section>
+
+    <section id="outputView" class="output-view" hidden aria-labelledby="outputTitle">
+      <h2 id="outputTitle">保存形式を選択</h2>
+      <p id="outputCount" class="output-count">確定済み 0件</p>
+      <fieldset class="output-format">
+        <legend>保存形式</legend>
+        <label><input type="radio" name="outputFormat" value="jpeg" checked> JPEG</label>
+        <label><input type="radio" name="outputFormat" value="pdf"> PDF</label>
+      </fieldset>
+      <label id="pdfFilenameField" class="pdf-filename-field" hidden>
+        PDFファイル名
+        <span class="pdf-filename-input"><input id="pdfFilenameInput" type="text" autocomplete="off"><span aria-hidden="true">.pdf</span></span>
+      </label>
+      <p id="outputMessage" class="output-message" aria-live="polite"></p>
+      <div class="output-actions">
+        <button id="continueScanningButton" type="button">撮影を続ける</button>
+        <button id="saveOutputButton" class="primary-action" type="button">保存</button>
+      </div>
+
+      <section id="confirmedScansPanel" class="confirmed-scans" hidden aria-labelledby="confirmedScansTitle">
+        <h2 id="confirmedScansTitle">確定済み一覧</h2>
+        <ul id="confirmedScanList"></ul>
+      </section>
+    </section>
+
+    <section id="completionView" class="completion-view" hidden aria-labelledby="completionTitle">
+      <h2 id="completionTitle">保存しました！</h2>
+      <img src="static/images/chappy_009.png" class="completion-chappy" alt="">
+      <p>必要なら、続けて新しい書類を撮影できます。</p>
+      <button id="restartScanningButton" class="primary-action" type="button">撮影に戻る</button>
+    </section>
+
+    <input id="filePicker" type="file" accept="image/*" capture="environment" hidden>
+
+    <p class="notice">
+      このアプリは画像をサーバーへ送信しません。補正画像は端末の保存先を選んで保存できます。
+    </p>
+
+    <footer class="wans-footer">
+      <button id="wansHqButton" class="wans-hq-button" type="button" aria-label="WANs">
+        <img src="static/images/chappy_023.png" alt="" aria-hidden="true">
+      </button>
+      <div>© 2026 WANs Inc.</div>
+    </footer>
+
+    <div id="wansModal" class="wans-modal" hidden>
+      <div class="wans-modal-backdrop" data-wans-close></div>
+      <section class="wans-modal-card" role="dialog" aria-modal="true" aria-labelledby="wansModalTitle">
+        <img class="wans-modal-hq" src="static/images/chappy_023.png" alt="" aria-hidden="true">
+        <h2 id="wansModalTitle">WANs Inc.</h2>
+        <img class="wans-president" src="static/images/chappy_022.png" alt="" aria-hidden="true">
+        <p class="wans-president-title">代表取締役社長</p>
+        <p class="wans-president-message">今日もだいたい見守っています。</p>
+        <p class="wans-division">WANs Inc. — Receipt Scan Division</p>
+        <button id="wansModalClose" class="wans-modal-close" type="button">閉じる</button>
+      </section>
+    </div>
+  </main>
+
+ <script src="static/vendor/jspdf.umd.min.js"></script>
+ <script src="static/app.js?v=23"></script>
+</body>
+</html>
