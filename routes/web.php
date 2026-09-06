@@ -271,6 +271,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::post('/shift/basic/{shiftNo}', [ShiftController::class, 'adminBasicShiftUpdate'])->name('admin.basic-shift.inline_update');
 
     Route::get('/office/documents', [DocumentsController::class, 'index'])->name('office.documents');
+    Route::get('/office/documents/{fileKey}', [DocumentsController::class, 'download'])->name('office.documents.download');
 
     Route::get('/office/sales-menu', [OfficeController::class, 'salesMenu'])->name('office.sales.menu');
     Route::get('/office/sales', [OfficeController::class, 'sales'])->name('office.sales');

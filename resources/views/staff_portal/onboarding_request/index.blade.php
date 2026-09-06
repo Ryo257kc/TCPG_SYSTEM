@@ -248,28 +248,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel">
             <div class="content-head">
                 <h2 class="content-title">入社手続き</h2>
             </div>
-
-            @if (session('statusMessage'))
-            <div class="status">{{ session('statusMessage') }}</div>
-            @endif
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif
-            @if ($errors->any())
-            <div class="error">
-                <p>入力内容を確認してください。</p>
-                <ul>
-                    @foreach ($errors->all() as $message)
-                    <li>{{ $message }}</li>
-                    @endforeach
-                </ul>
-            </div>
-            @endif
 
             <p class="pr-note">ご入社にあたり、住所・連絡先・振込口座・通勤経路・扶養の情報と、マイナンバー等の確認書類をご登録ください。該当する場合は運転免許証・住民票・前職関連の書類もあわせて添付してください。</p>
 
@@ -518,7 +502,7 @@
                     <li>施術者免許（原本）</li>
                     <li>
                         誓約書・身元保証引受書
-                        （<a href="{{ url('/document/PG-誓約書.pdf') }}" target="_blank">プレッジ誓約書</a>／<a href="{{ url('/document/TC-誓約書.pdf') }}" target="_blank">トータルケア誓約書</a>／<a href="{{ url('/document/PG-身元保証引受書.pdf') }}" target="_blank">プレッジ身元保証引受書</a>／<a href="{{ url('/document/TC-身元保証引受書.pdf') }}" target="_blank">トータルケア身元保証引受書</a>）
+                        （<a href="{{ route('office.documents.download', ['fileKey' => 'pg_pledge']) }}" target="_blank">プレッジ誓約書</a>／<a href="{{ route('office.documents.download', ['fileKey' => 'tc_pledge']) }}" target="_blank">トータルケア誓約書</a>／<a href="{{ route('office.documents.download', ['fileKey' => 'pg_guarantor']) }}" target="_blank">プレッジ身元保証引受書</a>／<a href="{{ route('office.documents.download', ['fileKey' => 'tc_guarantor']) }}" target="_blank">トータルケア身元保証引受書</a>）
                     </li>
                 </ul>
             </div>

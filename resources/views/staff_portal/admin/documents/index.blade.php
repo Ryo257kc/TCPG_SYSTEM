@@ -74,24 +74,24 @@
                         <tr>
                             <th class="num">1</th>
                             <td>
-                                <a class="doc-link" href="{{ url('/document/PG-誓約書.pdf') }}" target="_blank">プレッジ誓約書</a><br>
-                                <a class="doc-link" href="{{ url('/document/TC-誓約書.pdf') }}" target="_blank">トータルケア誓約書</a>
+                                <a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'pg_pledge']) }}" target="_blank">プレッジ誓約書</a><br>
+                                <a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'tc_pledge']) }}" target="_blank">トータルケア誓約書</a>
                             </td>
                         </tr>
                         <tr>
                             <th class="num">2</th>
                             <td>
-                                <a class="doc-link" href="{{ url('/document/PG-身元保証引受書.pdf') }}" target="_blank">プレッジ身元保証引受書</a><br>
-                                <a class="doc-link" href="{{ url('/document/TC-身元保証引受書.pdf') }}" target="_blank">トータルケア身元保証引受書</a>
+                                <a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'pg_guarantor']) }}" target="_blank">プレッジ身元保証引受書</a><br>
+                                <a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'tc_guarantor']) }}" target="_blank">トータルケア身元保証引受書</a>
                             </td>
                         </tr>
                         <tr>
                             <th class="num">3</th>
-                            <td><a class="doc-link" href="{{ url('/document/通勤手段経路申請書.pdf') }}" target="_blank">通勤手段経路申請書</a></td>
+                            <td><a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'commute_route']) }}" target="_blank">通勤手段経路申請書</a></td>
                         </tr>
                         <tr>
                             <th class="num">4</th>
-                            <td><a class="doc-link" href="{{ url('/document/扶養控除申告書.pdf') }}" target="_blank">扶養控除申告書（弊社で年末調整する場合のみ）</a></td>
+                            <td><a class="doc-link" href="{{ route('office.documents.download', ['fileKey' => 'fuyo_koujyo_shinkoku']) }}" target="_blank">扶養控除申告書（弊社で年末調整する場合のみ）</a></td>
                         </tr>
                     </tbody>
                 </table>
