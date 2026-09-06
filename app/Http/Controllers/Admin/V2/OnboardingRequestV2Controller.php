@@ -348,6 +348,16 @@ class OnboardingRequestV2Controller extends Controller
                 ->with('status', '確認後にスタッフのマスタ情報が変更されていたため反映を中止しました。内容を再確認し、確認し直してください。');
         }
 
+        $staffExists = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->exists();
+        if (!$staffExists) {
+            return redirect()
+                ->route('admin.work.onboarding_requests.show', ['requestId' => $requestId])
+                ->with('status', '反映先のスタッフ（staff_id: ' . $staffId . '）が見つかりません。マスタでスタッフを作成してから再度反映してください。');
+        }
+
         $currentEmployment = trim((string) DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])

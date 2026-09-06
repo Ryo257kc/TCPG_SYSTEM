@@ -335,6 +335,16 @@ class ProfileRequestV2Controller extends Controller
                 ->with('status', '確認後にスタッフのマスタ情報が変更されていたため反映を中止しました。内容を再確認し、確認し直してください。');
         }
 
+        $staffExists = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->exists();
+        if (!$staffExists) {
+            return redirect()
+                ->route('admin.work.profile_requests.show', ['requestId' => $requestId])
+                ->with('status', '反映先のスタッフ（staff_id: ' . $staffId . '）が見つかりません。');
+        }
+
         $staffUpdate = [];
 
         $newStaffName = trim((string) ($requestRow->new_staff_name ?? ''));
@@ -349,9 +359,18 @@ class ProfileRequestV2Controller extends Controller
             $staffUpdate['address_furi'] = trim((string) ($requestRow->new_address_furi ?? ''));
         }
 
-        if ($newStaffName !== '' || $newAddress !== '') {
-            $staffUpdate['head_house'] = trim((string) ($requestRow->setai_nushi ?? ''));
-            $staffUpdate['relationship'] = trim((string) ($requestRow->setai_zoku_gara ?? ''));
+        // setai_nushi/setai_zoku_garaは申請フォーム上nullable（任意項目）で、氏名・住所のみの
+        // 変更申請では未入力のことがある。無条件で上書きすると、その場合に既存の世帯主・続柄が
+        // 空文字で消えてしまう（YearEndAdjustmentV2Controller::reflectApplication()で実際に
+        // 発生済みの事故と同じ形。054長坂楓のケースを参照。このコントローラだけ同じ修正が
+        // 漏れていた、2026-08-24発覚）。未入力の時は既存値をそのまま残す。
+        $newHeadHouse = trim((string) ($requestRow->setai_nushi ?? ''));
+        if ($newHeadHouse !== '') {
+            $staffUpdate['head_house'] = $newHeadHouse;
+        }
+        $newRelationship = trim((string) ($requestRow->setai_zoku_gara ?? ''));
+        if ($newRelationship !== '') {
+            $staffUpdate['relationship'] = $newRelationship;
         }
 
         if (($requestRow->new_car_km ?? null) !== null) {
