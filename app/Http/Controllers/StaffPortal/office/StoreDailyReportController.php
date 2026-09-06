@@ -785,6 +785,45 @@ class StoreDailyReportController extends Controller
             ->values()
             ->all();
 
+        // 割合の選択肢は「その日実際に使われた値」だけだと、使用頻度の低い区分
+        // （交・母等）がその日の患者にいなければ選べなかった（2026-09-05、店舗からの
+        // 問い合わせで発覚）。専用マスタT_割合があるのでそこから引く。
+        $ratioOptions = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_割合')
+            ->select('割合')
+            ->orderBy('No')
+            ->get()
+            ->map(fn($row): string => trim((string) ($row->{'割合'} ?? '')))
+            ->filter(fn(string $割合): bool => $割合 !== '')
+            ->values()
+            ->all();
+
+        // 担当者の選択肢も同じ理由で「その日実際に使われた値」だけになっていた。
+        // front_staff=1（施術担当できる権限）のスタッフ一覧に変更（2026-09-05。全期間の
+        // 実績で使われた担当者IDが front_staff=1 の集合と完全一致することを確認済み）。
+        // 在職/退職の判定はemploymentフラグ(現在の状態)ではなくtai_date(退職日)と
+        // 対象日(targetDate)を比較する。日報は過去日付を編集することがあり、退職済みでも
+        // 在籍していた期間の日付では引き続き選べる必要があるため（ユーザー指摘、2026-09-05）。
+        $staffOptions = DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('front_staff', 1)
+            ->where(function ($query) use ($targetDate): void {
+                $query->whereNull('tai_date')
+                    ->orWhere('tai_date', '>=', $targetDate);
+            })
+            ->select(['staff_id', 'staff_name', 'display_name_ja'])
+            ->orderBy('staff_name_furi')
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                $staffId = trim((string) ($row->staff_id ?? ''));
+                $staffName = trim((string) ($row->display_name_ja ?? '')) !== ''
+                    ? trim((string) $row->display_name_ja)
+                    : trim((string) ($row->staff_name ?? ''));
+
+                return $staffId === '' ? [] : [$staffId => ($staffName !== '' ? $staffName : $staffId)];
+            })
+            ->all();
+
         $dailySummary = [
             '日報集計No' => (string) ($dailySummaryRow->{'日報集計No'} ?? ''),
             '日付' => $this->formatDateWithJapaneseWeekday($dailySummaryRow->{'日付'} ?? null),
@@ -845,6 +884,8 @@ class StoreDailyReportController extends Controller
             'filterModifiedOnly' => $filterModifiedOnly,
             'filterPatientName' => $filterPatientName,
             'menuOptions' => $menuOptions,
+            'ratioOptions' => $ratioOptions,
+            'staffOptions' => $staffOptions,
             'staffSummaryRows' => $staffSummaryRows,
             'dailySummaryExpenseRows' => $dailySummaryExpenseRows,
         ]));
@@ -2652,7 +2693,7 @@ class StoreDailyReportController extends Controller
                     'credit_item_name' => $definition['credit_item_name'],
                     'credit_tax_category' => $definition['credit_tax_category'],
                     'credit_department_name' => $departmentName,
-                    'company_name_short' => trim((string) $this->dailySummaryJournalCompanyName($departmentName)),
+                    'company_name_short' => $this->journalCompanyNameFromStoreCode($departmentRow->official_store_no ?? null),
                 ];
             }
         }
@@ -2855,7 +2896,7 @@ class StoreDailyReportController extends Controller
                     $query->where('has_receipt', true)
                         ->orWhere('has_receipt', 1);
                 })
-                ->select(['store_short_name', 'store_category'])
+                ->select(['store_short_name', 'store_category', 'official_store_no'])
                 ->orderBy('department_no')
                 ->first();
 
@@ -2870,21 +2911,8 @@ class StoreDailyReportController extends Controller
                 $query->where('store_short_name', $storeName)
                     ->orWhere('store_category', $storeName);
             })
-            ->select(['store_short_name', 'store_category'])
+            ->select(['store_short_name', 'store_category', 'official_store_no'])
             ->first();
-    }
-    private function dailySummaryJournalCompanyName(string $departmentName): string
-    {
-        return trim((string) (DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->where(function ($query) use ($departmentName): void {
-                $query->where('debit_department_name', $departmentName)
-                    ->orWhere('credit_department_name', $departmentName);
-            })
-            ->whereNotNull('company_name_short')
-            ->where('company_name_short', '<>', '')
-            ->orderByDesc('journal_entry_id')
-            ->value('company_name_short') ?? ''));
     }
 
     private function storeDailyReportStoreOptions(): array

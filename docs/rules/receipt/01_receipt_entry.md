@@ -34,3 +34,16 @@
 `!response.ok`で失敗判定）を使う二重構成。どちらの経路も既存のエラー表示
 （`session('errorMessage')`／`showReceiptInlineError()`）にそのまま乗るため、
 フロント側の改修は不要だった。
+
+## 入金日の生キー表示バグ（2026-09-05修正）
+
+`mx_insurance_claim_details.payment_date_text`は日付そのものではなく、
+`mx_journal_entries.journal_breakdown`と突き合わせるためのキー文字列（例:"6042803"）。
+`PaymentConfirmationController`は`payment_entry_occurred_at`（突き合わせ先仕訳の
+実際の入金日）を解決して`Y/m/d`表示していたが、`EntryController::index()`の
+「入金日」は`payment_date_text`を未加工でそのまま表示していた（041実運用の
+問い合わせで発覚、「6040903」が何を意味するか分からないという相談）。
+突き合わせクエリ（`paymentEntryOccurredAtQuery()`）を`HandlesStaffPortalContext`
+へ共通化し、`EntryController`側もこれを使って`Y/m/d`形式で表示するよう修正。
+突き合わせキー自体（`payment_date_text`）は保存・複製ロジックで今まで通り使う
+（表示だけを直した。キーとしての役割は変えない）。

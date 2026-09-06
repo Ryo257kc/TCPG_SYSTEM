@@ -381,6 +381,59 @@ trait HandlesStaffPortalContext
             ->leftJoin('dbo.mx_companies as company', 'store.company_id', '=', 'company.company_id');
     }
 
+    /**
+     * 窓口・自費・経費・レセの新規仕訳に付ける会社名(company_name_short)の正本。
+     * StoreDailyReportController・EntryControllerとも、以前は「その部門名で
+     * 一番新しく作られた仕訳のcompany_name_shortをコピーする」という、過去の仕訳結果を
+     * 見て決める作りだった。これは店舗の所有会社が変わらない限り結果的に正しい値を
+     * 連鎖コピーし続けるだけで、新規店舗（仕訳履歴が0件）ではcompany_name_shortが
+     * 空欄の仕訳が生成されてしまう欠陥があった（2026-08-24発覚）。店舗の所有会社は
+     * mx_stores.company_idというマスタデータで決まるものなので、過去の仕訳を経由せず
+     * official_store_no(store_code)からmx_stores→mx_companiesで直接解決する。
+     */
+    protected function journalCompanyNameFromStoreCode(?string $officialStoreNo): string
+    {
+        $officialStoreNo = trim((string) $officialStoreNo);
+        if ($officialStoreNo === '') {
+            return '';
+        }
+
+        $companyName = DB::connection('sqlsrv')
+            ->table('dbo.mx_stores as st')
+            ->leftJoin('dbo.mx_companies as c', 'st.company_id', '=', 'c.company_id')
+            ->where('st.store_code', $officialStoreNo)
+            ->value('c.company_name');
+
+        $companyName = trim((string) ($companyName ?? ''));
+        if ($companyName === '') {
+            return '';
+        }
+
+        // mx_journal_entries.company_name_shortは既存データが全て「㈱」表記
+        // （例:㈱トータルケア）で統一されている。mx_companies.company_nameは
+        // 正式名（例:株式会社トータルケア）のため、既存の変換ルール
+        // （ReportV2BonusPaymentCsvCleanService等と同じ対応）で短縮形へ揃える。
+        return str_replace('株式会社', '㈱', $companyName);
+    }
+
+    /**
+     * mx_insurance_claim_details.payment_date_textは実際の日付ではなく、
+     * mx_journal_entries.journal_breakdownと突き合わせるためのキー文字列
+     * （例:"6042803"）。画面にこの生の値をそのまま出すと、担当者が日付として
+     * 読めず問い合わせが来ていた（2026-09-05発覚、レセ請求入力画面）。
+     * このキーで実際に入金された仕訳のoccurred_at(実日付)を引けるよう、
+     * PaymentConfirmationControllerで確立済みの突き合わせをここに共通化する。
+     */
+    protected function paymentEntryOccurredAtQuery()
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->selectRaw('LTRIM(RTRIM(CAST(journal_breakdown AS NVARCHAR(255)))) as journal_breakdown_key')
+            ->selectRaw('MAX(occurred_at) as occurred_at')
+            ->whereNotNull('journal_breakdown')
+            ->groupByRaw('LTRIM(RTRIM(CAST(journal_breakdown AS NVARCHAR(255))))');
+    }
+
     // 書式変換
     protected function formatMoneyValue(mixed $value): string
     {

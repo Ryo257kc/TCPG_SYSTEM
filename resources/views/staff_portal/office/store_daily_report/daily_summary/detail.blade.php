@@ -265,6 +265,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
@@ -291,15 +292,6 @@
                         rel="noopener">先生別日報</a>
                 </div>
             </div>
-
-
-            @if (session('statusMessage'))
-            <div class="status-message status">{{ session('statusMessage') }}</div>
-            @endif
-
-            @if (session('errorMessage'))
-            <div class="status-message error">{{ session('errorMessage') }}</div>
-            @endif
 
             @php
             $isDailySummaryConfirmed = ($dailySummary['確定'] ?? '') !== '';
@@ -425,29 +417,14 @@
 
             $newPatientOptions = $makeOptions($patientSummaryOptionRows->pluck('新患'));
             $patientNameOptions = $makeOptions($patientSummaryOptionRows->pluck('患者名'));
-            // 割合は「0/1/2/3」等の数字（負担割合）と「自/交/母/子/障」等の記号が混在するため、
-            // 数字を昇順で先に並べ、記号類はその後ろへ通常の文字列比較で並べる。
-            $ratioOptions = $makeOptions($patientSummaryOptionRows->pluck('割合'))
-            ->sort(function ($a, $b) {
-            $aIsNumeric = is_numeric($a);
-            $bIsNumeric = is_numeric($b);
-            if ($aIsNumeric && $bIsNumeric) {
-            return $a <=> $b;
-            }
-            if ($aIsNumeric !== $bIsNumeric) {
-            return $aIsNumeric ? -1 : 1;
-            }
-            return strcmp($a, $b);
-            })
-            ->values();
-            $staffOptions = $patientDetailOptionRows
-            ->mapWithKeys(function (array $row): array {
-            $staffId = trim((string) ($row['担当者ID'] ?? ''));
-            $staffName = trim((string) ($row['staff_display_name'] ?? ''));
-
-            return $staffId === '' ? [] : [$staffId => ($staffName !== '' ? $staffName : $staffId)];
-            })
-            ->all();
+            // 割合の選択肢はマスタT_割合（controller側のratioOptions）から表示順のまま使う。
+            // その日の実績だけから作ると、使用頻度の低い区分がその日たまたま無ければ
+            // 選べなくなっていた（2026-09-05修正）。
+            $ratioOptions = collect($ratioOptions ?? []);
+            // 担当者もmx_staffs(front_staff=1・在職)のcontroller側staffOptionsをそのまま使う。
+            // 「その日実際に使われた担当者だけ」だと新規スタッフや当日未登板のスタッフを
+            // 選べなかった（2026-09-05修正）。
+            $staffOptions = $staffOptions ?? [];
             $itemOptions = $makeOptions($patientDetailOptionRows->pluck('項目'));
             $menuOptions = $makeOptions($menuOptions ?? []);
             $countOptions = $makeOptions($patientDetailOptionRows->pluck('回数表示'));
@@ -900,11 +877,24 @@
                                                     <td><input type="text" class="right" name="detail_rows[{{ $loop->index }}][レセ差額]" value="{{ $detailRow['レセ差額'] }}"></td>
                                                     <td><input type="text" class="right" name="detail_rows[{{ $loop->index }}][請求金額]" value="{{ $detailRow['請求金額'] }}"></td>
                                                     <td><input type="text" class="right" name="detail_rows[{{ $loop->index }}][カード手数料]" value="{{ $detailRow['カード手数料'] }}"></td>
+                                                    @php
+                                                    // 退職者等、$staffOptions(在職かつfront_staff=1)に無いIDが
+                                                    // 既存行に入っている場合でも、選択肢から漏れて表示上「未選択」に
+                                                    // なり保存時に空欄で上書きされないよう、その行自身の値だけは
+                                                    // 常に選択肢へ加える（2026-09-05）。
+                                                    $rowStaffId = trim((string) ($detailRow['担当者ID'] ?? ''));
+                                                    $rowStaffOptions = $staffOptions;
+                                                    if ($rowStaffId !== '' && !array_key_exists($rowStaffId, $rowStaffOptions)) {
+                                                    $rowStaffOptions[$rowStaffId] = trim((string) ($detailRow['staff_display_name'] ?? '')) !== ''
+                                                    ? trim((string) $detailRow['staff_display_name'])
+                                                    : $rowStaffId;
+                                                    }
+                                                    @endphp
                                                     <td>
                                                         <select name="detail_rows[{{ $loop->index }}][担当者ID]">
                                                             <option value=""></option>
-                                                            @foreach ($staffOptions as $staffId => $staffName)
-                                                            <option value="{{ $staffId }}" @selected((string) ($detailRow['担当者ID'] ?? '' )===(string) $staffId)>{{ $staffName }}</option>
+                                                            @foreach ($rowStaffOptions as $staffId => $staffName)
+                                                            <option value="{{ $staffId }}" @selected((string) $rowStaffId===(string) $staffId)>{{ $staffName }}</option>
                                                             @endforeach
                                                         </select>
                                                     </td>

@@ -43,6 +43,11 @@ class EntryController extends Controller
             ->leftJoin('dbo.mx_insurers as insurer', 'detail.insurer_number', '=', 'insurer.insurer_number')
             ->leftJoin('dbo.mx_departments as department', 'department.store_short_name', '=', 'detail.store_name')
             ->leftJoin('dbo.mx_staffs as staff', 'detail.staff_name', '=', 'staff.staff_id')
+            ->leftJoinSub($this->paymentEntryOccurredAtQuery(), 'payment_entry', function ($join): void {
+                $join->whereRaw(
+                    "LTRIM(RTRIM(CAST(detail.payment_date_text AS NVARCHAR(255)))) = payment_entry.journal_breakdown_key"
+                );
+            })
             ->select([
                 'detail.insurance_claim_detail_id',
                 'detail.treatment_month',
@@ -66,6 +71,7 @@ class EntryController extends Controller
                 'detail.payment_amount',
                 'detail.store_name',
                 'department.store_category',
+                'payment_entry.occurred_at as payment_entry_occurred_at',
             ])
             ->where('detail.insurer_number', '<>', '99999999')
             // ->whereDate('detail.treatment_month', '>=', $targetMonthStart)
@@ -140,7 +146,11 @@ class EntryController extends Controller
                 'claim_amount_raw' => $this->formatMoneyValue($row->claim_amount),
                 'adjustment_amount' => $this->formatMoneyValue($row->adjustment_amount),
                 'adjustment_amount_raw' => $this->formatMoneyValue($row->adjustment_amount),
-                'payment_date_display' => trim((string) ($row->payment_date_text ?? '')),
+                // payment_date_textはmx_journal_entriesとの突き合わせ用キー文字列であって
+                // 日付そのものではない（例:"6042803"）。ここではpayment_entry_occurred_at
+                // （突き合わせ先仕訳の実際の入金日）を表示用に整形する（2026-09-05、
+                // 生の値がそのまま表示されて読めないと問い合わせがあり発覚）。
+                'payment_date_display' => $this->formatDateValue($row->payment_entry_occurred_at ?? null, 'Y/m/d'),
                 'payment_amount' => $this->formatMoneyValue($row->payment_amount),
                 'payment_amount_raw' => $row->payment_amount === null ? '' : rtrim(rtrim((string) $row->payment_amount, '0'), '.'),
             ])
@@ -505,6 +515,7 @@ class EntryController extends Controller
             ->selectRaw("
                 detail.store_name as department_name,
                 department.{$departmentNoColumn} as department_no,
+                department.official_store_no as official_store_no,
                 {$prefixCase} as journal_prefix,
                 {$itemCase} as item_name,
                 SUM(ISNULL(detail.claim_amount, 0) + ISNULL(detail.adjustment_amount, 0) - ISNULL(detail.returned_amount, 0)) as amount
@@ -512,7 +523,7 @@ class EntryController extends Controller
             ->where('detail.treatment_month', '>=', $targetMonthStart->format('Y-m-d'))
             ->where('detail.treatment_month', '<', $targetMonthNext->format('Y-m-d'))
             ->where('detail.insurer_number', '<>', '99999999')
-            ->groupByRaw("detail.store_name, department.{$departmentNoColumn}, {$prefixCase}, {$itemCase}")
+            ->groupByRaw("detail.store_name, department.{$departmentNoColumn}, department.official_store_no, {$prefixCase}, {$itemCase}")
             ->get();
 
         $changedCount = 0;
@@ -527,6 +538,7 @@ class EntryController extends Controller
             $prefix = trim((string) ($row->journal_prefix ?? '一般'));
             $itemName = trim((string) ($row->item_name ?? '一般保険請求'));
             $departmentNo = trim((string) ($row->department_no ?? ''));
+            $companyNameShort = $this->journalCompanyNameFromStoreCode($row->official_store_no ?? null);
             $journalBreakdown = $targetMonthStart->format('Ym') . $prefix . ($departmentNo !== '' ? $departmentNo : $departmentName);
 
             $journalQuery = DB::connection('sqlsrv')
@@ -546,7 +558,7 @@ class EntryController extends Controller
                     'credit_amount' => $amount,
                     'credit_item_name' => $itemName,
                     'credit_department_name' => $departmentName,
-                    'company_name_short' => $this->receiptMonthlyJournalCompanyName($departmentName),
+                    'company_name_short' => $companyNameShort,
                 ]);
                 $changedCount++;
                 continue;
@@ -569,7 +581,7 @@ class EntryController extends Controller
                     'credit_item_name' => $itemName,
                     'credit_tax_category' => '非課売上',
                     'credit_department_name' => $departmentName,
-                    'company_name_short' => $this->receiptMonthlyJournalCompanyName($departmentName),
+                    'company_name_short' => $companyNameShort,
                 ]);
 
             $changedCount++;
@@ -590,6 +602,7 @@ class EntryController extends Controller
             ->selectRaw("
                 detail.store_name as department_name,
                 department.{$departmentNoColumn} as department_no,
+                department.official_store_no as official_store_no,
                 SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) IN (N'ｵｳｼﾝﾏﾄﾞｸﾞﾁ', N'ﾁｮｳｾｲ') THEN ISNULL(detail.cash_collected_amount, 0) ELSE 0 END) as counter_amount,
                 SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) = N'ｺｼﾞﾝﾌﾘｺﾐ' THEN ISNULL(detail.cash_collected_amount, 0) ELSE 0 END) as personal_transfer_amount,
                 SUM(CASE WHEN LTRIM(RTRIM(ISNULL(detail.deposit_name, N''))) = N'ｼﾞﾋ' THEN ISNULL(detail.cash_collected_amount, 0) ELSE 0 END) as self_pay_amount
@@ -597,7 +610,7 @@ class EntryController extends Controller
             ->where('detail.treatment_month', '>=', $targetMonthStart->format('Y-m-d'))
             ->where('detail.treatment_month', '<', $targetMonthNext->format('Y-m-d'))
             ->where('detail.insurer_number', '99999999')
-            ->groupByRaw("detail.store_name, department.{$departmentNoColumn}")
+            ->groupByRaw("detail.store_name, department.{$departmentNoColumn}, department.official_store_no")
             ->get();
 
         $changedCount = 0;
@@ -610,6 +623,7 @@ class EntryController extends Controller
 
             $departmentNo = trim((string) ($row->department_no ?? ''));
             $journalKey = $departmentNo !== '' ? $departmentNo : $departmentName;
+            $companyNameShort = $this->journalCompanyNameFromStoreCode($row->official_store_no ?? null);
 
             $changedCount += $this->upsertReceiptMonthlyWindowJournalEntry(
                 $targetMonthStart,
@@ -618,7 +632,8 @@ class EntryController extends Controller
                 $journalKey,
                 $departmentName,
                 '保険窓口負担',
-                (float) ($row->counter_amount ?? 0)
+                (float) ($row->counter_amount ?? 0),
+                $companyNameShort
             );
 
             $changedCount += $this->upsertReceiptMonthlyWindowJournalEntry(
@@ -628,7 +643,8 @@ class EntryController extends Controller
                 $journalKey,
                 $departmentName,
                 '個人振込',
-                (float) ($row->personal_transfer_amount ?? 0)
+                (float) ($row->personal_transfer_amount ?? 0),
+                $companyNameShort
             );
 
             $changedCount += $this->upsertReceiptMonthlySelfPayJournalEntry(
@@ -636,7 +652,8 @@ class EntryController extends Controller
                 $targetMonth,
                 $journalKey,
                 $departmentName,
-                (float) ($row->self_pay_amount ?? 0)
+                (float) ($row->self_pay_amount ?? 0),
+                $companyNameShort
             );
         }
 
@@ -648,7 +665,8 @@ class EntryController extends Controller
         Carbon $targetMonth,
         string $journalKey,
         string $departmentName,
-        float $amount
+        float $amount,
+        string $companyNameShort
     ): int {
         if ($amount === 0.0) {
             return 0;
@@ -670,7 +688,7 @@ class EntryController extends Controller
             'credit_item_name' => '自費',
             'credit_tax_category' => '課税売上10%',
             'credit_department_name' => $departmentName,
-            'company_name_short' => $this->receiptMonthlyJournalCompanyName($departmentName),
+            'company_name_short' => $companyNameShort,
         ];
 
         $journalQuery = DB::connection('sqlsrv')
@@ -700,7 +718,8 @@ class EntryController extends Controller
         string $journalKey,
         string $departmentName,
         string $itemName,
-        float $amount
+        float $amount,
+        string $companyNameShort
     ): int {
         if ($amount === 0.0) {
             return 0;
@@ -722,7 +741,7 @@ class EntryController extends Controller
             'credit_item_name' => $itemName,
             'credit_tax_category' => '非課売上',
             'credit_department_name' => $departmentName,
-            'company_name_short' => $this->receiptMonthlyJournalCompanyName($departmentName),
+            'company_name_short' => $companyNameShort,
         ];
 
         $journalQuery = DB::connection('sqlsrv')
@@ -760,19 +779,6 @@ class EntryController extends Controller
     private function receiptDepartmentNoColumn(): string
     {
         return 'department_no';
-    }
-    private function receiptMonthlyJournalCompanyName(string $departmentName): string
-    {
-        return trim((string) (DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->where(function ($query) use ($departmentName): void {
-                $query->where('debit_department_name', $departmentName)
-                    ->orWhere('credit_department_name', $departmentName);
-            })
-            ->whereNotNull('company_name_short')
-            ->where('company_name_short', '<>', '')
-            ->orderByDesc('journal_entry_id')
-            ->value('company_name_short') ?? ''));
     }
     private function receiptMonthlyClosingRow(Carbon $targetMonth): ?object
     {
