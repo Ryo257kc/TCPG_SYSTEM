@@ -247,8 +247,9 @@
 </head>
 
 <body>
-    <main class="container">
+    <main class="container" id="payment-confirmation-top">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section @class([ 'panel' , 'content-panel' , 'staff-viewport-panel' , 'payment-confirmation-has-selection'=> !empty($selectedPaymentRow),
             ])
@@ -256,7 +257,7 @@
             data-payment-delete-url="{{ route('office.receipt.payment_confirmation.delete') }}"
             data-payment-csrf="{{ csrf_token() }}"
             data-payment-journal-entry-id="{{ $selectedPaymentRow['journal_entry_id'] ?? '' }}">
-            <div class="content-head" id="payment-confirmation-top">
+            <div class="content-head">
                 <h2 class="content-title">入金確認一覧</h2>
                 @if (!empty($journalImportedThrough))
                 <p class="f_size12">

@@ -16,6 +16,10 @@ class PaymentConfirmationController extends Controller
 
     private const BLANK_DEPOSIT_NAME_LABEL = '（入金名称なし）';
 
+    // 絞り込み条件が緩いと候補内訳が数千〜数万件になり、メモリ不足で画面が落ちる
+    // （2026-09-05発覚）。上限を超えたら黙って切り詰めず、絞り込みを促す表示にする。
+    private const MAX_CANDIDATE_ROWS = 500;
+
     public function index(Request $request): RedirectResponse|View
     {
         $staffId = (string) $request->session()->get('staff_id', '');
@@ -123,6 +127,7 @@ class PaymentConfirmationController extends Controller
 
         $selectedPaymentRow = $paymentRows->firstWhere('journal_entry_id', $selectedJournalEntryId);
         $candidateReceiptRows = [];
+        $statusMessage = '';
         $detailInsurerOptions = [];
         $detailDepositNameOptions = [];
 
@@ -220,6 +225,13 @@ class PaymentConfirmationController extends Controller
                 ])
                 ->where('detail.insurer_number', '<>', '99999999');
 
+            if (($selectedPaymentRow['company_id'] ?? '') !== '') {
+                $candidateRowsQuery->whereRaw(
+                    'LTRIM(RTRIM(CAST(detail_store.company_id AS NVARCHAR(255)))) = ?',
+                    [$selectedPaymentRow['company_id']]
+                );
+            }
+
             if ($detailInsurerKeyword !== '') {
                 $candidateRowsQuery->where(function ($query) use ($detailInsurerKeyword): void {
                     $query->where('detail.insurer_number', 'like', '%' . $detailInsurerKeyword . '%')
@@ -243,12 +255,6 @@ class PaymentConfirmationController extends Controller
                     'LTRIM(RTRIM(CAST(detail.payment_date_text AS NVARCHAR(255)))) = ?',
                     [$selectedPaymentKey]
                 );
-                if (($selectedPaymentRow['company_id'] ?? '') !== '') {
-                    $candidateRowsQuery->whereRaw(
-                        'LTRIM(RTRIM(CAST(detail_store.company_id AS NVARCHAR(255)))) = ?',
-                        [$selectedPaymentRow['company_id']]
-                    );
-                }
             } elseif ($detailTab === 'unpaid') {
                 $candidateRowsQuery
                     ->where('detail.deposit_name', $selectedPaymentRow['deposit_name'])
@@ -267,11 +273,17 @@ class PaymentConfirmationController extends Controller
                 }
             }
 
-            $candidateReceiptRows = $candidateRowsQuery
+            $candidateRows = $candidateRowsQuery
                 ->orderBy('detail.treatment_month')
                 ->orderBy('detail.insurer_number')
                 ->orderBy('detail.insurance_claim_detail_id')
-                ->get()
+                ->limit(self::MAX_CANDIDATE_ROWS + 1)
+                ->get();
+            if ($candidateRows->count() > self::MAX_CANDIDATE_ROWS) {
+                $statusMessage = '検索結果が多いため、一部のみ表示しています。保険者名や入金名称でさらに絞り込んでください。';
+            }
+            $candidateReceiptRows = $candidateRows
+                ->take(self::MAX_CANDIDATE_ROWS)
                 ->map(fn($row): array => [
                     'insurance_claim_detail_id' => (int) ($row->insurance_claim_detail_id ?? 0),
                     'treatment_month' => $this->formatDateValue($row->treatment_month, 'Y/m/d'),
@@ -322,6 +334,7 @@ class PaymentConfirmationController extends Controller
             'paymentRows' => $paymentRows->all(),
             'selectedPaymentRow' => $selectedPaymentRow,
             'candidateReceiptRows' => $candidateReceiptRows,
+            'statusMessage' => $statusMessage,
             'journalImportedThrough' => $this->journalImportedThroughByCompany(),
         ]));
     }
@@ -558,16 +571,6 @@ class PaymentConfirmationController extends Controller
             'confirmed_amount' => $this->formatMoneyValue($confirmedAmount),
             'remaining_amount' => $remainingAmount == 0.0 ? '0' : $this->formatMoneyValue($remainingAmount),
         ];
-    }
-
-    private function paymentEntryOccurredAtQuery()
-    {
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_journal_entries')
-            ->selectRaw('LTRIM(RTRIM(CAST(journal_breakdown AS NVARCHAR(255)))) as journal_breakdown_key')
-            ->selectRaw('MAX(occurred_at) as occurred_at')
-            ->whereNotNull('journal_breakdown')
-            ->groupByRaw('LTRIM(RTRIM(CAST(journal_breakdown AS NVARCHAR(255))))');
     }
 
     private function confirmedPaymentAmountForJournalBreakdown(mixed $journalBreakdown, mixed $companyId): float
