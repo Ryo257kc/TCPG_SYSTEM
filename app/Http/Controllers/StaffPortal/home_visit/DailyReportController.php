@@ -820,7 +820,7 @@ class DailyReportController extends Controller
             return back()->withErrors(['date' => '日付がありません。']);
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->whereDate('treatment_date', $date)
             ->where('staff_name', $targetStaffId)
@@ -832,7 +832,7 @@ class DailyReportController extends Controller
         return redirect()->route('home_visit.daily_report', [
             'date' => date('Y-m-d', strtotime($date)),
             'staff_name' => $targetStaffId,
-        ])->with('status', '本人確定しました。');
+        ])->with('status', $affected > 0 ? '本人確定しました。' : '対象の日報がありませんでした。');
     }
 
     // 確定解除
@@ -853,7 +853,7 @@ class DailyReportController extends Controller
             return back()->withErrors(['date' => '日付がありません。']);
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->whereDate('treatment_date', $date)
             ->where('staff_name', $staffId)
@@ -865,7 +865,7 @@ class DailyReportController extends Controller
 
         return redirect()->route('home_visit.monthly_report', [
             'month' => date('Y-m', strtotime($date)),
-        ])->with('status', '確定解除しました。');
+        ])->with('status', $affected > 0 ? '確定解除しました。' : '対象の日報がありませんでした。');
     }
 
     // 管理確定
@@ -886,7 +886,7 @@ class DailyReportController extends Controller
             return back()->withErrors(['date' => '日付がありません。']);
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->whereDate('treatment_date', $date)
             ->where('staff_name', $staffId)
@@ -896,7 +896,7 @@ class DailyReportController extends Controller
 
         return redirect()->route('home_visit.monthly_report', [
             'month' => date('Y-m', strtotime($date)),
-        ])->with('status', '管理確定しました。');
+        ])->with('status', $affected > 0 ? '管理確定しました。' : '対象の日報がありませんでした。');
     }
 
 }

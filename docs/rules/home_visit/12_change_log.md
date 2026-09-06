@@ -1,5 +1,33 @@
 # 往診 変更履歴・注意点
 
+## 2026-08-24 フォールバック監査（保存確認漏れ一斉修正と同時に実施）
+
+`ReceiptController.php`の入金確定バナー表示（`is_payment_confirmed`/`payment_confirmed_at`）が、
+対象月の全明細ではなく`$items->first()`（先頭行）だけを見て判定していた。一括確定後に
+未確定の明細が追加されても、先頭行が確定済みなら画面全体が確定済みに見えてしまう。
+`hv_office/DepositManagementController::depositData()`の`isAllConfirmed`判定
+（`->every()`で全行確認）と同じロジックに揃えて修正。
+
+`AttendanceV2ConfirmedStateService::mapByStaffIds()`は、`mx_time_cards.attendance_checked`
+カラムが存在しない場合に「全スタッフ未確定」を黙って返していた。この判定は往診の
+売上ロック（`DailyReportController::isSalesLockedByAttendance()`）だけでなく、給与側の
+編集ロック解除判定（`PayrollV2UpdateService`）や管理画面の勤怠確定表示にも使われており、
+スキーマが想定外に変化した場合に「未確定」＝ロック解除側に静かに倒れる危険な作り。
+DEV上は現在カラムが存在することを確認済み（実害なし）だが、フォールバックをやめて
+例外を投げる形に変更し、今後スキーマが崩れた場合に気づけるようにした。
+
+## 2026-08-24 保存確認漏れ一斉修正（041優先範囲の監査に続き、往診ドメインも横断監査）
+
+`PatientController::update()`/`delete()`（患者マスタ、`hv_kanjya_info`）と
+`MonthlyVisitController::update()`（月間回数・日報編集、`hv_nippou`）は、対象行の存在確認・
+`update()`/`delete()`の影響行数チェックが**一切**無く、常に成功メッセージを返していた。
+特に`MonthlyVisitController::update()`は事前の`first()`すら無い、このセッションで見つけた中で
+最も無防備な形。標準負担額・治療費・距離等の金額項目も対象に含まれる。
+`DailyReportController::confirm()`/`unconfirm()`/`adminConfirm()`・
+`PaymentConfirmedController::confirm()`/`unconfirm()`（本人確定・管理確定・入金確定の
+一括更新系）も影響行数を見ずに固定メッセージだった。全て影響行数を見て、0件なら
+対象なし/見つからない旨を返すよう修正。
+
 ## 構造的な壊れ方への警戒(2026-08-12時点)
 
 往診(home-visit)セクションは新システムで最初に作られた部分で、ユーザー曰く「往診を最初に作ってとんでもなくめちゃくちゃにされて、多分２回ぐらい作り変えてる」。このため他のドメインより構造的な破損（コンパイル済みBladeキャッシュがそのままsourceの`.blade.php`として保存されている等）が起きやすい。

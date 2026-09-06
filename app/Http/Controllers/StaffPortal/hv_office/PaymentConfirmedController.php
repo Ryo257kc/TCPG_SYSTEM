@@ -56,7 +56,7 @@ class PaymentConfirmedController extends Controller
         $targetMonthStart = date('Y-m-01', strtotime($targetMonth));
         $targetMonthNext = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
             ->where('target_month', '>=', $targetMonthStart)
@@ -68,7 +68,7 @@ class PaymentConfirmedController extends Controller
 
         return redirect()->route('hv_office.payment_confirmed', [
             'year' => date('Y', strtotime($targetMonthStart)),
-        ])->with('status', '確定しました。');
+        ])->with('status', $affected > 0 ? '確定しました。' : '対象の入金データがありませんでした。');
     }
 
     // 管理者側：全スタッフ分の入金確定状況（旧システムのkanri_rireki_ryoshu.phpを踏襲）
@@ -131,7 +131,7 @@ class PaymentConfirmedController extends Controller
         $targetMonthStart = date('Y-m-01', strtotime($targetMonth));
         $targetMonthNext = date('Y-m-d', strtotime($targetMonthStart . ' +1 month'));
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_ryoukin')
             ->whereRaw('LTRIM(RTRIM(payment_staff)) = ?', [$staffId])
             ->where('target_month', '>=', $targetMonthStart)
@@ -143,6 +143,6 @@ class PaymentConfirmedController extends Controller
 
         return redirect()->route('hv_office.payment_confirmed', [
             'year' => date('Y', strtotime($targetMonthStart)),
-        ])->with('status', '解除しました。');
+        ])->with('status', $affected > 0 ? '解除しました。' : '対象の入金データがありませんでした。');
     }
 }

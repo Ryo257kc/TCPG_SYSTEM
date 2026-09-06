@@ -478,7 +478,7 @@ class MonthlyVisitController extends Controller
             'daily_report_address' => ['nullable', 'string', 'max:200'],
         ]);
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_nippou')
             ->where('daily_report_id', $daily_report_id)
             ->update([
@@ -499,16 +499,24 @@ class MonthlyVisitController extends Controller
                 'daily_report_address' => $validated['daily_report_address'] ?? null,
             ]);
 
+        $redirectParams = [
+            'target_month' => $request->input('target_month'),
+            'switch_type' => $request->input('switch_type'),
+            'daily_report_store_name' => $request->input('daily_report_store_name'),
+            'billing_staff' => $request->input('billing_staff'),
+            'daily_report_facility_name' => $request->input('daily_report_facility_name'),
+            'patient_name' => $request->input('patient_name'),
+            'patient_id' => $request->input('patient_id'),
+        ];
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('home_visit.monthly_visit', $redirectParams)
+                ->with('status', '更新対象の日報が見つかりません。画面を更新してから再度お試しください。');
+        }
+
         return redirect()
-            ->route('home_visit.monthly_visit', [
-                'target_month' => $request->input('target_month'),
-                'switch_type' => $request->input('switch_type'),
-                'daily_report_store_name' => $request->input('daily_report_store_name'),
-                'billing_staff' => $request->input('billing_staff'),
-                'daily_report_facility_name' => $request->input('daily_report_facility_name'),
-                'patient_name' => $request->input('patient_name'),
-                'patient_id' => $request->input('patient_id'),
-            ])
+            ->route('home_visit.monthly_visit', $redirectParams)
             ->with('status', '保存しました。');
     }
 }

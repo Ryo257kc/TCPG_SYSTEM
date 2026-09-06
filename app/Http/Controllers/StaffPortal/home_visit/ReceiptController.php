@@ -151,8 +151,12 @@ class ReceiptController extends Controller
         $facility_name_options = $this->patientFacilityOptions();
         $payment_staff_options = $this->homeVisitStaffOptions($targetMonthStart);
 
-        $payment_confirmed_at = $items->first()?->payment_confirmed_at;
-        $is_payment_confirmed = (int) ($items->first()?->is_payment_confirmed ?? 0);
+        // 確定済表示は「先頭行」ではなく「対象月の全行」で判定する。先頭行だけ見ると、
+        // 一括確定後に未確定の明細が追加された場合でも先頭が確定済なら画面全体が
+        // 確定済に見えてしまう（DepositManagementController::depositData()のisAllConfirmedと
+        // 同じ判定に揃える、2026-08-24発覚）。
+        $is_payment_confirmed = $items->isNotEmpty() && $items->every(fn($item): bool => (int) $item->is_payment_confirmed === 1) ? 1 : 0;
+        $payment_confirmed_at = $is_payment_confirmed === 1 ? $items->max('payment_confirmed_at') : null;
 
         $selectedPatient = null;
         $receiptDetailRows = collect();

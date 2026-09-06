@@ -35,7 +35,11 @@ class AttendanceV2ConfirmedStateService
         }
 
         if (!Schema::connection('sqlsrv')->hasColumn('mx_time_cards', 'attendance_checked')) {
-            return $result;
+            // ここで「全員未確定」を黙って返すと、給与側の編集ロック解除や
+            // 往診売上のロック解除など、確定済み扱いされるべき箇所が静かに
+            // 未確定＝編集可能になってしまう（2026-08-24発覚）。
+            // 想定外のスキーマ変化なので握りつぶさず例外で気づけるようにする。
+            throw new \RuntimeException('mx_time_cards.attendance_checked カラムが見つかりません。勤怠確定状態を判定できません。');
         }
 
         $fromDate = sprintf('%04d-%02d-01', $year, $month);

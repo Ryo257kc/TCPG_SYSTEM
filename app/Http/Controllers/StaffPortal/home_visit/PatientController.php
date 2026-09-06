@@ -186,7 +186,7 @@ class PatientController extends Controller
 
         $validated = $request->validate($this->patientValidationRules());
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
             ->where('patient_id', $patient_id)
             ->update([
@@ -211,6 +211,12 @@ class PatientController extends Controller
                 'consent_date' => $validated['consent_date'] ?? null,
             ]);
 
+        if ($affected === 0) {
+            return redirect()
+                ->route('patients.edit', ['patient_id' => $patient_id])
+                ->with('status', '更新対象の患者が見つかりません。画面を更新してから再度お試しください。');
+        }
+
         return redirect()
             ->route('patients.edit', ['patient_id' => $patient_id])
             ->with('status', '更新しました');
@@ -228,10 +234,16 @@ class PatientController extends Controller
             abort(403);
         }
 
-        DB::connection('sqlsrv')
+        $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
             ->where('patient_id', $patientNo)
             ->delete();
+
+        if ($affected === 0) {
+            return redirect()
+                ->route('home_visit.patients.index')
+                ->with('status', '削除対象の患者が見つかりません。画面を更新してから再度お試しください。');
+        }
 
         return redirect()
             ->route('home_visit.patients.index')
