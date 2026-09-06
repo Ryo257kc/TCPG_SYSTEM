@@ -47,15 +47,6 @@
             font-size: 13px
         }
 
-        .status {
-            margin: 10px 0 0;
-            padding: 10px 12px;
-            border-radius: 10px;
-            background: #edf7ed;
-            border: 1px solid #c9e3c9;
-            color: #25603b
-        }
-
         .store-layout {
             display: grid;
             grid-template-columns: 220px minmax(0, 1fr);

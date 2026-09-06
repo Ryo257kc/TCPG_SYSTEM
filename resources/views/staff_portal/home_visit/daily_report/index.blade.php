@@ -12,6 +12,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <style>
             .sales-amount-form {
@@ -37,14 +38,6 @@
             <div class="content-head">
                 <h2 class="content-title">往診日報</h2>
             </div>
-
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
             <div class="dr-toolbar">
                 <form method="get" action="{{ route('home_visit.daily_report') }}">

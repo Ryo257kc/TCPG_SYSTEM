@@ -11,7 +11,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
-
+        @include('shared.status_message')
 
         <style>
             /* .error { margin-bottom: 10px; color: #b00020; font-size: 12px; } */
@@ -123,9 +123,6 @@
             <h1 align="center" class="margin_b20">往診日報 詳細編集</h1>
             <!-- <h2 class="content-title">往診日報 詳細編集</h2> -->
 
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
             @if($isReadOnly ?? false)
             <div class="error">確定済みのため閲覧のみです。編集するには管理者に確定解除を依頼してください。</div>
             @endif

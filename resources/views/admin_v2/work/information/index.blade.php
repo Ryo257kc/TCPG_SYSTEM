@@ -15,20 +15,12 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">TCPG SYSTEM インフォメーション</h1>
         </div>
 
         <section class="panel information-page-panel">
-            @if (session('status'))
-            <div class="status_box">{{ session('status') }}</div>
-            @endif
-
-            @if ($errors->any())
-            <div class="error_box">
-                {{ $errors->first() }}
-            </div>
-            @endif
 
             <section class="information-section">
                 <div class="information-section-head">

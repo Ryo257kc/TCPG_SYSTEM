@@ -197,13 +197,10 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">年末調整管理</h1>
         </div>
-
-        @if (session('status'))
-        <div class="status">{{ session('status') }}</div>
-        @endif
 
         @if (!$tableExists)
         <div class="error">mx_nen_tyo テーブルが見つかりません。</div>

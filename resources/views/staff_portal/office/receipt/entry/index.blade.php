@@ -34,17 +34,7 @@
                 <h2 class="content-title">レセ請求入力</h2>
             </div>
 
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif
-
-            @if ($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
-
-            @if (session('statusMessage'))
-            <div class="status">{{ session('statusMessage') }}</div>
-            @endif
+            @include('shared.status_message')
 
             <form id="receipt-monthly-close-form" method="post" action="{{ route('office.receipt.entry.monthly_close') }}">
                 @csrf

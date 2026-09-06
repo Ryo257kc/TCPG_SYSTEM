@@ -29,19 +29,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">返戻ノート</h2>
             </div>
-
-            @if (session('statusMessage'))
-            <div class="status-message status">{{ session('statusMessage') }}</div>
-            @endif
-
-            @if (session('errorMessage'))
-            <div class="status-message error">{{ session('errorMessage') }}</div>
-            @endif
 
             <form method="get" action="{{ route('office.store_daily_report.return_note') }}" class="filter-row return-note-filter">
                 <label>

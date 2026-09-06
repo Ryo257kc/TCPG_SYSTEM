@@ -204,17 +204,10 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">請求一覧</h1>
         </div>
-
-        @if (session('status'))
-        <div class="status">{{ session('status') }}</div>
-        @endif
-
-        @if ($errors->any())
-        <div class="error">{{ $errors->first() }}</div>
-        @endif
 
         <section class="billing-layout">
             <aside class="panel billing-list-panel">

@@ -331,6 +331,7 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">{{ $targetYear }}年　年末調整詳細</h1>
             <a href="{{ route('admin.work.year_end_adjustments', ['target_year' => $targetYear]) }}" class="btn btn-outline">一覧へ戻る</a>
@@ -340,10 +341,6 @@
             <a href="{{ route('admin.work.year_end_adjustments.gensen_bo.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">源泉徴収簿</a>
             <a href="{{ route('admin.work.year_end_adjustments.gensen_hyou.preview', ['applicationId' => $applicationId]) }}" target="_blank" rel="noopener" class="btn btn-outline">源泉徴収票</a>
         </div>
-
-        @if (session('status'))
-        <div class="panel">{{ session('status') }}</div>
-        @endif
 
         <section class="panel">
             <div class="year-end-detail-grid">

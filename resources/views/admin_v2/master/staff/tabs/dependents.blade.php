@@ -126,18 +126,6 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
   </div>
 
   <div class="staff-tab-panels">
-    @if(session('status'))
-    <div class="status">{{ session('status') }}</div>
-    @endif
-
-    @if ($errors->any())
-    <div class="error">
-      @foreach ($errors->all() as $error)
-      <div>{{ $error }}</div>
-      @endforeach
-    </div>
-    @endif
-
     <div class="master-create" id="fuyo-create">
       <button type="button" class="btn-secondary master-toggle-btn" data-toggle-target="fuyo-create">＋新規登録</button>
       <form method="post" action="{{ route('admin.master.staff.fuyo.store') }}" class="info-block master-toggle-body">

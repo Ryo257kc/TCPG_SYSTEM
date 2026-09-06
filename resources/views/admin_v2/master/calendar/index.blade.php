@@ -145,13 +145,11 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM カレンダーマスタ</div>
         </div>
         <section class="panel">
-            @if (session('status'))
-            <p>{{ session('status') }}</p>
-            @endif
 
             <div class="filter-form calendar-controls">
                 <form method="get" class="filter-form filter-form-inline">

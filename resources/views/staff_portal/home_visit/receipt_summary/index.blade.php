@@ -59,19 +59,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel sales-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">領収金額 集計</h2>
             </div>
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
-
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
 
             @if($existingCount > 0)
             <div class="receipt-summary-message">「{{ $target_month }}」は既に集計されています。</div>

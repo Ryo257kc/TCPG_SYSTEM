@@ -202,6 +202,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel sales-panel staff-viewport-panel monthly-visit-panel">
 
@@ -209,13 +210,6 @@
                 <h2 class="content-title">往診月間回数</h2>
             </div>
 
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
             <div class="error" data-monthly-visit-print-error style="display: none;"></div>
 
             <form method="get" action="{{ route('home_visit.monthly_visit') }}" class="monthly-visit-toolbar" data-print-url="{{ route('home_visit.monthly_visit.print') }}">

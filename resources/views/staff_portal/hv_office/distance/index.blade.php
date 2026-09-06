@@ -37,15 +37,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">移動距離集計</h2>
             </div>
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
             <form method="get" action="{{ route('hv_office.distance') }}" class="distance-toolbar">
                 <label>

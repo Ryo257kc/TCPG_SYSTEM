@@ -443,17 +443,12 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">TCPG SYSTEM 仕訳帳</h1>
         </div>
 
         <section class="panel journal-entries-panel admin-viewport-panel ">
-            @if (session('statusMessage'))
-            <div class="status">{{ session('statusMessage') }}</div>
-            @endif
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif
 
             <form id="journal-entries-import-form" method="post" action="{{ route('admin.work.journal_entries.import') }}" enctype="multipart/form-data">
                 @csrf

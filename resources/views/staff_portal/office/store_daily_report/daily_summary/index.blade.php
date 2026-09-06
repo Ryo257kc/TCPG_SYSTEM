@@ -29,6 +29,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
@@ -148,13 +149,6 @@
                 <input type="hidden" name="target_month" value="{{ $targetMonth ?? now()->format('Y-m') }}">
             </form>
 
-            @if (session('statusMessage'))
-            <div class="status-message status">{{ session('statusMessage') }}</div>
-            @endif
-
-            @if (session('errorMessage'))
-            <div class="status-message error">{{ session('errorMessage') }}</div>
-            @endif
             <div class="table-wrap f_size13">
                 <table class="data-table">
                     <colgroup>

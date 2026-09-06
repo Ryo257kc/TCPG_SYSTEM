@@ -32,15 +32,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel sales-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">往診売上</h2>
             </div>
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
             <form method="get" action="{{ route('home_visit.sales') }}" class="home-visit-sales-toolbar">
                 <label>

@@ -420,6 +420,7 @@ button,
     background: #fff3e4;
     color: #8f4c1f;
     font-weight: 700;
+    font-size: 14px;
 }
 
 /* 成功メッセージ */
@@ -427,7 +428,7 @@ button,
     border: 1px solid #7fb58b;
     background: #eef9f0;
     color: #1f6b32;
-    margin:10px 0px;
+    margin: 10px 0;
 }
 
 /* エラー */
@@ -435,6 +436,7 @@ button,
     border: 1px solid #d66b6b;
     background: #fff0f0;
     color: #9b1c1c;
+    margin: 10px 0;
 }
 
 /* 件数なしメッセージ */

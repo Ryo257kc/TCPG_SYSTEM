@@ -93,14 +93,11 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM スタッフ権限一覧</div>
         </div>
         <section class="panel">
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
             <form method="get" class="filter-form">
                 <input type="text" name="q" value="{{ $keyword }}" placeholder="ID / 氏名 / 店舗名で検索">
                 <select name="employment_filter">
@@ -231,8 +228,11 @@
                         </tr>
                         <tr>
                             <td class="col-staff">店舗システム</td>
-                            <td class="col-staff">現在システム内で参照している箇所なし（未使用）。旧システムが往診用と店舗用に分かれていた頃の名残。</td>
-                            <td class="col-staff">（なし）</td>
+                            <td class="col-staff">実体は施術担当（front_staff）権限。店舗日報詳細画面（daily_summary/detail）の
+                                「担当者」選択リストに表示されるかどうかを制御する（在職中のみ、退職者は表示されない）。
+                                旧来「店舗システム」という表示名だが、実際に効いているのはこの担当者リストのみ
+                                （2026-09-05確認。過去に実際使われた担当者IDは全てこの権限を持つスタッフと一致）。</td>
+                            <td class="col-staff">（ダッシュボードには該当なし。店舗日報の担当者リストにのみ影響）</td>
                         </tr>
                     </tbody>
                 </table>

@@ -15,20 +15,12 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">TCPG SYSTEM メンテナンス設定</h1>
         </div>
 
         <section class="panel information-page-panel">
-            @if (session('status'))
-            <div class="status_box">{{ session('status') }}</div>
-            @endif
-
-            @if ($errors->any())
-            <div class="error_box">
-                {{ $errors->first() }}
-            </div>
-            @endif
 
             <p>指定した時間帯は、システムマスタ以外ログイン不可・既にログイン中の人も次のページ操作で強制ログアウトになります。</p>
 

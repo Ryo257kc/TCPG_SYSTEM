@@ -56,10 +56,6 @@ return $text !== '' && !in_array(mb_strtolower($text), ['0', 'false', 'no', 'off
   </div>
 
   <div class="staff-tab-panels">
-    @if(session('status'))
-    <div class="status">{{ session('status') }}</div>
-    @endif
-
     <form method="post" action="{{ route('admin.master.staff.insurance.update') }}" class="info-block social-insurance-block master-editable" id="social-insurance-basic">
       @csrf
       <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">

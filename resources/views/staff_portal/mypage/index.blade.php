@@ -133,18 +133,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">MyPage</h2>
             </div>
-
-            @if (session('statusMessage'))
-            <div class="status">{{ session('statusMessage') }}</div>
-            @endif
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif
 
             <p class="notice center">変更する項目の編集ボタンを押して、変更後に保存してください。</p>
 

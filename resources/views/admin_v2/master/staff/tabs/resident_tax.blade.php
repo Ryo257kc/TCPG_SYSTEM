@@ -130,10 +130,6 @@ return $value;
   </div>
 
   <div class="staff-tab-panels">
-    @if(session('status'))
-    <div class="status">{{ session('status') }}</div>
-    @endif
-
     <div class="master-create" id="resident-tax-create">
       <button type="button" class="btn-secondary master-toggle-btn" data-toggle-target="resident-tax-create">＋新規登録</button>
       <form method="post" action="{{ route('admin.master.staff.resident.store') }}" class="info-block resident-tax-block master-toggle-body">

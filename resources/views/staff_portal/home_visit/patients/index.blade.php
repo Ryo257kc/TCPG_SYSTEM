@@ -12,6 +12,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <style>
             .w-keyword {
@@ -28,14 +29,6 @@
             <div class="content-head">
                 <h2 class="content-title">患者一覧</h2>
             </div>
-
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
 
             @if($errors->has('patients'))

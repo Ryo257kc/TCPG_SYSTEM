@@ -87,6 +87,7 @@
 <body class="attendance-punch-page">
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel attendance-punch-panel">
             <div class="content-head">
@@ -95,10 +96,6 @@
 
             <p class="attendance-punch-now">現在日時： {{ $currentDateTime }}</p>
             <p class="attendance-punch-user">ログイン： <strong>{{ $displayName }}</strong></p>
-
-            @if (!empty($statusMessage))
-            <div class="attendance-punch-message">{{ $statusMessage }}</div>
-            @endif
 
             <div class="attendance-punch-actions">
                 <button type="button" class="attendance-punch-action">始業</button>

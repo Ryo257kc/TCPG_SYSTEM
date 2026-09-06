@@ -100,6 +100,7 @@
 <body class="attendance-edit-page">
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName ?? '', 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <h2 class="center">勤怠編集</h2>
@@ -108,10 +109,6 @@
                 中抜けや休憩した際はその時刻も入力してください。<br><br>
                 差戻しがあった際は理由が記載されますので、その内容を確認の上、再申請してください。
             </p>
-
-            @if (session('errorMessage'))
-            <div class="error-box">{{ session('errorMessage') }}</div>
-            @endif
 
             <form method="post" action="{{ route('attendance.update', ['timeNo' => $timeNo]) }}">
                 @csrf

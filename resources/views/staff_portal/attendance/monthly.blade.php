@@ -46,15 +46,13 @@
 <body class="attendance-monthly-page">
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">月間勤怠</h2>
             </div>
 
-            @if ($statusMessage !== '')
-            <div class="status">{{ $statusMessage }}</div>
-            @endif
             <div class="staff-title-row">
                 <form method="get" action="{{ route('attendance.monthly') }}" class="filter-row">
                     <label for="month">日付</label>

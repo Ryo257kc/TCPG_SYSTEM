@@ -58,10 +58,6 @@ return '履歴 ' . $fallback;
   </div>
 
   <div class="staff-tab-panels">
-    @if(session('status'))
-    <div class="status">{{ session('status') }}</div>
-    @endif
-
     <div class="master-create" id="master-create">
       <button type="button" class="btn-secondary master-toggle-btn" data-toggle-target="master-create">＋新規登録</button>
       <form method="post" action="{{ route('admin.master.staff.kihon.store') }}" class="info-block payroll-master-block master-toggle-body">

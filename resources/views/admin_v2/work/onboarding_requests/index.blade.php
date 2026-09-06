@@ -51,13 +51,10 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">入社手続き申請管理</h1>
         </div>
-
-        @if (session('status'))
-        <div class="status">{{ session('status') }}</div>
-        @endif
 
         <section class="panel">
             <form method="get" action="{{ route('admin.work.onboarding_requests') }}" class="year-end-toolbar">

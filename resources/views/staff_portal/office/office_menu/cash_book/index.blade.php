@@ -13,18 +13,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">現金出納帳</h2>
             </div>
-
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif
-            @if (session('statusMessage'))
-            <div class="status">{{ session('statusMessage') }}</div>
-            @endif
 
             <form method="get" class="toolbar">
                 <div class="toolbar-group">

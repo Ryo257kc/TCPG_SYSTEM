@@ -82,18 +82,9 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
-
-
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
-
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
             <h2 class="content-title">患者詳細</h2>
 

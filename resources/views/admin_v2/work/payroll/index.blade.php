@@ -29,6 +29,7 @@
   @include('admin_v2.shared.global_nav')
   @php require resource_path('views/admin_v2/work/payroll/page_state_runtime.php'); @endphp
   <div class="wrap">
+    @include('shared.status_message')
     <div class="top">
       <div class="title">TCPG SYSTEM 給与計算</div>
     </div>

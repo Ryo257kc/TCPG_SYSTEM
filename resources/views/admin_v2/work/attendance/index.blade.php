@@ -571,14 +571,10 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM 勤怠管理</div>
         </div>
-        @if (session('status'))
-        <div class="status">
-            {{ session('status') }}
-        </div>
-        @endif
         <section class="panel" id="attendance-main">
             <form method="GET" class="filters">
                 <label for="month">対象月</label>

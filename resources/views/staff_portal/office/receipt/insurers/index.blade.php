@@ -108,7 +108,7 @@
 </head>
 
 <body>
-    <main class="container">@include('staff_portal.shared.app_header', ['displayName'=> $displayName, 'hidePayrollLinks'=> $hidePayrollLinks ?? false]) @php $oldOriginalInsurerNumber =trim((string) old('original_insurer_number', ''));
+    <main class="container">@include('staff_portal.shared.app_header', ['displayName'=> $displayName, 'hidePayrollLinks'=> $hidePayrollLinks ?? false]) @include('shared.status_message') @php $oldOriginalInsurerNumber =trim((string) old('original_insurer_number', ''));
         $oldInsurerNumber =old('insurer_number');
         $hasOldInsurerInput =$oldInsurerNumber !==null;
         $isNewErrorRow =$hasOldInsurerInput && $oldOriginalInsurerNumber ==='';
@@ -129,12 +129,6 @@
                     <button type="submit" class="btn btn-primary margin_l20">表示</button>
                 </div>
             </form>
-            @if (session('errorMessage'))
-            <div class="error">{{ session('errorMessage') }}</div>
-            @endif @if ($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif @if (session('successMessage'))
-            <div class="status">{{ session('successMessage') }}</div>@endif
             <datalist id="insurer-scheduled-payment-name-options">
                 @foreach (($scheduledPaymentNameOptions ?? []) as $paymentNameOption)
                 <option value="{{ $paymentNameOption }}"></option>

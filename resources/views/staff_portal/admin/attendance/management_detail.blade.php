@@ -61,14 +61,12 @@
 <body class="attendance-management-detail-page">
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">日別勤怠（{{ $targetStaffName }}）</h2>
             </div>
-            @if (!empty($statusMessage))
-            <div class="status">{{ $statusMessage }}</div>
-            @endif
             <div class="meta">
                 <span>対象月: {{ $selectedMonth }}</span>
                 <!-- <span>ID: {{ $targetStaffId }}</span>

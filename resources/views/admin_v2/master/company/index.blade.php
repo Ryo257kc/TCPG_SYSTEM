@@ -47,15 +47,6 @@
             font-size: 13px
         }
 
-        .status {
-            margin: 10px 0 0;
-            padding: 10px 12px;
-            border-radius: 10px;
-            background: #edf7ed;
-            border: 1px solid #c9e3c9;
-            color: #25603b
-        }
-
         .company-layout {
             display: flex;
             gap: 16px;
@@ -604,14 +595,11 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM 会社マスタ</div>
         </div>
         <section class="panel">
-            @if(session('status'))
-            <p class="status">{{ session('status') }}</p>
-            @endif
-
             <div class="company-layout">
                 <div class="company-list-panel">
                     <div class="panel-title">会社一覧</div>

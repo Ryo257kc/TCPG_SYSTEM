@@ -12,6 +12,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
@@ -31,9 +32,6 @@
                 <button type="submit">表示</button>
             </form>
 
-            @if ($errorMessage !== '')
-            <div class="status">{{ $errorMessage }}</div>
-            @endif
 
             @if ($selectedStaffId !== '')
             <div class="section-head">

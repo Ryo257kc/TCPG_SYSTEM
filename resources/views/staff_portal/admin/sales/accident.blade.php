@@ -11,6 +11,7 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
@@ -22,13 +23,6 @@
                 <button type="submit">表示</button>
                 <a class="btn" href="{{ route('admin.sales.accident.create', ['month' => $selectedMonth]) }}">新規登録</a>
             </form>
-
-            @if ($statusMessage !== '')
-            <div class="status">{{ $statusMessage }}</div>
-            @endif
-            @if ($errorMessage !== '')
-            <div class="status">{{ $errorMessage }}</div>
-            @endif
 
             @if ($rowCount === 0)
             <div class="empty">「{{ $selectedMonth }}」の交通事故はありません。</div>

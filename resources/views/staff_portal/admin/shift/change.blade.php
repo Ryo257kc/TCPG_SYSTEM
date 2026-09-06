@@ -23,14 +23,12 @@
         $basicShiftBackRoute = $updateRouteName === 'office.attendance.update' ? 'office.attendance' : 'admin.shift.change';
         @endphp
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">シフト変更</h2>
             </div>
-            @if (($statusMessage ?? '') !== '')
-            <div class="status">{{ $statusMessage }}</div>
-            @endif
             <form method="get" class="filter-row">
                 <label for="month">月</label>
                 <input id="month" type="month" name="month" value="{{ $selectedMonth }}">

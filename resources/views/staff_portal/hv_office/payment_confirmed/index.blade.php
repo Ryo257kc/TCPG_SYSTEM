@@ -12,19 +12,12 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        @include('shared.status_message')
 
         <section class="panel content-panel sales-panel staff-viewport-panel">
             <div class="content-head">
                 <h2 class="content-title">入金確定履歴</h2>
             </div>
-
-            @if(session('status'))
-            <div class="status">{{ session('status') }}</div>
-            @endif
-
-            @if($errors->any())
-            <div class="error">{{ $errors->first() }}</div>
-            @endif
 
             <form method="get" action="{{ route('hv_office.payment_confirmed') }}" class="filter-row">
                 <select name="year">

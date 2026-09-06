@@ -725,6 +725,7 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM スタッフマスタ</div>
         </div>

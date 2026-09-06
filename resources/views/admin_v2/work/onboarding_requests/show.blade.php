@@ -145,14 +145,11 @@
     @include('admin_v2.shared.global_nav')
 
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <h1 class="title">入社手続き申請詳細</h1>
             <a href="{{ route('admin.work.onboarding_requests') }}" class="btn btn-outline">一覧へ戻る</a>
         </div>
-
-        @if (session('status'))
-        <div class="status">{{ session('status') }}</div>
-        @endif
 
         <section class="panel">
             <dl class="pr-fields">

@@ -91,13 +91,11 @@
 <body>
     @include('admin_v2.shared.global_nav')
     <div class="wrap">
+        @include('shared.status_message')
         <div class="top">
             <div class="title">TCPG SYSTEM 手当マスタ</div>
         </div>
         <section class="panel">
-            @if(session('status'))
-            <p class="status">{{ session('status') }}</p>
-            @endif
 
             <form method="get" class="filter-form">
                 <label for="office_name">会社:</label>
