@@ -235,7 +235,7 @@ class YearEndAdjustmentV2Controller extends Controller
             'applicationId' => $applicationId,
             'targetYear' => $targetYear,
             'application' => $this->formatApplication($application),
-            'staff' => $this->staffDetail($staffId),
+            'staff' => $this->staffDetail($staffId, $application->section ?? null),
             'nenTyo' => $this->nenTyoDetail($application, $staffId, $targetYear),
             'nenTyoSummaryGroups' => $this->nenTyoSummaryGroups(),
             'kisoBracketOptions' => $this->kisoBracketOptionsForView($targetYear),
@@ -358,7 +358,7 @@ class YearEndAdjustmentV2Controller extends Controller
         [$application, $staffId, $targetYear] = $this->yearEndApplicationContext($applicationId);
 
         $templatePath = $this->yearEndPdfTemplatePath($targetYear, 'hoken_koujyo_shinkoku');
-        $staff = $this->staffDetail($staffId);
+        $staff = $this->staffDetail($staffId, $application->section ?? null);
         $nenTyo = $this->nenTyoDetail($application, $staffId, $targetYear);
         $grouped = $this->groupHokenRows($this->hokenRows($staffId, $targetYear));
 
@@ -856,7 +856,7 @@ class YearEndAdjustmentV2Controller extends Controller
                 continue;
             }
 
-            $staff = $this->staffDetail($staffId);
+            $staff = $this->staffDetail($staffId, $application->section ?? null);
             $staffCompanyId = trim((string) ($staff['company_id'] ?? ''));
             if ($companyId !== '' && $staffCompanyId !== $companyId) {
                 continue;
@@ -950,7 +950,7 @@ class YearEndAdjustmentV2Controller extends Controller
     {
         [$application, $staffId, $targetYear] = $this->yearEndApplicationContext($applicationId);
         $templatePath = $this->yearEndPdfTemplatePath($targetYear, $templateKey);
-        $staff = $this->staffDetail($staffId);
+        $staff = $this->staffDetail($staffId, $application->section ?? null);
         $nenTyo = $this->nenTyoDetail($application, $staffId, $targetYear);
 
         $previewDir = storage_path("app/year_end/previews/{$targetYear}/{$staffId}");
@@ -1481,7 +1481,7 @@ class YearEndAdjustmentV2Controller extends Controller
         // 要確認：支払を受ける者 住所又は居所／氏名。フリガナは元データに存在するのに
         // このPDFだけ書き忘れていたため追加（writeGensenBoHeader()と同じ、氏名の少し上に
         // 詰め字で書く形を踏襲）。座標は仮置き。
-        $this->writePdfWrappedTextSized($pdf, 21, 16, $address, 40, 5.5, 2, 9);
+        $this->writePdfWrappedTextSized($pdf, 21, 16, $address, 39, 5.5, 2, 9);
         $this->writePdfTrackedTextSized($pdf, 110, 23, $staffFuri, 6, 1.2, 20);
         $this->writePdfTextSized($pdf, 110, 27, $staffName, 8, 30);
 
@@ -1682,9 +1682,12 @@ class YearEndAdjustmentV2Controller extends Controller
         // 揃えて、会社名の上に住所を置く。テンプレートは148.5mm幅の単票（クラス冒頭の
         // コメント参照）なので、x=150のような右寄せはページ外になる。電話番号は会社名の
         // すぐ下に仮置き。座標はいずれも仮置きなので実帳票で確認してください。
-        $this->writePdfWrappedTextSized($pdf, 45, 194, $companyAddress, 90, 3.5, 2, 8);
-        $this->writePdfTextSized($pdf, 45, 201, $companyName, 8, 55);
+        $this->writePdfWrappedTextSized($pdf, 30, 194, $companyAddress, 90, 3.5, 2, 8);
+        $this->writePdfTextSized($pdf, 30, 201, $companyName, 8, 55);
         $this->writePdfTextSized($pdf, 112, 201, $companyTel, 7, 40);
+        // 会社印。24mmが実物の角印サイズ（ファイル名の「角印24mm」の通り、縮小しない）。
+        // 位置は会社名の右横あたりに仮置き（座標は実帳票で確認してください）。
+        $this->writePdfCompanySeal($pdf, $staff, 80, 185, 24);
 
         // 要確認：以下はまだ実枠の位置を確認していない項目をまとめて摘要欄あたりに仮置きする。
         // 該当者が出た時にその項目だけ実枠へ移す想定（ラベル付きなので何の値か分かる）。
@@ -2449,6 +2452,9 @@ class YearEndAdjustmentV2Controller extends Controller
                 'nen_tyo_false' => 0,
                 'edit_lock' => 0,
                 'application_status' => 'draft',
+                // 対象者作成時点の所属を固定する。帳票の会社・店舗解決はこの値を使う
+                // （後で本人が転籍しても、この年度の書類は作成時点の所属のまま、2026-08-24）。
+                'section' => trim((string) ($row->section ?? '')) !== '' ? trim((string) $row->section) : null,
             ];
             $created++;
         }
@@ -2571,6 +2577,16 @@ class YearEndAdjustmentV2Controller extends Controller
         $newStaffName = trim((string) ($application->new_staff_name ?? ''));
 
         if ($personalInfoChanged && ($newAddress !== '' || $newStaffName !== '')) {
+            $staffExists = DB::connection('sqlsrv')
+                ->table('dbo.mx_staffs')
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+                ->exists();
+            if (!$staffExists) {
+                return redirect()
+                    ->route('admin.work.year_end_adjustments.show', ['applicationId' => $applicationId])
+                    ->with('status', '反映先のスタッフ（staff_id: ' . $staffId . '）が見つかりません。');
+            }
+
             $staffUpdate = [];
             if ($newAddress !== '') {
                 $staffUpdate['address'] = $newAddress;
@@ -2785,7 +2801,7 @@ class YearEndAdjustmentV2Controller extends Controller
      */
     public function parseHokenCertificateXml(Request $request, int $applicationId): JsonResponse
     {
-        [, , $targetYear] = $this->hokenApplicationContext($applicationId);
+        [,, $targetYear] = $this->hokenApplicationContext($applicationId);
 
         $request->validate([
             'certificate_file' => ['required', 'file', 'max:5120'],
@@ -3291,15 +3307,16 @@ class YearEndAdjustmentV2Controller extends Controller
             'certificate_uploaded_at' => $stored['uploaded_at'],
         ];
     }
+    // 変更が無い年度はファイルを複製せず前年分をそのまま使う想定のため、targetYearから
+    // 2025年まで年度を遡って最初に見つかったファイルを使う（2025年固定フォールバックだと、
+    // 2026年に更新したファイルが2027年も変更無しの場合に2025年版まで飛び越えてしまうため
+    // 2026-09-06修正）。
     private function yearEndPdfTemplatePath(int $targetYear, string $templateKey): string
     {
         $fileName = $templateKey . '.pdf';
-        $candidates = [
-            storage_path("app/templates/year_end/{$targetYear}-{$fileName}"),
-            storage_path("app/templates/year_end/2025-{$fileName}"),
-        ];
 
-        foreach ($candidates as $path) {
+        for ($year = $targetYear; $year >= 2025; $year--) {
+            $path = storage_path("app/templates/year_end/{$year}/{$fileName}");
             if (is_file($path)) {
                 return $path;
             }
@@ -3311,6 +3328,31 @@ class YearEndAdjustmentV2Controller extends Controller
     {
         $pdf->SetFillColor((int) $rgb[0], (int) $rgb[1], (int) $rgb[2]);
         $pdf->Rect($x, $y, $w, $h, 'F');
+    }
+
+    // 会社印（storage/app/templates/seals/配下、mx_companies.seal_image_pathで会社ごとに
+    // 切り替え）を帳票へ重ねる。ファイルが無い/未設定の会社は何も書かず静かにスキップする
+    // （角印が無い会社があってもエラーにしない）。
+    //
+    // 画像はそのまま渡す（PNG自体のアルファチャンネルには頼らない。TCPDFがGDのimagecopy()で
+    // 半透明部分を黒背景と合成してから色を抜き出す実装になっており、自前でRGB/アルファを
+    // 分離してもなお画質が劣化する問題を解決できなかったため）。下の文字を透けさせたい場合は
+    // setAlpha()でCSSのopacityのように描画全体へ均一な透明度をかける方式に変更（2026-09-06）。
+    private function writePdfCompanySeal(Fpdi $pdf, array $staff, float $x, float $y, float $size): void
+    {
+        $sealFileName = trim((string) ($staff['company_seal_image_path'] ?? ''));
+        if ($sealFileName === '') {
+            return;
+        }
+
+        $sealPath = storage_path('app/templates/seals/' . $sealFileName);
+        if (!is_file($sealPath)) {
+            return;
+        }
+
+        $pdf->setAlpha(0.6);
+        $pdf->Image($sealPath, $x, $y, $size, $size);
+        $pdf->setAlpha(1);
     }
 
     /**
@@ -3426,7 +3468,7 @@ class YearEndAdjustmentV2Controller extends Controller
     {
         return DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
-            ->select(['staff_id', 'staff_name', 'tai_date', 'staff_division', 'employment'])
+            ->select(['staff_id', 'staff_name', 'tai_date', 'staff_division', 'employment', 'section'])
             ->where(function ($query): void {
                 $query->whereNull('tai_date')
                     ->orWhere(DB::raw("LTRIM(RTRIM(CAST(tai_date AS nvarchar(50))))"), '=', '')
@@ -3487,7 +3529,15 @@ class YearEndAdjustmentV2Controller extends Controller
     }
 
     /** @return array<string, string> */
-    private function staffDetail(string $staffId): array
+    /**
+     * $nenTyoSectionは対象年調行(mx_nen_tyo.section、対象者作成時点で固定した所属)。
+     * 年調は是正で過去年度をやり直す前提の機能なので、帳票の会社・店舗は「今の」所属
+     * (mx_staffs.section)ではなく、対象年度時点の所属で解決する必要がある
+     * （転籍した人の過去年度書類が今の会社名で印刷されてしまう不具合を2026-08-24に修正、
+     * 給与のmx_kyuyo_shou.sectionと同じ考え方）。呼び出し元は必ずmx_nen_tyo行の
+     * sectionを渡すこと。
+     */
+    private function staffDetail(string $staffId, ?string $nenTyoSection = null): array
     {
         if ($staffId === '') {
             return [];
@@ -3503,7 +3553,7 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         $detail = $this->objectToArray($row);
-        $section = trim((string) ($detail['section'] ?? ''));
+        $section = trim((string) ($nenTyoSection ?? ''));
         $storeCode = $section !== '' && ctype_digit($section) ? str_pad($section, 3, '0', STR_PAD_LEFT) : $section;
         if ($storeCode !== '') {
             $company = DB::connection('sqlsrv')
@@ -3517,6 +3567,7 @@ class YearEndAdjustmentV2Controller extends Controller
                     'c.company_address',
                     'c.corporate_number',
                     'c.tel',
+                    'c.seal_image_path',
                 ]);
 
             if ($company) {
@@ -3526,6 +3577,7 @@ class YearEndAdjustmentV2Controller extends Controller
                 $detail['company_address'] = trim((string) ($company->company_address ?? ''));
                 $detail['corporate_number'] = trim((string) ($company->corporate_number ?? ''));
                 $detail['company_tel'] = trim((string) ($company->tel ?? ''));
+                $detail['company_seal_image_path'] = trim((string) ($company->seal_image_path ?? ''));
             }
         }
 

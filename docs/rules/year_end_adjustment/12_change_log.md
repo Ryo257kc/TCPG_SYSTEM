@@ -1,5 +1,33 @@
 # 年末調整 変更履歴
 
+## 2026-08-24 帳票の会社・店舗解決が「今の」所属を見ていた問題を修正・mx_nen_tyo.section追加
+
+- `YearEndAdjustmentV2Controller::staffDetail()`（源泉徴収票・賃金台帳・扶養控除申告書・
+  保険料控除申告書等、全帳票の会社名・店舗名・住所・電話番号の解決元）が、`mx_staffs.section`
+  （スタッフの**今の**所属）を常に参照していた。年調は是正で過去年度をやり直す前提の機能なのに、
+  対象年度時点の所属を保存する列が`mx_nen_tyo`に無かった。転籍した人の過去年度の年調書類が、
+  転籍後の今の会社名で印刷される可能性があった（給与の`mx_kyuyo_shou.section`で既に
+  修正済みの問題と全く同じパターン、2026-08-24発覚）。
+- `mx_nen_tyo`に`section`列（nvarchar(3)、`mx_kyuyo_shou.section`と同じ型）を追加
+  （`database/sql/2026_08_add_section_to_mx_nen_tyo.sql`）。既存231行は履歴が無いため、
+  今の`mx_staffs.section`で暫定バックフィル（転籍者は稀という前提、ユーザー確認の上で実施。
+  転籍歴のあるスタッフの過去分は必要なら個別に手動訂正）。`createTargets()`（対象者作成）で
+  以降は作成時点の所属を必ず固定する。
+- `staffDetail()`のシグネチャを`staffDetail(string $staffId, ?string $nenTyoSection)`に変更し、
+  呼び出し元（`show()`・`hokenPreview()`・`templatePreview()`・一括印刷の会社絞り込み処理）は
+  全て対象`mx_nen_tyo`行の`section`を渡すよう修正。sectionが無い場合は会社情報を一切埋めない
+  （もっともらしい値へのフォールバックはしない）。
+
+## 2026-08-24 反映(reflectApplication)がmx_staffs側の存在確認をしてなかった問題を修正
+
+`YearEndAdjustmentV2Controller::reflectApplication()`・`OnboardingRequestV2Controller::reflectApplication()`・
+`ProfileRequestV2Controller::reflectApplication()`は、いずれも申請側の行（`mx_nen_tyo`/
+`staff_onboarding_requests`/`staff_profile_requests`）は`abort_unless`で存在確認してたが、
+実際の反映先（`mx_staffs`、staff_id指定でUPDATE）は一度も存在確認してなかった。反映先の
+staff_idが存在しない/ずれてると、氏名・住所・世帯主・**銀行口座**（入社手続きのみ）等の反映が
+無言で失敗するのに「実データへ反映しました。」と出る。3箇所とも反映先の`mx_staffs`行の
+存在確認を追加し、無ければ反映せずエラーメッセージを返すよう修正。
+
 ## 2026-08-23 状態更新の保存確認漏れ修正
 
 `YearEndAdjustmentV2Controller::updateStatus()`（対象者の状態変更）が、対象`nen_tyo_no`の
