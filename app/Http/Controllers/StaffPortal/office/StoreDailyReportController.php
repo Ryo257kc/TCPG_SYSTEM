@@ -684,8 +684,10 @@ class StoreDailyReportController extends Controller
                 '保険負担計' => $this->formatMoneyValue($row->{'保険負担計'} ?? null),
                 'レセ差額' => $this->formatMoneyValue($row->{'レセ差額'} ?? null),
                 '請求金額計' => $this->formatMoneyValue($row->{'請求金額計'} ?? null),
-                '回収日' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y/m/d'),
-                '回収日_raw' => $this->formatDateValue($row->{'回収日'} ?? null, 'Y-m-d'),
+                // 編集フォームへ渡す値は必ず回収日ビューでの入れ替えの影響を受けない
+                // patient.回収日そのもの（回収日_actual）を使う（2026-09-12、上のコメント参照）。
+                '回収日' => $this->formatDateValue($row->{'回収日_actual'} ?? null, 'Y/m/d'),
+                '回収日_raw' => $this->formatDateValue($row->{'回収日_actual'} ?? null, 'Y-m-d'),
                 'レセ負担金' => $this->formatMoneyValue($row->{'レセ負担金'} ?? null),
                 '負担金ch' => trim((string) ($row->{'負担金ch'} ?? '')),
                 '保険請求' => $this->formatMoneyValue($row->{'保険請求'} ?? null),
@@ -1970,6 +1972,12 @@ class StoreDailyReportController extends Controller
             'patient.新患',
             DB::raw($dateSql),
             DB::raw($collectionDateSql),
+            // 上の$collectionDateSqlは回収日ビューで印刷向けに「回収日」列の中身を元の受診日へ
+            // 入れ替えているが、日報詳細画面の編集フォーム（回収日の<input>）はこの入れ替え後の
+            // 値を使うと保存時に本物のpatient.回収日を元の受診日で上書きしてしまう
+            // （2026-09-12、店舗からの実例で発覚：回収日を8/3にしたのに保存後8/1に戻っていた）。
+            // フォーム用に、入れ替えの影響を受けない本物のpatient.回収日を別名で常に持たせる。
+            DB::raw('patient.回収日 as 回収日_actual'),
             'patient.保険証',
             'patient.患者No',
             'patient.割合',
