@@ -847,14 +847,23 @@ class EntryController extends Controller
         $departmentRow = DB::connection('sqlsrv')
             ->table('dbo.mx_departments')
             ->where('store_category', $storeName)
-            ->select(['store_short_name'])
+            ->select(['store_short_name', 'receipt_type'])
             ->first();
         $resolvedStoreShortName = trim((string) ($departmentRow?->store_short_name ?? ''));
+        $receiptType = trim((string) ($departmentRow?->receipt_type ?? ''));
 
         if ($resolvedStoreShortName === '') {
             fclose($handle);
             return back()->with('errorMessage', '店舗に紐づく店舗略称が見つかりません。');
         }
+
+        // 入金名称は柔整/鍼灸で使う列が違う（手入力側のpage_script.blade.jsと同じ判定）。
+        // CSV取込は店舗を1つだけ選んで行うため、取込全体で1回だけ決まる。
+        $scheduledPaymentColumn = match (true) {
+            str_contains($receiptType, '柔整') => 'scheduled_payment_name',
+            str_contains($receiptType, '鍼灸') => 'scheduled_payment_name_2',
+            default => null,
+        };
 
         $alreadyImported = DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details')
@@ -866,6 +875,20 @@ class EntryController extends Controller
             fclose($handle);
             return back()->with('errorMessage', 'この月・店舗のデータは既に取込済です。');
         }
+
+        // 入金名称は保険者マスタ(mx_insurers.scheduled_payment_name／_2)の予定入金名称を
+        // 自動で入れる想定（手入力側はinsurerLookupOptions経由でJSが同じ列を使って
+        // オートフィルしている）。CSV取込側だけこのルックアップが抜けていて、
+        // 常に未入力のまま保存されていた（2026-09-12発覚）。店舗のreceipt_type（柔整/鍼灸）
+        // でどちらの列を使うか変わる（上の$scheduledPaymentColumn参照）。どちらでもない
+        // 店舗種別の場合は手入力側と同じく空のままにする。
+        $scheduledPaymentNameByInsurerNumber = $scheduledPaymentColumn === null
+            ? []
+            : DB::connection('sqlsrv')
+                ->table('dbo.mx_insurers')
+                ->pluck($scheduledPaymentColumn, 'insurer_number')
+                ->map(fn($value): string => trim((string) ($value ?? '')))
+                ->all();
 
         $count = 0;
         $importRows = [];
@@ -917,6 +940,7 @@ class EntryController extends Controller
                 'copayment_amount' => $this->parseMoneyInput($row[7] ?? null),
                 'claim_amount' => $this->parseMoneyInput($row[8] ?? null),
                 'store_name' => $resolvedStoreShortName,
+                'deposit_name' => $scheduledPaymentNameByInsurerNumber[$insurerNumber] ?? '',
             ];
 
             if ($insurerName !== '') {
@@ -956,7 +980,8 @@ class EntryController extends Controller
                 }
             }
 
-            // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう、9列×200行=1800個で分割する。
+            // SQL Serverの1クエリあたりパラメータ上限(2100個)を超えないよう、10列×200行=2000個で分割する
+            // （deposit_name追加で9列→10列になったため、2026-09-12にコメントの列数を修正）。
             foreach (array_chunk($importRows, 200) as $chunk) {
                 DB::connection('sqlsrv')
                     ->table('dbo.mx_insurance_claim_details')

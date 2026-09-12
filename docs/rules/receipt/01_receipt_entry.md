@@ -47,3 +47,19 @@
 へ共通化し、`EntryController`側もこれを使って`Y/m/d`形式で表示するよう修正。
 突き合わせキー自体（`payment_date_text`）は保存・複製ロジックで今まで通り使う
 （表示だけを直した。キーとしての役割は変えない）。
+
+## CSV取込で入金名称が自動入力されないバグ（2026-09-12修正）
+
+手入力（`save()`）は画面側で保険者を選ぶとJSが`insurerLookupOptions`
+（`mx_insurers.scheduled_payment_name`／`scheduled_payment_name_2`）から`deposit_name`欄を
+自動入力する作りだが、`import()`（CSV取込）側は`$importRows[]`に`deposit_name`列自体が
+無く、常に未入力のまま保存されていた（041実運用からの報告で発覚）。入金名称は柔整/鍼灸で使う列が違う（`scheduled_payment_name`=柔整、
+`scheduled_payment_name_2`=鍼灸、`page_script.blade.js`の`receiptType.indexOf()`判定と
+同じ）。CSV取込は店舗を1つだけ選んで行うため、`mx_departments.receipt_type`を取込全体で
+1回だけ見てどちらの列を使うか決め、`mx_insurers`の`insurer_number => 該当列`のマップを
+作って各行の`deposit_name`をここから引くよう修正。receipt_typeが柔整/鍼灸のどちらでも
+ない店舗（未設定の7店舗、2026-09-12時点）は手入力側と同じく空のままにする。
+
+取込直後に新規追加する保険者（`$newInsurers`）は`scheduled_payment_name`／`_2`が空のまま
+登録されるため、そちらは従来通り未入力になる（保険者マスタ画面で後から入力してもらう想定、
+新規保険者の入金名称をCSVの列から推測して埋める仕組みは無い）。
