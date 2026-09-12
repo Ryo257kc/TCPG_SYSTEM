@@ -217,15 +217,21 @@ class YearEndCalculationService
 
     /**
      * 特定親族特別控除（令和7年分〜、19〜23歳未満の親族向け新控除）の控除額。
-     * 国税庁タックスアンサーNo.1177の表そのもの（合計所得58万円超123万円以下、9段階）。
+     * 国税庁タックスアンサーNo.1177の表そのもの（9段階の金額自体は令和7年分から変更なし）。
      * https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1177.htm で確認済み（2026-08-15）。
      * 引数は合計所得金額（給与収入から給与所得控除後の額。呼び出し側でsalaryIncomeAfterDeduction()
-     * 済みのものを渡すこと）。範囲外（58万円以下・123万円超）は0を返す。
+     * 済みのものを渡すこと）。
+     *
+     * 対象の合計所得金額の下限が、令和8年度税制改正で58万円→62万円に引き上げられた
+     * （上限123万円・9段階の金額は変更なし。国税庁「令和8年分 年末調整のしかた」17〜18ページで
+     * 確認済み、2026-09-12）。範囲外（下限以下・123万円超）は0を返す。
      */
-    public function tokuteiShinzokuTokubetsuKoujoAmount(float $netIncome): float
+    public function tokuteiShinzokuTokubetsuKoujoAmount(float $netIncome, int $targetYear): float
     {
+        $lowerCeiling = $targetYear >= 2026 ? 620000.0 : 580000.0;
+
         return match (true) {
-            $netIncome <= 580000 => 0.0,
+            $netIncome <= $lowerCeiling => 0.0,
             $netIncome <= 850000 => 630000.0,
             $netIncome <= 900000 => 610000.0,
             $netIncome <= 950000 => 510000.0,
@@ -295,13 +301,15 @@ class YearEndCalculationService
             $rates = $this->dependentDeductionRates();
 
             if ($age >= 19 && $age < 23) {
-                // 特定扶養親族(toku_fu)は合計所得58万円以下が条件だが、この判定が丸ごと
-                // 抜けていて収入に関わらず63万円控除が付いていた（2026-08-15判明・要修正で
-                // ユーザー承認済み）。収入(fuyo_shunyu、給与収入額)を合計所得に変換した上で
-                // 判定する。58万円超123万円以下は特定親族特別控除（tokuteiShinzokuTokubetsuKoujoAmount）
-                // に切り替わり、toku_fuとは二重に付かない。123万円超はどちらも対象外。
+                // 特定扶養親族(toku_fu)は合計所得58万円以下（令和8年分以後は62万円以下）が
+                // 条件だが、この判定が丸ごと抜けていて収入に関わらず63万円控除が付いていた
+                // （2026-08-15判明・要修正でユーザー承認済み）。収入(fuyo_shunyu、給与収入額)を
+                // 合計所得に変換した上で判定する。しきい値超123万円以下は特定親族特別控除
+                // （tokuteiShinzokuTokubetsuKoujoAmount）に切り替わり、toku_fuとは二重に付かない。
+                // 123万円超はどちらも対象外。
                 //
-                // 要確認：58万円のしきい値・特定親族特別控除とも令和7年(2025年)分からの制度。
+                // 要確認：58万円→62万円への引き上げは令和8年度税制改正
+                // （国税庁「令和8年分 年末調整のしかた」17〜18ページ、2026-09-12確認）。
                 // このシステムの他の年度依存ロジック（spousalDeductionAmounts等）と同じく
                 // targetYear<2025では新ルールを適用しない。2025年より前の正しいしきい値
                 // （改正前は合計所得48万円以下）は未確認・未実装のため、旧仕様のまま
@@ -312,11 +320,12 @@ class YearEndCalculationService
                     $totals['deduction_sum'] += $rates['toku_fu'];
                 } else {
                     $dependentNetIncome = $this->salaryIncomeAfterDeduction((float) ($row->fuyo_shunyu ?? 0), $targetYear);
-                    if ($dependentNetIncome <= 580000) {
+                    $tokuFuCeiling = $targetYear >= 2026 ? 620000 : 580000;
+                    if ($dependentNetIncome <= $tokuFuCeiling) {
                         $totals['toku_fu']++;
                         $totals['deduction_sum'] += $rates['toku_fu'];
                     } else {
-                        $totals['tokutei_shinzoku_tokubetsu_koujo'] += $this->tokuteiShinzokuTokubetsuKoujoAmount($dependentNetIncome);
+                        $totals['tokutei_shinzoku_tokubetsu_koujo'] += $this->tokuteiShinzokuTokubetsuKoujoAmount($dependentNetIncome, $targetYear);
                     }
                 }
             } elseif ($age >= 70) {
@@ -355,22 +364,54 @@ class YearEndCalculationService
      * 年度ごとに国税庁の表が変わるため targetYear で分岐する。年調是正で過去年分を
      * 再計算する場合でも、その年の表で計算されるよう年度ごとに分けて実装すること。
      *
-     * 令和6年（2024年）分以前・令和7年（2025年）分・令和8年（2026年）分以後、
-     * いずれも国税庁公式サイトで確認済み
-     * （https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/1199.htm）。
+     * 令和6年（2024年）分以前・令和7年（2025年）分・令和8年度税制改正後の
+     * 令和8・9年分・令和10年（2028年）分以後、いずれも国税庁公式サイトで確認済み
+     * （国税庁「令和8年分 年末調整のしかた」3ページ、令和8年度税制改正であらためて
+     * 引き上げられた表。https://www.nta.go.jp/publication/pamph/gensen/nencho2026/01.htm
+     * で2026-09-12確認。この表が出る前に令和8年分として実装していた95万/58万一律の数字は
+     * 撤回された旧予定の数字だったため、2026-09-12に置き換えた）。
      * 900万/950万/1,000万円というサブ区分（kiso_bunrui用）は基礎控除額そのものには
      * 影響しない（配偶者控除等申告書の金額表の列選択にのみ使う別の区分）。
      */
     private function basicDeductionAmount(float $totalIncome, int $targetYear): int
     {
-        if ($targetYear >= 2026) {
-            // 令和8年（2026年）分以後：令和7年分にあった132万超2,350万円以下の
-            // 4段階（88万/68万/63万/58万）が一律58万円に統合される。
+        if ($targetYear >= 2028) {
+            // 令和10年（2028年）分以後：令和8・9年分にあった132万超655万円以下の
+            // 3段階（104万/104万/67万）が一律62万円に統合される。
             if ($totalIncome <= 1320000) {
-                return 950000;
+                return 990000;
             }
             if ($totalIncome <= 23500000) {
-                return 580000;
+                return 620000;
+            }
+            if ($totalIncome <= 24000000) {
+                return 480000;
+            }
+            if ($totalIncome <= 24500000) {
+                return 320000;
+            }
+            if ($totalIncome <= 25000000) {
+                return 160000;
+            }
+            return 0;
+        }
+
+        if ($targetYear >= 2026) {
+            // 令和8・9年分（令和8年度税制改正、令和8年分が当初予定より更に引き上げられた）。
+            if ($totalIncome <= 1320000) {
+                return 990000;
+            }
+            if ($totalIncome <= 3360000) {
+                return 1040000;
+            }
+            if ($totalIncome <= 4890000) {
+                return 1040000;
+            }
+            if ($totalIncome <= 6550000) {
+                return 670000;
+            }
+            if ($totalIncome <= 23500000) {
+                return 620000;
             }
             if ($totalIncome <= 24000000) {
                 return 480000;
@@ -438,10 +479,13 @@ class YearEndCalculationService
         if ($targetYear < 2025) {
             return [2400, 2450, 2500];
         }
-        if ($targetYear === 2025) {
+        if ($targetYear >= 2025 && $targetYear <= 2027) {
+            // 令和7年分・令和8年分・令和9年分は基礎控除額が変わる境界が同じ
+            // （132/336/489/655万円、金額はbasicDeductionAmount()側で年度ごとに違う）。
             return [132, 336, 489, 655, 900, 950, 1000, 2350, 2400, 2450, 2500];
         }
 
+        // 令和10年分以後：132万超655万円以下の3段階が統合され、132万円の1点だけになる。
         return [132, 900, 950, 1000, 2350, 2400, 2450, 2500];
     }
 
@@ -563,8 +607,9 @@ class YearEndCalculationService
             return $none;
         }
 
-        // 配偶者の所得0円（専業主婦・主夫等）は「58万円以下」の枠に該当し満額の対象になる。
-        // spousalDeductionAmounts() は呼び出し側（has_spouse）で配偶者の有無を判定済みの前提。
+        // 配偶者の所得0円（専業主婦・主夫等）は「58万円以下」（令和8年分以後は62万円以下）の
+        // 枠に該当し満額の対象になる。spousalDeductionAmounts() は呼び出し側（has_spouse）で
+        // 配偶者の有無を判定済みの前提。
         if ($spouseIncome < 0 || $taxpayerIncome > 10000000) {
             return $none;
         }
@@ -577,7 +622,13 @@ class YearEndCalculationService
             $column = 2;
         }
 
-        if ($spouseIncome <= 580000) {
+        // 配偶者控除・配偶者特別控除とも対象となる配偶者の所得要件の下限が、令和8年度税制改正で
+        // 58万円→62万円に引き上げられた（上限側の133万円は変更なし、内訳の9段階の金額表も
+        // 変更なし。国税庁「令和8年分 年末調整のしかた」17〜18ページで確認済み、2026-09-12）。
+        // 年度を跨いだ記載が無く恒久的な変更に見えるため、令和8年分以後はtargetYearで
+        // 打ち切らず>=2026のまま使う想定。令和10年分以降で変わるとわかれば分岐を追加する。
+        $spouseFullDeductionCeiling = $targetYear >= 2026 ? 620000 : 580000;
+        if ($spouseIncome <= $spouseFullDeductionCeiling) {
             $amounts = $spouseIsElderly ? [480000, 320000, 160000] : [380000, 260000, 130000];
             return ['regular' => $amounts[$column], 'special' => 0];
         }
@@ -613,6 +664,49 @@ class YearEndCalculationService
             return 0;
         }
 
+        if ($targetYear === 2026 || $targetYear === 2027) {
+            // 令和8・9年分：給与所得控除の最低保障額が65万円→74万円に引き上げ。加えて、
+            // 収入69万1,000円以上220万円未満は上記引き上げにかかわらず専用の特例表を使う
+            // （国税庁「令和8年分 年末調整のしかた」3ページで確認済み、2026-09-12）。
+            // 220万円以上は令和7年分までと同じ計算式（変更なしと明記されている）。
+            if ($income < 691000) {
+                return 0;
+            }
+            if ($income < 741000) {
+                // 69万1,000円以上74万1,000円未満は「なし」（給与所得の金額は発生しない）。
+                return 0;
+            }
+            if ($income < 2191000) {
+                return (int) ($income - 740000);
+            }
+            if ($income < 2193000) {
+                return 1451000;
+            }
+            if ($income < 2196000) {
+                return 1453000;
+            }
+            if ($income < 2200000) {
+                return 1456000;
+            }
+            if ($income <= 3599999) {
+                $bucketed = (int) floor($income / 4000) * 4000;
+                return (int) floor($bucketed * 0.7 - 80000);
+            }
+            if ($income <= 6599999) {
+                $bucketed = (int) floor($income / 4000) * 4000;
+                return (int) floor($bucketed * 0.8 - 440000);
+            }
+            if ($income <= 8499999) {
+                return (int) floor($income * 0.9 - 1100000);
+            }
+            return (int) ($income - 1950000);
+        }
+
+        // 要確認：令和10年（2028年）分以後は給与所得控除の最低保障額の表がさらに変わる
+        // （国税庁「令和8年分 年末調整のしかた」3ページに「その収入金額×30%+8万円
+        // （69万円未満となる場合は69万円）」という記載があるが、既存の65万円保証の式との
+        // 関係が未確認のため、令和10年分が近づいたら公式資料で確認してから分岐を追加する。
+        // それまではtargetYear>=2025の式（65万円保証）にフォールバックする。
         if ($targetYear >= 2025) {
             if ($income <= 650999) {
                 return 0;
@@ -711,6 +805,37 @@ class YearEndCalculationService
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    /**
+     * 保険料控除申告書：一般生命保険料控除の特例（年齢23歳未満の扶養親族を有する場合）の
+     * 対象かどうか。令和8年度税制改正で、令和8・9年分限定で新設された（国税庁「令和8年分
+     * 年末調整のしかた」17ページ、2026-09-12確認）。控除対象かどうか(deduction_target)に
+     * 関わらず「扶養親族」であれば対象（特定親族特別控除の対象親族とは判定基準が別のため、
+     * yearEndDependentTotals()のtoku_fu/tokutei_shinzoku_tokubetsu_koujoの判定とは
+     * 独立してこのメソッドで判定する）。
+     */
+    public function hasDependentUnder23(string $staffId, int $targetYear): bool
+    {
+        $rows = DB::connection('sqlsrv_payroll')
+            ->table('dbo.mx_fuyo')
+            ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+            ->whereYear('registration_date', $targetYear)
+            ->where('deduction_target', 1)
+            ->get(['fuyo_birthday', 'fuyo_relationship']);
+
+        foreach ($rows as $row) {
+            $relationship = trim((string) ($row->fuyo_relationship ?? ''));
+            if (in_array($relationship, ['夫', '妻', '配偶者'], true)) {
+                // 配偶者は「扶養親族」に含まない（yearEndDependentTotals()と同じ扱い）。
+                continue;
+            }
+            if ($this->ageAtYearEnd($row->fuyo_birthday ?? null, $targetYear) < 23) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isYearEndRetired(string $staffId): bool

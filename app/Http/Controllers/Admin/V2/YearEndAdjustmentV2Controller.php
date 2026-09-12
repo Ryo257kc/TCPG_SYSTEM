@@ -490,13 +490,20 @@ class YearEndAdjustmentV2Controller extends Controller
 
         $this->writeHokenHeader($pdf, $targetYear, $staff);
 
+        // 年齢23歳未満の扶養親族を有する場合の一般生命保険料控除の特例（令和8・9年分限定）
+        // の対象か。ページ内で複数回使うのでここで1回だけ判定する。
+        $hasDependentUnder23 = $this->calculationService->hasDependentUnder23(
+            (string) ($staff['staff_id'] ?? ''),
+            $targetYear
+        );
+
         // 生命保険料控除：一般／介護医療／個人年金。それぞれ自分の上限行数ぶんだけこのページの区間を表示する。
         // 例：一般は4行/ページなので、2ページ目は5〜8件目を表示する。
         foreach (['general', 'nursing', 'pension'] as $section) {
             $capacity = self::HOKEN_ROW_CAPACITY[$section];
             $rows = array_slice($grouped[$section], $pageIndex * $capacity, $capacity);
             foreach ($rows as $index => $row) {
-                $this->writeHokenLifeInsuranceRow($pdf, $row, $section, $index, $nenTyo);
+                $this->writeHokenLifeInsuranceRow($pdf, $row, $section, $index, $nenTyo, $targetYear, $hasDependentUnder23);
             }
         }
 
@@ -556,7 +563,7 @@ class YearEndAdjustmentV2Controller extends Controller
      * 座標・フォントサイズ・文字間・最大幅がすべて1行で見えるので、他のフィールドを
      * 探さずにその行だけを個別に調整できる。行を増やす場合はHOKEN_ROW_CAPACITYも増やすこと。
      */
-    private function writeHokenLifeInsuranceRow(Fpdi $pdf, array $row, string $section, int $index, array $nenTyo): void
+    private function writeHokenLifeInsuranceRow(Fpdi $pdf, array $row, string $section, int $index, array $nenTyo, int $targetYear, bool $hasDependentUnder23): void
     {
         $company = (string) ($row['insurance_company'] ?? '');
         $type = (string) ($row['insurance_type'] ?? '');
@@ -587,9 +594,16 @@ class YearEndAdjustmentV2Controller extends Controller
             if ($index === 0) {
                 $a = $this->money($nenTyo['shin_seimei_fee'] ?? 0);
                 $b = $this->money($nenTyo['kyu_seimei_fee'] ?? 0);
-                $calc1 = $this->hokenLifeInsuranceCalc1($a);
+                // 年齢23歳未満の扶養親族を有する場合の新生命保険料の特例（令和8・9年分限定、
+                // 一般生命保険料のみ対象。介護医療・個人年金は対象外なので通常の計算式Ⅰのまま）。
+                // 国税庁「令和8年分 年末調整のしかた」17ページで確認済み（2026-09-12）。
+                $useNewGeneralSpecial = ($targetYear === 2026 || $targetYear === 2027) && $hasDependentUnder23;
+                $calc1 = $useNewGeneralSpecial
+                    ? $this->hokenNewLifeInsuranceCalcUnder23Special($a)
+                    : $this->hokenLifeInsuranceCalc1($a);
                 $calc2 = $this->hokenLifeInsuranceCalc2($b);
-                $combined = min($calc1 + $calc2, 40000.0);
+                $generalCombinedCap = $useNewGeneralSpecial ? 60000.0 : 40000.0;
+                $combined = min($calc1 + $calc2, $generalCombinedCap);
                 $chosen = max($calc2, $combined);
 
                 $this->writePdfTextRightSized($pdf, 56.0, 96.0, (string) ($nenTyo['shin_seimei_fee'] ?? ''), 7, 16); // A
@@ -721,6 +735,27 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         return 40000.0;
+    }
+
+    /**
+     * 年齢23歳未満の扶養親族を有する場合の、新生命保険料に係る一般生命保険料控除の特例
+     * （令和8・9年分限定）。国税庁「令和8年分 年末調整のしかた」17ページで確認済み
+     * （2026-09-12）。介護医療保険料・個人年金保険料には適用されない
+     * （writeHokenLifeInsuranceRow()のgeneral区分・Aの金額(shin_seimei_fee)にのみ使う）。
+     */
+    private function hokenNewLifeInsuranceCalcUnder23Special(float $amount): float
+    {
+        if ($amount <= 30000.0) {
+            return $amount;
+        }
+        if ($amount <= 60000.0) {
+            return $amount * 0.5 + 15000.0;
+        }
+        if ($amount <= 120000.0) {
+            return $amount * 0.25 + 30000.0;
+        }
+
+        return 60000.0;
     }
 
     /**
