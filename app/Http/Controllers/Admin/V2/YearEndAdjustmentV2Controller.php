@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Master\CompanyV2Service;
 use App\Services\Admin\V2\YearEndAdjustment\YearEndCalculationService;
 use App\Services\YearEnd\CertificateFileService;
+use App\Services\YearEnd\LifeInsuranceCertificateSignatureVerifier;
 use App\Services\YearEnd\LifeInsuranceCertificateXmlParser;
+use App\Services\YearEnd\LifeInsuranceCertificateXsltRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -23,6 +26,8 @@ class YearEndAdjustmentV2Controller extends Controller
         private readonly CompanyV2Service $companyService,
         private readonly CertificateFileService $certificateFileService,
         private readonly LifeInsuranceCertificateXmlParser $lifeInsuranceCertificateXmlParser,
+        private readonly LifeInsuranceCertificateXsltRenderer $lifeInsuranceCertificateXsltRenderer,
+        private readonly LifeInsuranceCertificateSignatureVerifier $lifeInsuranceCertificateSignatureVerifier,
     ) {}
 
     /**
@@ -2330,11 +2335,20 @@ class YearEndAdjustmentV2Controller extends Controller
         }
 
         $xmlParsed = null;
+        $signatureVerification = null;
         if ($extension === 'xml' && !$isExternal && $this->certificateFileService->exists($path)) {
+            $xmlContent = $this->certificateFileService->getContents($path);
             try {
-                $xmlParsed = $this->lifeInsuranceCertificateXmlParser->parse($this->certificateFileService->getContents($path));
+                $xmlParsed = $this->lifeInsuranceCertificateXmlParser->parse($xmlContent);
             } catch (\RuntimeException) {
                 $xmlParsed = null;
+            }
+            if ($xmlParsed !== null) {
+                // 電子署名（XML-DSig）の改ざん検知だけ行う（2026-09-13、ユーザー確認：
+                // 「この証明書を誰が発行したか」までの認証局チェックは対象外。埋め込み証明書は
+                // XML自身のKeyInfoから取り出すため、保存されているXML本文が署名時点から
+                // 変わっていないかだけを見る）。
+                $signatureVerification = $this->lifeInsuranceCertificateSignatureVerifier->verify($xmlContent);
             }
         }
 
@@ -2346,8 +2360,45 @@ class YearEndAdjustmentV2Controller extends Controller
             'isPdf' => $extension === 'pdf',
             'isXml' => $xmlParsed !== null,
             'xmlParsed' => $xmlParsed,
+            'signatureVerification' => $signatureVerification,
             'hokenNo' => $hokenNo,
+            'applicationId' => $applicationId,
             'targetYear' => $targetYear,
+        ]);
+    }
+
+    /**
+     * 生命保険料控除証明書（TEG800）のXMLを、国税庁公開の公式XSLT
+     * （`docs/reference/nta_certificate_xsd/stylesheet/CMTEG800-001.xsl`）で
+     * 変換した見た目そのままのHTMLを返す。certificate_preview.blade.php側から
+     * iframeで埋め込む用（スタイルシート自体がHTML文書を1本丸ごと生成するため、
+     * 管理画面のレイアウトとは分離して表示する）。
+     */
+    public function hokenCertificateXsltPreview(int $applicationId, int $hokenNo): Response
+    {
+        [, $staffId, $targetYear] = $this->hokenApplicationContext($applicationId);
+        $row = $this->hokenRowOrFail($hokenNo, $staffId, $targetYear);
+        $path = trim((string) ($row->certificate_file_path ?? ''));
+        abort_if($path === '', 404);
+        abort_unless($this->certificateFileService->extension($path) === 'xml', 404);
+        abort_unless($this->certificateFileService->exists($path), 404);
+
+        try {
+            $html = $this->lifeInsuranceCertificateXsltRenderer->render(
+                $this->certificateFileService->getContents($path)
+            );
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        // hokenPreview()のPDF出力と同じ理由：座標・スタイル調整のたびに毎回作り直しているのに
+        // キャッシュ無効化ヘッダーが無いと、ブラウザ内蔵のPDFビューア／iframeが同一URLの
+        // 古い表示を使い回し、直しても見た目が変わらないことがある（2026-09-13、ユーザーの
+        // 手元で反映が遅れて見えた実例あり）。
+        return response($html, 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
         ]);
     }
 

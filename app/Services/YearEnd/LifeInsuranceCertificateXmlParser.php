@@ -14,6 +14,7 @@ namespace App\Services\YearEnd;
 class LifeInsuranceCertificateXmlParser
 {
     private const NS = 'http://xml.e-tax.nta.go.jp/XSD/kyotsu';
+    private const GEN_NS = 'http://xml.e-tax.nta.go.jp/XSD/general';
 
     /**
      * 明細（WCE00000）1件・区分1つにつき1契約として返す。
@@ -39,6 +40,7 @@ class LifeInsuranceCertificateXmlParser
 
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('k', self::NS);
+        $xpath->registerNamespace('gen', self::GEN_NS);
 
         $root = $xpath->query('/k:TEG800')->item(0);
         if ($root === null) {
@@ -46,7 +48,7 @@ class LifeInsuranceCertificateXmlParser
         }
 
         $insuranceCompany = $this->text($xpath, $root, 'k:WCA00000');
-        $certificateDate = $this->formatDate($this->text($xpath, $root, 'k:WCC00000'));
+        $certificateDate = $this->dateFromParts($xpath, $root, 'k:WCC00000');
         $policyHolder = $this->text($xpath, $root, 'k:WCD00000');
 
         // ルート要素の属性（id/VR/sakuseiDay/sakuseiNM）。改ざん・使い回しの手がかりとして
@@ -67,7 +69,7 @@ class LifeInsuranceCertificateXmlParser
             $insuranceType = $this->text($xpath, $detail, 'k:WCE00050');
             $insuredPerson = $this->text($xpath, $detail, 'k:WCE00080');
             $beneficiary = $this->text($xpath, $detail, 'k:WCE00110');
-            $pensionStartDate = $this->formatDate($this->text($xpath, $detail, 'k:WCE00180'));
+            $pensionStartDate = $this->dateFromParts($xpath, $detail, 'k:WCE00180');
 
             // 「証明額（12月期想定）」(WCE00440) 配下、旧制度/新制度 × 一般/介護医療/年金の
             // 5組み合わせをそれぞれ確認し、「申告額（参考）」が入っている分だけ契約として拾う。
@@ -125,13 +127,33 @@ class LifeInsuranceCertificateXmlParser
         return $node !== null ? trim((string) $node->textContent) : '';
     }
 
-    /** gen:yyyymmdd（YYYYMMDD）をYYYY-MM-DDへ。空・不正な値はnull。 */
-    private function formatDate(string $value): ?string
+    /**
+     * WCC00000（証明日）・WCE00180（年金支払開始日）のような「年月日をそれぞれ
+     * gen:yyyy/gen:mm/gen:ddの子要素で持つ」日付項目をYYYY-MM-DDへ組み立てる。
+     *
+     * 要注意：以前は親要素のtextContent（子要素の値を単純連結した文字列）を
+     * 「8桁ちょうどの西暦+月2桁+日2桁」とみなして正規表現で切り出していたが、
+     * 国税庁のCSV変換モジュール定義（TEG800_1.1_tpl.xmlのzeroSuppress="1"）で
+     * 月・日はゼロ埋めしない仕様と判明（2026-09-13、実データ相当のテストで発覚）。
+     * 例えば9月1日は連結すると"202691"の6桁になり、8桁固定の想定では日付が
+     * 丸ごと空になっていた。年・月・日を別々の子要素として取得し、自前で
+     * ゼロ埋めしてから組み立てる。
+     */
+    private function dateFromParts(\DOMXPath $xpath, \DOMNode $context, string $relativePath): ?string
     {
-        if (!preg_match('/^\d{8}$/', $value)) {
+        $node = $xpath->query($relativePath, $context)->item(0);
+        if ($node === null) {
             return null;
         }
 
-        return substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2);
+        $year = trim($this->text($xpath, $node, 'gen:yyyy'));
+        $month = trim($this->text($xpath, $node, 'gen:mm'));
+        $day = trim($this->text($xpath, $node, 'gen:dd'));
+
+        if (!preg_match('/^\d{1,4}$/', $year) || !preg_match('/^\d{1,2}$/', $month) || !preg_match('/^\d{1,2}$/', $day)) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', (int) $year, (int) $month, (int) $day);
     }
 }
