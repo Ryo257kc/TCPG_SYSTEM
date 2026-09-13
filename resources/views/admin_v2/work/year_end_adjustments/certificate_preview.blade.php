@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TCPG SYSTEM - 証明書プレビュー</title>
     <link rel="stylesheet" href="{{ asset('css/admin_v2/app-ui.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/admin_v2/app-frame.css') }}">
     <style>
         body {
             margin: 0;
@@ -118,7 +119,7 @@
             width: 100%;
             min-width: 770px;
             max-width: none;
-            height: 1360px;
+            height: 1450px;
             border: 1px solid #d7dee8;
             background: #fff;
         }
@@ -225,7 +226,7 @@
                     src="{{ route('admin.work.year_end_adjustments.hoken.certificate_xslt_preview', ['applicationId' => $applicationId, 'hokenNo' => $hokenNo]) }}"
                     title="生命保険料控除証明書（国税庁公式レイアウト）"></iframe>
             </div>
-            <p class="year-end-note">国税庁がe-Taxで公開しているスタイルシートでそのまま表示したもの（元のレイアウトが横900px固定のため、はみ出す場合は枠内を横スクロールしてください）。下の「自動入力用に読み取った内容」と見比べて確認できます。</p>
+            <p class="year-end-note f_size11">国税庁がe-Taxで公開しているスタイルシートでそのまま表示したもの（元のレイアウトが横900px固定のため、はみ出す場合は枠内を横スクロールしてください）。下の「自動入力用に読み取った内容」と見比べて確認できます。</p>
         </div>
         <div class="proof-xml">
             <p class="proof-xml-header">
@@ -238,12 +239,12 @@
                 @if ($signatureVerification !== null)
                 <p class="proof-xml-signature {{ $signatureVerification['verified'] ? 'is-ok' : 'is-ng' }}">
                     @if ($signatureVerification['verified'])
-                        ✓ 電子署名の検証OK（保存されている内容は署名時点から変更されていません）
+                    ✓ 電子署名の検証OK（保存されている内容は署名時点から変更されていません）
                     @else
-                        ⚠ 電子署名の検証NG（{{ $signatureVerification['reason'] ?? '内容が署名時点から変更されている可能性があります' }}）
+                    ⚠ 電子署名の検証NG（{{ $signatureVerification['reason'] ?? '内容が署名時点から変更されている可能性があります' }}）
                     @endif
                     @if ($signatureVerification['signer'])
-                        ／署名者：{{ $signatureVerification['signer']['subject'] }}
+                    ／署名者：{{ $signatureVerification['signer']['subject'] }}
                     @endif
                 </p>
                 @endif
@@ -322,15 +323,15 @@
                 </table>
             </div>
             @endforeach
-            <p class="year-end-note">この内容はXMLから自動で読み取ったものです。原本のXMLファイルは「元を開く」からダウンロードして確認できます。</p>
+            <p class="year-end-note f_size13"><b>この内容はXMLから自動で読み取ったものです。原本のXMLファイルは「元を開く」からダウンロードして確認できます。</b></p>
         </div>
         @elseif ($extension === 'xml')
-        <div class="proof-message">
-            このXMLファイルの内容を読み取れませんでした（対応していない様式の可能性があります）。上の「元を開く」から元ファイルを確認してください。
+        <div class="proof-message f_size13"><b>
+                このXMLファイルの内容を読み取れませんでした（対応していない様式の可能性があります）。上の「元を開く」から元ファイルを確認してください。</b>
         </div>
         @else
-        <div class="proof-message">
-            この形式は画面内プレビューに対応していません。上の「元を開く」から確認してください。
+        <div class="proof-message f_size13"><b>
+                この形式は画面内プレビューに対応していません。上の「元を開く」から確認してください。</b>
         </div>
         @endif
     </main>
