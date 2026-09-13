@@ -38,47 +38,45 @@
                 <h3>店舗売上一覧</h3>
                 <div class="name-meta">名前：{{ $selectedStaffName }}</div>
             </div>
-            <div class="table-wrap staff-viewport-list-wrap">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>店舗</th>
-                            <th>保険</th>
-                            <th>自費</th>
-                            <th>合計</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($storeRows as $row)
-                        <tr>
-                            <td>{{ $row['store_name'] }}</td>
-                            <td class="num">{{ number_format($row['insurance_amount']) }}</td>
-                            <td class="num">{{ number_format($row['private_amount']) }}</td>
-                            <td class="num">{{ number_format($row['total_amount']) }}</td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td>売上なし</td>
-                            <td class="num">0</td>
-                            <td class="num">0</td>
-                            <td class="num">0</td>
-                        </tr>
-                        @endforelse
-                        <tr>
-                            <td>往診</td>
-                            <td class="num"></td>
-                            <td class="num"></td>
-                            <td class="num">{{ number_format($houseCall['total'] ?? 0) }}</td>
-                        </tr>
-                        <tr>
-                            <td><b>合計</b></td>
-                            <td class="num"><b>{{ number_format($storeTotals['insurance']) }}</b></td>
-                            <td class="num"><b>{{ number_format($storeTotals['private']) }}</b></td>
-                            <td class="num"><b>{{ number_format(($storeTotals['total'] ?? 0) + ($houseCall['total'] ?? 0)) }}</b></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>店舗</th>
+                        <th>保険</th>
+                        <th>自費</th>
+                        <th>合計</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($storeRows as $row)
+                    <tr>
+                        <td>{{ $row['store_name'] }}</td>
+                        <td class="num">{{ number_format($row['insurance_amount']) }}</td>
+                        <td class="num">{{ number_format($row['private_amount']) }}</td>
+                        <td class="num">{{ number_format($row['total_amount']) }}</td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td>売上なし</td>
+                        <td class="num">0</td>
+                        <td class="num">0</td>
+                        <td class="num">0</td>
+                    </tr>
+                    @endforelse
+                    <tr>
+                        <td>往診</td>
+                        <td class="num"></td>
+                        <td class="num"></td>
+                        <td class="num">{{ number_format($houseCall['total'] ?? 0) }}</td>
+                    </tr>
+                    <tr>
+                        <td><b>合計</b></td>
+                        <td class="num"><b>{{ number_format($storeTotals['insurance']) }}</b></td>
+                        <td class="num"><b>{{ number_format($storeTotals['private']) }}</b></td>
+                        <td class="num"><b>{{ number_format(($storeTotals['total'] ?? 0) + ($houseCall['total'] ?? 0)) }}</b></td>
+                    </tr>
+                </tbody>
+            </table>
             <p class="note">※往診売上はリアルタイムではありません。</p>
 
             <h3>メニュー別一覧</h3>

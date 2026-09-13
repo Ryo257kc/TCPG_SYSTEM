@@ -24,7 +24,7 @@ class StoreSalesController extends Controller
         $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
-        return view('staff_portal.admin.sales.index', $this->commonViewData($request, []));
+        return view('staff_portal.store.sales.index', $this->commonViewData($request, []));
     }
 
     public function personal(Request $request): RedirectResponse|View
@@ -32,7 +32,7 @@ class StoreSalesController extends Controller
         $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
-        return view('staff_portal.admin.sales.personal', $this->commonViewData($request, $this->personalSalesViewData($request)));
+        return view('staff_portal.store.sales.personal', $this->commonViewData($request, $this->personalSalesViewData($request)));
     }
 
     public function consignment(Request $request): RedirectResponse|View
@@ -40,7 +40,7 @@ class StoreSalesController extends Controller
         $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
-        return view('staff_portal.admin.sales.consignment', $this->commonViewData($request, $this->consignmentSalesViewData($request)));
+        return view('staff_portal.store.sales.consignment', $this->commonViewData($request, $this->consignmentSalesViewData($request)));
     }
 
     public function daily(Request $request): RedirectResponse|View
@@ -48,7 +48,7 @@ class StoreSalesController extends Controller
         $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
-        return view('staff_portal.admin.sales.daily', $this->commonViewData($request, $this->dailySalesViewData($request)));
+        return view('staff_portal.store.sales.daily', $this->commonViewData($request, $this->dailySalesViewData($request)));
     }
 
     public function monthly(Request $request): RedirectResponse|View
@@ -56,7 +56,7 @@ class StoreSalesController extends Controller
         $this->requireStoreManager($request);
         $staffId = $this->staffPortalStaffId($request);
 
-        return view('staff_portal.admin.sales.monthly', $this->commonViewData($request, $this->monthlySalesViewData($request)));
+        return view('staff_portal.store.sales.monthly', $this->commonViewData($request, $this->monthlySalesViewData($request)));
     }
 
     // 店舗管理（isStoreManager||isAdmin）権限が必要な画面共通のガード。
@@ -157,22 +157,27 @@ class StoreSalesController extends Controller
                 ];
             });
 
+        // メニュー別内訳は自費のあるメニューを歩合対象・対象外を問わず全て表示する
+        // （2026-09-13、ユーザー確認：以前はwhereNotNull('menu.歩合割合')で歩合対象外の
+        // メニュー（鍼・マッサージ等、大半のメニュー）が表ごと除外されており、
+        // storeTotalsの自費合計と一致しなかった）。「歩合対象額」列だけは歩合割合が
+        // 設定されているメニューに絞って計算する（列の意味＝歩合対象額はそのまま維持）。
+        // T_施術メニューに無いメニュー名でも取りこぼさないようleftJoinにする。
         $menuRows = DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_先生別日報 as teacher')
             ->join('dbo.T_患者名日報 as patient', 'patient.患者No', '=', 'teacher.患者No_t')
-            ->join('dbo.T_施術メニュー as menu', 'menu.メニュー', '=', 'teacher.メニュー')
+            ->leftJoin('dbo.T_施術メニュー as menu', 'menu.メニュー', '=', 'teacher.メニュー')
             ->selectRaw("
                 teacher.[メニュー] as menu_name,
                 LTRIM(RTRIM(COALESCE(patient.[店舗], N''))) as store_name,
                 COUNT(patient.[患者No]) as visit_count,
                 SUM(ISNULL(teacher.[自費], 0)) as private_total,
-                SUM(CASE WHEN patient.[店舗] = N'さくら鍼灸整骨院' THEN ISNULL(teacher.[自費], 0) ELSE 0 END) as sakura_incentive_total,
-                SUM(CASE WHEN patient.[店舗] = N'ひなた鍼灸整骨院' THEN ISNULL(teacher.[自費], 0) ELSE 0 END) as hinata_incentive_total
+                SUM(CASE WHEN patient.[店舗] = N'さくら鍼灸整骨院' AND menu.[歩合割合] IS NOT NULL THEN ISNULL(teacher.[自費], 0) ELSE 0 END) as sakura_incentive_total,
+                SUM(CASE WHEN patient.[店舗] = N'ひなた鍼灸整骨院' AND menu.[歩合割合] IS NOT NULL THEN ISNULL(teacher.[自費], 0) ELSE 0 END) as hinata_incentive_total
             ")
             ->where('patient.日付', '>=', $monthStart->toDateString())
             ->where('patient.日付', '<', $monthEnd->toDateString())
             ->whereNotNull('teacher.メニュー')
-            ->whereNotNull('menu.歩合割合')
             ->where(function ($query): void {
                 $query->whereNull('teacher.先生別外')
                     ->orWhere('teacher.先生別外', 0);
@@ -503,9 +508,36 @@ class StoreSalesController extends Controller
 
     private function consignmentStaffOptions(Carbon|string $targetMonthStart): array
     {
-        $targetMonthStartDate = $targetMonthStart instanceof Carbon
-            ? $targetMonthStart->format('Y-m-d')
-            : $targetMonthStart;
+        $monthStart = $targetMonthStart instanceof Carbon
+            ? $targetMonthStart
+            : Carbon::createFromFormat('Y-m-d', $targetMonthStart)->startOfDay();
+        $targetMonthStartDate = $monthStart->format('Y-m-d');
+        $monthEnd = $monthStart->copy()->addMonth();
+
+        // 名前選択は、その月に実際に売上（歩合割合ありのメニュー実績）がある人だけに絞る
+        // （2026-09-13、ユーザー確認。以前は業務委託の在籍者全員を出していたため、
+        // その月に実績が無い人まで選択肢に並んでいた）。
+        $staffIdsWithSales = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_施術メニュー as menu')
+            ->join('dbo.T_先生別日報 as teacher', 'menu.メニュー', '=', 'teacher.メニュー')
+            ->join('dbo.T_患者名日報 as patient', 'patient.患者No', '=', 'teacher.患者No_t')
+            ->where('patient.日付', '>=', $targetMonthStartDate)
+            ->where('patient.日付', '<', $monthEnd->toDateString())
+            ->whereNotNull('teacher.メニュー')
+            ->whereNotNull('menu.歩合割合')
+            ->where(function ($query): void {
+                $query->whereNull('teacher.先生別外')
+                    ->orWhere('teacher.先生別外', 0);
+            })
+            ->selectRaw('DISTINCT LTRIM(RTRIM(CAST(teacher.[担当者ID] as nvarchar(20)))) as staff_id')
+            ->pluck('staff_id')
+            ->map(fn($value): string => trim((string) $value))
+            ->filter(fn(string $value): bool => $value !== '')
+            ->all();
+
+        if ($staffIdsWithSales === []) {
+            return [];
+        }
 
         return DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
@@ -520,6 +552,10 @@ class StoreSalesController extends Controller
                 $query->where('staff_division', 'like', '%業務委託%')
                     ->orWhere('staff_division', 'like', '%委託%');
             })
+            ->whereRaw(
+                'LTRIM(RTRIM(staff_id)) IN (' . implode(',', array_fill(0, count($staffIdsWithSales), '?')) . ')',
+                $staffIdsWithSales
+            )
             ->orderBy('staff_id')
             ->get()
             ->map(fn($row): array => [
