@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
 use App\Services\Admin\V2\YearEndAdjustment\YearEndCalculationService;
 use App\Services\YearEnd\CertificateFileService;
+use App\Services\YearEnd\LifeInsuranceCertificateSignatureVerifier;
 use App\Services\YearEnd\LifeInsuranceCertificateXmlParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +23,7 @@ class YearEndApplicationController extends Controller
         private readonly CertificateFileService $certificateFileService,
         private readonly YearEndCalculationService $calculationService,
         private readonly LifeInsuranceCertificateXmlParser $lifeInsuranceCertificateXmlParser,
+        private readonly LifeInsuranceCertificateSignatureVerifier $lifeInsuranceCertificateSignatureVerifier,
     ) {}
 
     private const EDITABLE_STATUSES = ['draft', 'returned'];
@@ -469,8 +471,22 @@ class YearEndApplicationController extends Controller
             return response()->json(['error' => 'XMLファイルを選択してください。'], 422);
         }
 
+        $xmlContent = (string) file_get_contents($file->getRealPath());
+
+        // 電子署名が検証NG（＝署名は付いているが中身が署名後に書き換わっている）なら
+        // 自動入力させない（2026-09-13追加）。証明書の年欄そのものを改ざんして対象年に
+        // 合わせれば下の年チェックだけではすり抜けられてしまう（ユーザーが実際に試して
+        // 発覚）ため、改ざん検知として署名検証も自動入力の入口でかける。署名が存在しない
+        // 証明書（検証対象外）まではブロックしない。
+        $signatureVerification = $this->lifeInsuranceCertificateSignatureVerifier->verify($xmlContent);
+        if (!$signatureVerification['verified'] && $signatureVerification['signer'] !== null) {
+            return response()->json([
+                'error' => 'この証明書は電子署名の検証に失敗しました（発行後に内容が書き換えられている可能性があります）。原本を確認してください。',
+            ], 422);
+        }
+
         try {
-            $result = $this->lifeInsuranceCertificateXmlParser->parse((string) file_get_contents($file->getRealPath()));
+            $result = $this->lifeInsuranceCertificateXmlParser->parse($xmlContent);
         } catch (\RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
@@ -562,9 +578,15 @@ class YearEndApplicationController extends Controller
     }
 
     /**
-     * 保険料控除の証憑としてXML（電子的控除証明書）が添付された場合、証明書の年
-     * （WCE00010）が今年の年末調整の対象年と違えば保存させない。XML以外・パース失敗時は
-     * 何もしない（PDF/JPG/PNGの証憑や、対応外の様式のXMLまでは阻害しない）。
+     * 保険料控除の証憑としてXML（電子的控除証明書）が添付された場合、
+     * (1) 証明書の年（WCE00010）が今年の年末調整の対象年と違えば保存させない、
+     * (2) 電子署名が検証NG（＝署名は付いているが中身が署名後に書き換わっている）なら
+     * 保存させない。どちらもXML以外・パース失敗時は何もしない（PDF/JPG/PNGの証憑や、
+     * 対応外の様式のXMLまでは阻害しない）。
+     * (2)は2026-09-13追加：証明書の年欄そのものを改ざんして対象年に合わせれば(1)は
+     * すり抜けられてしまう（ユーザーが実際に試して発覚）ため、改ざん検知として
+     * 電子署名の検証も自動入力・直接添付保存の両方でかけることにした。署名が
+     * 存在しない証明書（検証対象外）まではブロックしない。
      */
     private function assertCertificateYearMatches(\Illuminate\Http\UploadedFile $file, int $targetYear, string $fileFieldPath): void
     {
@@ -572,8 +594,17 @@ class YearEndApplicationController extends Controller
             return;
         }
 
+        $xmlContent = (string) file_get_contents($file->getRealPath());
+
+        $signatureVerification = $this->lifeInsuranceCertificateSignatureVerifier->verify($xmlContent);
+        if (!$signatureVerification['verified'] && $signatureVerification['signer'] !== null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                $fileFieldPath => 'この証明書は電子署名の検証に失敗しました（発行後に内容が書き換えられている可能性があります）。原本を確認してください。',
+            ]);
+        }
+
         try {
-            $result = $this->lifeInsuranceCertificateXmlParser->parse((string) file_get_contents($file->getRealPath()));
+            $result = $this->lifeInsuranceCertificateXmlParser->parse($xmlContent);
         } catch (\RuntimeException) {
             return;
         }
