@@ -1,5 +1,22 @@
 # 往診 変更履歴・注意点
 
+## 2026-09-13 スタッフポータルの一般公開に往診だけ未対応、メニューをシステムマスタ限定に変更
+
+他ドメインはスタッフへの一般公開を進める段階になったが、往診だけ準備が整っていないため、
+ダッシュボードのメニューカード「往診」「往診事務」「往診管理」の`visible`条件を
+一旦`$isAdmin`（システムマスタ）のみに変更した（`resources/views/staff_portal/dashboard/index.blade.php`）。
+
+**Controller側の権限チェック（`isOushinStaff()`/`isAccounting()`/`isVisitManagement()`等）は
+変更していない。** メニューを隠しているだけなので、対象スタッフがURLを直接開けば従来通り
+動作する（`00_global.md`の「メニューを隠すだけで満足しない」という原則とは逆方向の変更に
+見えるが、ここは「まだ一般公開する準備ができていない機能を隠す」という意図的な暫定対応。
+往診の一般公開準備が整ったら、`$isAdmin`単独の条件を元の`|| $isOushinStaff`等へ戻すこと）。
+
+同じ理由で、ダッシュボードの「入金確定が未確定です（◯年◯月）。内容を確認してください。」
+バナー（`hv_ryoukin`の自分の未確定月を知らせる、`hv_office.payment_confirmed`へのリンク）も
+`AuthController::dashboard()`側でシステムマスタ以外には計算・表示しないよう変更した
+（`$isAdminForDashboard`で`unconfirmedPaymentMonths()`の呼び出し自体を分岐）。
+
 ## 2026-08-24 フォールバック監査（保存確認漏れ一斉修正と同時に実施）
 
 `ReceiptController.php`の入金確定バナー表示（`is_payment_confirmed`/`payment_confirmed_at`）が、

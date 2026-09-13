@@ -78,11 +78,16 @@ class AuthController extends Controller
             return redirect()->route('login.portal')->with('errorMessage', 'ログインしてください。');
         }
 
+        // 往診はスタッフへの一般公開に未対応（2026-09-13、docs/rules/home_visit/12_change_log.md
+        // 参照）。この入金確定バナーは往診の入金確定画面(hv_office.payment_confirmed)へのリンクで、
+        // メニューを隠した相手にまで表示すると混乱するため、メニューと同じくシステムマスタのみに絞る。
+        $isAdminForDashboard = $this->isAdmin($this->staffPortalStaffRow($staffId));
+
         return view('staff_portal.dashboard.index', $this->commonViewData($request, [
             'staffId' => $staffId,
             'needsCorrection' => $this->hasReturnedAttendance($staffId),
             'needsYearEndAttention' => $this->hasReturnedYearEndApplication($staffId),
-            'unconfirmedPaymentMonths' => $this->unconfirmedPaymentMonths($staffId),
+            'unconfirmedPaymentMonths' => $isAdminForDashboard ? $this->unconfirmedPaymentMonths($staffId) : [],
             'informationMessages' => $this->informationMessages(),
         ]));
     }

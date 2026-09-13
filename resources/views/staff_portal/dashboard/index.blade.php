@@ -40,7 +40,10 @@
     ],
     ],
     [
-    'visible' => $isOushinStaff || $isAdmin || $isViewOnly,
+    // 往診はシステムマスタへの一般公開に未対応のため、一旦システムマスタのみ表示する
+    // （2026-09-13、ユーザー指示。Controller側の権限チェック(isOushinStaff等)は
+    // 変更していない。メニューを隠すだけで、往診担当者がURLを直接開けば従来通り動く）。
+    'visible' => $isAdmin,
     'badge' => 'STAFF',
     'title' => '往診',
     'cards' => [
@@ -161,7 +164,8 @@
 
 
     [
-    'visible' => $isAccounting || $isAdmin || $isViewOnly || $isVisitManagement,
+    // 往診と同じ理由でシステムマスタのみ表示（2026-09-13）。
+    'visible' => $isAdmin,
     'badge' => 'OFFICE',
     'title' => '往診事務',
     'cards' => [
@@ -208,7 +212,8 @@
 
 
     [
-    'visible' => $isVisitManagement || $isAdmin,
+    // 往診と同じ理由でシステムマスタのみ表示（2026-09-13）。
+    'visible' => $isAdmin,
     'badge' => 'ADMIN',
     'title' => '往診管理',
     'cards' => [
