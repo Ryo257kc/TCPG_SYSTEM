@@ -3381,6 +3381,13 @@ class YearEndAdjustmentV2Controller extends Controller
             return [];
         }
 
+        // 「自動入力」ボタン(parseHokenCertificateXml())を通さず証憑ファイルだけ直接
+        // 添付して保存した場合、証明書の年チェックが一度も走らないまま保存できてしまって
+        // いた（2026-09-13発覚。年チェック自体は自動入力プレビュー側にしか実装されて
+        // おらず、保存の実処理であるここには無かった）。保存の入口となるここでも
+        // 同じチェックを行う（スタッフ側`resolveCertificateFields()`と同じ意図）。
+        $this->assertHokenCertificateYearMatches($file, $targetYear);
+
         $stored = $this->certificateFileService->store(
             $file,
             "year_end/{$targetYear}/{$staffId}/insurance",
@@ -3392,6 +3399,35 @@ class YearEndAdjustmentV2Controller extends Controller
             'certificate_original_name' => $stored['original_name'],
             'certificate_uploaded_at' => $stored['uploaded_at'],
         ];
+    }
+
+    /**
+     * 保険料控除の証憑としてXML（電子的控除証明書）が添付された場合、証明書の年
+     * （WCE00010）が今年の年末調整の対象年と違えば保存させない。XML以外・パース失敗時は
+     * 何もしない（PDF/JPG/PNGの証憑や、対応外の様式のXMLまでは阻害しない）。
+     */
+    private function assertHokenCertificateYearMatches(\Illuminate\Http\UploadedFile $file, int $targetYear): void
+    {
+        if (strtolower((string) $file->getClientOriginalExtension()) !== 'xml') {
+            return;
+        }
+
+        try {
+            $result = $this->lifeInsuranceCertificateXmlParser->parse((string) file_get_contents($file->getRealPath()));
+        } catch (\RuntimeException) {
+            return;
+        }
+
+        $mismatchedYears = collect($result['contracts'])
+            ->pluck('certificate_year')
+            ->filter(fn($year) => $year !== null && (int) $year !== $targetYear)
+            ->unique()
+            ->values();
+        if ($mismatchedYears->isNotEmpty()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'certificate_file' => 'この証明書は' . $mismatchedYears->implode('年・') . '年分のため、' . $targetYear . '年の年末調整には使用できません。',
+            ]);
+        }
     }
     // 変更が無い年度はファイルを複製せず前年分をそのまま使う想定のため、targetYearから
     // 2025年まで年度を遡って最初に見つかったファイルを使う（2025年固定フォールバックだと、
