@@ -54,4 +54,16 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleCompanyInfoEdit(form.id, false);
   });
 });
+
+// 二重送信防止：市長税(特別徴収)の新規追加で、ボタン連打により同じ内容が
+// 2件登録される実例が発生した（2026-09-14）。このページの全フォーム（社保・老保・
+// 市長税の新規追加/編集/削除）に共通で、submit時にボタンを即座に無効化する。
+document.addEventListener('submit', (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement)) return;
+
+  form.querySelectorAll('button[type="submit"]').forEach((button) => {
+    button.disabled = true;
+  });
+});
 </script>

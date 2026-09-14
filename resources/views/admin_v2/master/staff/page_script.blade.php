@@ -114,4 +114,16 @@ document.addEventListener('DOMContentLoaded', () => {
   setupStaffDateEraHints();
   setupPayrollStyleToggles();
 });
+
+// 二重送信防止：同種の会社マスタ画面(company/page_script.blade.php)でボタン連打による
+// 重複登録が発生した実例（2026-09-14）を受け、こちらのスタッフマスタ（住民税・社保・
+// 扶養等の登録/編集/削除フォーム）にも同じ対策を入れる。submit時にボタンを即座に無効化する。
+document.addEventListener('submit', (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement)) return;
+
+  form.querySelectorAll('button[type="submit"]').forEach((button) => {
+    button.disabled = true;
+  });
+});
 </script>
