@@ -715,7 +715,7 @@
                             <td class="num">{{ number_format((float) ($m['change_scheduled_total'] ?? 0), 2) }}</td>
                             <td class="num">{{ $showOrBlank($m['overtime_total'] ?? 0) }}</td>
                             <td class="num">{{ $showOrBlank($m['night_overtime_total'] ?? 0) }}</td>
-                            <td class="num">{{ $showOrBlank(($m['category_totals']['休出'] ?? 0)) }}</td>
+                            <td class="num">{{ $showOrBlank($m['holiday_work_time'] ?? 0) }}</td>
                             <td class="num">
                                 {{ $showOrBlank(
         ($m['category_totals']['遅刻'] ?? 0)

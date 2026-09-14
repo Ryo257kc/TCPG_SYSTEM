@@ -44,9 +44,13 @@ class AttendanceV2MetricService
 
             // 検算アラート：シフト-休み+残業+休出 が実働時間(change_scheduled_total)と
             // 一致するかどうか。本人申請の変更実績の入力ミスを見つけるための表示用（2026-08-17）。
-            // 業務委託は残業が付かず、シフトも他スタッフと同じ意味を持たないため対象外にする。
-            $isOutsource = str_contains(trim((string) ($staff['division'] ?? '')), '業務委託');
-            $reconciliationDiff = $isOutsource ? 0.0 : $this->monthlySummaryService->reconciliationDiff($metric);
+            // 以前は「業務委託は残業が付かず、シフトも他スタッフと同じ意味を持たないため」と
+            // 対象外にしていたが、それだと本物の入力ミス（staff035・2026年8月、-17.5時間の
+            // 食い違い）まで見逃してしまっていた（2026-09-14発覚）。業務委託だけ実際に月ごとの
+            // 差分を確認したところ、多くの月・多くのスタッフで0付近に収まっており
+            // （2026年6月:2名2.5h/4h、7月:2名2h/2h、8月:1名-17.5h）、対象外にしたままだと
+            // 逆に見逃しの方が実害として大きいと判断し、業務委託も対象に含める（2026-09-14）。
+            $reconciliationDiff = $this->monthlySummaryService->reconciliationDiff($metric);
 
             $rows[] = [
                 'staff_id' => $staff['staff_id'],
@@ -56,7 +60,7 @@ class AttendanceV2MetricService
                 'company_name' => $staff['company_name'],
                 'metrics' => $metric,
                 'reconciliation_diff' => $reconciliationDiff,
-                'reconciliation_mismatch' => !$isOutsource && abs($reconciliationDiff) > 0.05,
+                'reconciliation_mismatch' => abs($reconciliationDiff) > 0.05,
             ];
         }
 

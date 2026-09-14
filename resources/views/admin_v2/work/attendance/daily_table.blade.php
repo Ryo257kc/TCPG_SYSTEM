@@ -58,7 +58,14 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 <div class="daily-summary-value">{{ number_format((float) ($dailySummary['overtime_total'] ?? 0), 2) }}</div>
                 <div class="daily-summary-label">深夜集計</div>
                 <div class="daily-summary-value">{{ number_format((float) ($dailySummary['night_overtime_total'] ?? 0), 2) }}</div>
+                <div class="daily-summary-label">休出時間</div>
+                <div class="daily-summary-value">{{ number_format((float) ($dailySummary['holiday_work_time'] ?? 0), 2) }}</div>
+                {{-- 休出時間は上のholiday_work_time（change_scheduledベースの自動計算値）を使うため、
+                ここでは除く（work_type_time直読みのcategory_totals['休出']は手入力欄が空だと
+                値が入らず信頼できないため2026-09-14に切替、admin_v2/work/attendance/index.blade.php
+                の一覧側「休出時間」列と同じ修正）。 --}}
                 @foreach (($dailySummary['category_totals'] ?? []) as $category => $total)
+                @continue($category === '休出')
                 <div class="daily-summary-label">{{ $category }}時間</div>
                 <div class="daily-summary-value">{{ number_format((float) $total, 2) }}</div>
                 @endforeach
