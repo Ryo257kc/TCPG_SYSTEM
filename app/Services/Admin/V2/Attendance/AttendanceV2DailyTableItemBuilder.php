@@ -188,6 +188,16 @@ class AttendanceV2DailyTableItemBuilder
                 ? $this->formatNumber($rawChangeScheduled)
                 : ($hasChangeRecord ? $changeScheduled : ($isRestDay ? '' : $shiftScheduled));
 
+            // 区分が休みの日（欠勤・有休・有半・振休）なのに、変更実績所定が空欄にならず
+            // 値が残っているケース（change_scheduledの保存値や変更実績の時刻が、区分を
+            // 休みに変える前のまま残っている等）を検知する。シフト所定が休みの日に残るのは
+            // 「元々その予定だった」という正常な状態（10_calculation_basis.md参照）なので
+            // 対象にしない。あくまで「実績側に働いた形跡が残っている」ことだけを問題にする
+            // （2026-09-14、ユーザー要望：欠勤なのに時間が入ってても今まで気付きにくかった）。
+            $isRestScheduledMismatch = $isRestDay
+                && trim((string) $displayChangeScheduled) !== ''
+                && $this->toFloat($displayChangeScheduled) > 0;
+
             $isChangeScheduledOver =
                 $rawChangeScheduled !== '' &&
                 $this->toFloat($rawChangeScheduled) > $this->toFloat($shiftScheduled);
@@ -233,6 +243,7 @@ class AttendanceV2DailyTableItemBuilder
                 'change_end' => $this->formatTime($card->change_end ?? null),
                 'change_scheduled' => $displayChangeScheduled,
                 'is_change_scheduled_over' => $isChangeScheduledOver ? '1' : '0',
+                'is_rest_scheduled_mismatch' => $isRestScheduledMismatch ? '1' : '0',
                 'is_holiday' => $isHoliday ? '1' : '0',
                 'overtime' => $this->formatNumber($card->overtime ?? null),
                 'night_overtime' => $this->formatNumber($card->night_overtime ?? null),

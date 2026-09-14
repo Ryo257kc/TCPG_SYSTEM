@@ -259,7 +259,7 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                         <span class="daily-view">{{ $row['change_end'] }}</span>
                         <input class="daily-edit daily-edit-input" type="text" name="change_end" value="{{ $row['change_end'] }}" form="{{ $formId }}" data-original="{{ $row['change_end'] }}">
                     </td>
-                    <td @class(['daily-value-alert'=> $isChangeScheduledOver, 'daily-value-under'=> $isChangeScheduledUnder])>
+                    <td @class(['daily-value-alert'=> $isChangeScheduledOver || ($row['is_rest_scheduled_mismatch'] ?? '0') === '1', 'daily-value-under'=> $isChangeScheduledUnder])>
                         <span class="daily-view">{{ $row['change_scheduled'] }}</span>
                         <input class="daily-edit daily-edit-input daily-edit-input-num" type="text" name="change_scheduled" value="{{ $row['change_scheduled'] }}" form="{{ $formId }}" data-original="{{ $row['change_scheduled'] }}">
                     </td>
