@@ -137,7 +137,12 @@ class AttendanceV2HolidayCategoryService
         return match ($text) {
             '平日', 'weekday', '0' => self::CATEGORY_WEEKDAY,
             '半日', 'half_day', 'halfday', '1' => self::CATEGORY_HALF_DAY,
-            '休日', 'holiday', 'off', '2' => self::CATEGORY_HOLIDAY,
+            // 「会社休」はmx_calendar.work_holidayの実値（お盆・年末年始等の会社独自の
+            // 休業日）。この一致が無いと未認識でnull落ちし、下のpublic_holiday
+            // （備考の「盆休み」等）優先の分岐に流れて誤って祝日扱いになっていた
+            // （2026-09-14、staff075で発覚。他スタッフの同じ日付は既存データ上
+            // 正しく休日になっているため、公式な祝日ではなく会社休として扱う）。
+            '休日', 'holiday', 'off', '会社休', '2' => self::CATEGORY_HOLIDAY,
             '祝日', 'public_holiday', 'public holiday', '3' => self::CATEGORY_PUBLIC_HOLIDAY,
             default => null,
         };
