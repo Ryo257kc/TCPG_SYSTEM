@@ -67,7 +67,15 @@ DEV上は現在カラムが存在することを確認済み（実害なし）�
 
 ## hv_nippou/hv_ryoukin のNULLバックフィル(2026-08-13)
 
-ユーザーはレガシーPHPサイト(`tests/hinata_oushin/`)を別の本番DBに対して並行運用中で、`hv_nippou`/`hv_ryoukin`/`hv_kanjya_info`は将来的にレガシー本番から再同期される可能性がある(一回限りの移行ではない)。再同期時は、空欄と数値が混在するとExcelフィルタが重くなる問題が過去に起きているため、以下の列をNULL→0でバックフィルすること(再利用可能な同期スクリプトはリポジトリに存在しない、過去の同期は使い捨ての手動スクリプト):
+ユーザーはレガシーPHPサイト(`tests/hinata_oushin/`)を別の本番DBに対して並行運用中で、`hv_nippou`/`hv_ryoukin`/`hv_kanjya_info`は将来的にレガシー本番から再同期される可能性がある(一回限りの移行ではない)。再同期時は、空欄と数値が混在するとExcelフィルタが重くなる問題が過去に起きているため、以下の列をNULL→0でバックフィルすること:
+
+**2026-09-14追記**: レガシー本番DBは`HINATAoushin`（TCPGSYSTEM等と同一サーバー・同一アカウント、
+DB名から`_DEV`を外したものが本番という通常のパターンと同じ）で、`.env`に個別設定は無いが
+`sqlsrv`接続のままDB名を差し替えたクエリで到達できる（[[reference_db_topology]]参照）。
+2026年8月分の同期を実施済み、スクリプトは
+`database/sql/2026_09_sync_hv_nippou_ryoukin_kanjyainfo_from_hinataoushin_202608.php`
+（列対応の確認結果・実行結果も同ファイルのコメントに記載）。次回以降はこれをベースに
+対象月を書き換えて使える（完全な汎用スクリプトではなく、日付がハードコードされている点に注意）。
 
 - `hv_nippou.distance`/`private_fee`/`copayment_amount`/`uncollected_amount`
 - `hv_ryoukin.collected_amount`/`unit_price`/`billing_count`/`adjustment_amount`
