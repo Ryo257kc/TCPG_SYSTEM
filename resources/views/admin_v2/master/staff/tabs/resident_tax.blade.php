@@ -143,7 +143,7 @@ return $value;
         <div class="info-block-grid">
           <label class="detail-field detail-field-compact">
             <span>住民税対象月</span>
-            <input type="date" name="target_month" required>
+            <input type="month" name="target_month" required>
           </label>
           <label class="detail-field detail-field-compact">
             <span>宛名番号</span>
@@ -164,7 +164,7 @@ return $value;
               @foreach($residentMonths as $field => $label)
               <label class="detail-field detail-field-compact">
                 <span>{{ $label }}</span>
-                <input type="text" name="{{ $field }}" @if($field==='resident_tax2' ) data-resident-tax-fill-source="1" @endif>
+                <input type="text" name="{{ $field }}" class="resident-tax-month-input">
               </label>
               @endforeach
             </div>
@@ -206,7 +206,7 @@ return $value;
         <label class="detail-field detail-field-compact">
           <span>住民税対象月</span>
           <div class="resident-tax-value">{{ str_replace('-', '/', substr((string)($row['_raw_target_month'] ?? ''), 0, 10)) ?: '---' }}</div>
-          <input type="date" name="target_month" value="{{ substr((string)($row['_raw_target_month'] ?? ''), 0, 10) }}" required>
+          <input type="month" name="target_month" value="{{ substr((string)($row['_raw_target_month'] ?? ''), 0, 7) }}" required>
         </label>
         <label class="detail-field detail-field-compact">
           <span>年間合計</span>
@@ -237,7 +237,7 @@ return $value;
             <label class="detail-field detail-field-compact">
               <span>{{ $label }}</span>
               <div class="resident-tax-value">{{ $formatResidentNumber($row[$field] ?? '') !== '' ? $formatResidentNumber($row[$field] ?? '') : '---' }}</div>
-              <input type="text" name="{{ $field }}" value="{{ $formatResidentNumber($row[$field] ?? '') }}" @if($field==='resident_tax2' ) data-resident-tax-fill-source="1" @endif>
+              <input type="text" name="{{ $field }}" value="{{ $formatResidentNumber($row[$field] ?? '') }}" class="resident-tax-month-input">
             </label>
             @endforeach
           </div>
@@ -297,12 +297,19 @@ return $value;
 </div>
 
 <script>
-  document.querySelectorAll('[data-resident-tax-fill-source="1"]').forEach(function(source) {
+  // 住民税は月ごとに金額が変わらないことが多いため、いずれかの月に入力したら
+  // それ以降の月（6月〜翌5月の並びで、入力した月より後ろ）へ同じ金額を自動で埋める。
+  // 以前は7月(resident_tax2)固定でしか発火しなかったが、9月スタートの途中入社等、
+  // 最初の対象月が7月より後ろになるケースで使えなかった（2026-09-14、ユーザー指摘）。
+  // どの月から入力しても後続月へ広がるよう、月を問わず発火するようにする。
+  document.querySelectorAll('.resident-tax-month-input').forEach(function(source) {
     source.addEventListener('change', function() {
+      var match = source.name.match(/^resident_tax(\d+)$/);
       var form = source.closest('form');
-      if (!form || source.value === '') return;
+      if (!match || !form || source.value === '') return;
 
-      for (var i = 3; i <= 12; i += 1) {
+      var sourceIndex = parseInt(match[1], 10);
+      for (var i = sourceIndex + 1; i <= 12; i += 1) {
         var target = form.querySelector('[name="resident_tax' + i + '"]');
         if (target) {
           target.value = source.value;

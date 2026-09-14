@@ -275,7 +275,7 @@ class StaffV2Controller extends Controller
 
     public function storeResident(Request $request): RedirectResponse
     {
-        $v = $request->validate($this->residentRules());
+        $v = $request->validate($this->residentRules(), $this->residentMessages());
 
         $this->service->createResident($v);
 
@@ -287,7 +287,7 @@ class StaffV2Controller extends Controller
         $v = $request->validate([
             'resident_no' => ['required', 'string', 'max:50'],
             ...$this->residentRules(),
-        ]);
+        ], $this->residentMessages());
 
         $this->service->updateResident($v);
 
@@ -514,6 +514,15 @@ class StaffV2Controller extends Controller
             'resident_tax11' => ['nullable', 'string', 'max:100'],
             'resident_tax12' => ['nullable', 'string', 'max:100'],
             'memo' => ['nullable', 'string'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function residentMessages(): array
+    {
+        return [
+            'target_month.required' => '住民税対象月を入力してください。',
+            'target_month.date_format' => '住民税対象月は年月（YYYY-MM）の形式で入力してください。',
         ];
     }
 
