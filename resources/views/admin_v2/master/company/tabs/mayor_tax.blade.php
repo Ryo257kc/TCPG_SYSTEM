@@ -1,5 +1,9 @@
 @php
-  $mayorSeed = $selectedMayorRow ?? [];
+  // 老保・社保タブと違い、市長税(特別徴収)は「会社が関わる市区町村を1件ずつ追加していく
+  // リスト」であり、直近登録した市区町村の内容を土台にする意味が無い。むしろ姫路市を
+  // 登録した直後に新規追加を押すと姫路市の内容がそのまま出てきて紛らわしい
+  // （2026-09-14、ユーザー指摘）。新規追加は常に空欄から始める。
+  $mayorSeed = [];
 @endphp
 
 <div class="current-rate-card mayor-tax-card" id="mayor-current-card">
