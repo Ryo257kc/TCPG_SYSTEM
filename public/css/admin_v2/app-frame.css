@@ -99,6 +99,9 @@ select {
 .margin_r20 {
     margin-right: 20px;
 }
+.margin_b10 {
+    margin-bottom: 10px;
+}
 
 /* フォントサイズ */
 .f_size9 {

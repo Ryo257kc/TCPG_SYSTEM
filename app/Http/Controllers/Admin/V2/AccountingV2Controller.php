@@ -27,12 +27,22 @@ class AccountingV2Controller extends Controller
         'credit_amount' => true,
     ];
 
+    // 絞り込み欄に「空白」と入れた時だけ、その項目が借方・貸方どちらか片方でも空欄の明細を
+    // 拾う特別扱いにする（2026-09-14、ユーザー要望。フィルタ欄がこれ以上増やせないため、
+    // 専用チェックボックスではなく既存の入力欄の中で完結させる。同じ入力欄・
+    // 候補一覧(datalist)の両方でこの値を使うため定数化）。
+    private const BLANK_FILTER_SENTINEL = '空白';
+
     public function __construct(
         private readonly SalesV2Service $salesService,
     ) {}
 
     public function journalEntries(Request $request): View
     {
+        // 表示形式：グループ折りたたみ(既定)とフラット(明細1行=1行)を切り替える
+        // （2026-09-14、ユーザー要望。Accessでは全行フラットに並べて部門欄等を目視確認
+        // できていたが、今のグループ折りたたみではそれができないため）。
+        $displayMode = $request->query('display', 'group') === 'flat' ? 'flat' : 'group';
         $dateFrom = trim((string) $request->query('date_from', now()->startOfMonth()->format('Y-m-d')));
         $dateTo = trim((string) $request->query('date_to', now()->endOfMonth()->format('Y-m-d')));
         $selectedCompanyName = trim((string) $request->query('company_name_short', ''));
@@ -42,9 +52,14 @@ class AccountingV2Controller extends Controller
         $accountTitle = trim((string) $request->query('account_title', ''));
         $itemName = trim((string) $request->query('item_name', ''));
         $departmentName = trim((string) $request->query('department_name', ''));
+        $vaultName = trim((string) $request->query('vault_name', ''));
         $managementNumber = trim((string) $request->query('management_number', ''));
         $journalBreakdown = trim((string) $request->query('journal_breakdown', ''));
         $parsedAmount = $this->parseMoneyValue($amount);
+        // 除外モード：チェックが付いている間、入力済みの全絞り込み欄を「一致するものだけ表示」
+        // ではなく「一致するものを除いて表示」に切り替える（2026-09-14、ユーザー要望。
+        // 項目ごとの個別トグルは使わない・全体で1つのチェックのみ、混在運用はしない）。
+        $excludeMode = $request->boolean('exclude_mode');
 
         $companyOptions = DB::connection('sqlsrv')
             ->table('dbo.mx_journal_entries')
@@ -64,8 +79,21 @@ class AccountingV2Controller extends Controller
         $summaryTextOptions = $this->fetchDistinctOptions('summary_text', false, $dateFrom, $dateTo);
         $accountTitleOptions = $this->fetchDistinctUnionOptions('debit_account_title', 'credit_account_title', false, $dateFrom, $dateTo);
         $itemNameOptions = $this->fetchDistinctUnionOptions('debit_item_name', 'credit_item_name', false, $dateFrom, $dateTo);
-        $departmentOptions = $this->fetchDistinctUnionOptions('debit_department_name', 'credit_department_name', false, $dateFrom, $dateTo);
+        // 部門欄には mx_departments.store_short_name（例: T_さくら 店舗）がそのまま保存
+        // されており、絞り込み欄に生のコードが出て読みにくかった（2026-09-14、ユーザー
+        // 指摘）。候補一覧・入力欄とも store_category（さくら店舗 等）の読める名前だけに
+        // 統一し、生のコードは一切表示しない。実際の検索（$departmentNameを使ったLIKE、
+        // 下記）は、読める名前から生のコードへ変換してから行う。
+        $departmentLabelMap = $this->fetchDepartmentLabelMap();
+        $departmentOptions = array_values(array_unique(array_map(
+            fn(string $value): string => $departmentLabelMap[$value] ?? $value,
+            $this->fetchDistinctUnionOptions('debit_department_name', 'credit_department_name', false, $dateFrom, $dateTo),
+        )));
         $departmentSelectOptions = $this->fetchDepartmentSelectOptions();
+        // 金庫(通帳)ごとにフィルタして報酬計算の漏れを確認する運用があったが、絞り込み欄に
+        // 無く、グループの折りたたみを開かないと金庫名が見えなかった（2026-09-14、ユーザー
+        // 指摘）。他の項目と同じ形でフィルタを追加する。
+        $vaultNameOptions = $this->fetchDistinctOptions('vault_name', false, $dateFrom, $dateTo);
         $managementNumberOptions = $this->fetchDistinctOptions('management_number', false, $dateFrom, $dateTo);
         $journalBreakdownOptions = $this->fetchDistinctOptions('journal_breakdown', false, $dateFrom, $dateTo);
 
@@ -99,42 +127,69 @@ class AccountingV2Controller extends Controller
                 'entry.is_reward_excluded',
                 'entry.is_confirmation_checked',
             ])
-            ->when($dateFrom !== '', fn($query) => $query->whereDate('entry.occurred_at', '>=', $dateFrom))
-            ->when($dateTo !== '', fn($query) => $query->whereDate('entry.occurred_at', '<=', $dateTo))
-            ->when($selectedCompanyName !== '', fn($query) => $query->where('entry.company_name_short', 'like', '%' . $selectedCompanyName . '%'))
-            ->when($counterparty !== '', function ($query) use ($counterparty) {
-                $query->where(function ($subQuery) use ($counterparty) {
-                    $subQuery->where('entry.debit_counterparty', 'like', '%' . $counterparty . '%')
-                        ->orWhere('entry.credit_counterparty', 'like', '%' . $counterparty . '%');
-                });
-            })
-            ->when($parsedAmount !== null, function ($query) use ($parsedAmount) {
-                $query->where(function ($subQuery) use ($parsedAmount) {
-                    $subQuery->where('entry.debit_amount', $parsedAmount)
-                        ->orWhere('entry.credit_amount', $parsedAmount);
-                });
-            })
-            ->when($summaryText !== '', fn($query) => $query->where('entry.summary_text', 'like', '%' . $summaryText . '%'))
-            ->when($accountTitle !== '', function ($query) use ($accountTitle) {
-                $query->where(function ($subQuery) use ($accountTitle) {
-                    $subQuery->where('entry.debit_account_title', 'like', '%' . $accountTitle . '%')
-                        ->orWhere('entry.credit_account_title', 'like', '%' . $accountTitle . '%');
-                });
-            })
-            ->when($itemName !== '', function ($query) use ($itemName) {
-                $query->where(function ($subQuery) use ($itemName) {
-                    $subQuery->where('entry.debit_item_name', 'like', '%' . $itemName . '%')
-                        ->orWhere('entry.credit_item_name', 'like', '%' . $itemName . '%');
-                });
-            })
-            ->when($departmentName !== '', function ($query) use ($departmentName) {
-                $query->where(function ($subQuery) use ($departmentName) {
-                    $subQuery->where('entry.debit_department_name', 'like', '%' . $departmentName . '%')
-                        ->orWhere('entry.credit_department_name', 'like', '%' . $departmentName . '%');
-                });
-            })
-            ->when($managementNumber !== '', fn($query) => $query->where('entry.management_number', 'like', '%' . $managementNumber . '%'))
-            ->when($journalBreakdown !== '', fn($query) => $query->where('entry.journal_breakdown', 'like', '%' . $journalBreakdown . '%'))
+            // 管理番号（例：2026/5月給与）は特定の仕訳を名指しで探す用途が主で、対象月を
+            // 覚えていないことも多い。デフォルトの期間（当月）で絞られたまま検索すると
+            // 見つからず不便なため、管理番号を入力した時は期間を無視して全期間から探す
+            // （2026-09-16、ユーザー要望。management_numberには索引済みで全件検索も現実的）。
+            ->when($dateFrom !== '' && $managementNumber === '', fn($query) => $query->whereDate('entry.occurred_at', '>=', $dateFrom))
+            ->when($dateTo !== '' && $managementNumber === '', fn($query) => $query->whereDate('entry.occurred_at', '<=', $dateTo))
+            // 社名・摘要・金庫・管理番号・仕訳内訳は1つの仕訳(複合仕訳含む)の中で共通の値
+            // （編集フォームでも「共通」欄として扱っている）なので、行単位でそのまま絞り込んでも
+            // 複合仕訳の一部だけが消えることはない。
+            ->when($selectedCompanyName !== '', fn($query) => $this->applyFieldFilter($query, ['entry.company_name_short'], [$selectedCompanyName], $excludeMode))
+            ->when($summaryText !== '', fn($query) => $this->applyFieldFilter($query, ['entry.summary_text'], [$summaryText], $excludeMode))
+            ->when($vaultName !== '', fn($query) => $this->applyFieldFilter($query, ['entry.vault_name'], [$vaultName], $excludeMode))
+            ->when($managementNumber !== '', fn($query) => $this->applyFieldFilter($query, ['entry.management_number'], [$managementNumber], $excludeMode))
+            ->when($journalBreakdown !== '', fn($query) => $this->applyFieldFilter($query, ['entry.journal_breakdown'], [$journalBreakdown], $excludeMode))
+            // 取引先・金額・勘定科目・品目・部門は借方/貸方や明細行ごとに値が変わる項目。
+            // 行単位でそのままWHEREをかけると、複合仕訳（1つの仕訳の中に給料手当・法定福利費
+            // 等、複数の明細がぶら下がっている形）で、条件に一致しない他の明細行だけ一覧から
+            // 消えてしまい、グループの中身が欠けて見える不具合があった（2026-09-14、
+            // ユーザーが仕訳6052013で発見：借方1行+貸方5行の給与仕訳を勘定科目で絞ったら
+            // 一致する1行しか出てこなかった）。「条件に一致する行が1つでもある仕訳は、
+            // その仕訳の全行を表示する」に変更する（EXISTSで同じ仕訳内の兄弟行を見る）。
+            ->when(
+                $counterparty !== '' || $parsedAmount !== null || $accountTitle !== '' || $itemName !== '' || $departmentName !== '',
+                function ($query) use ($counterparty, $parsedAmount, $accountTitle, $itemName, $departmentName, $departmentLabelMap, $excludeMode) {
+                    $query->whereExists(function ($sub) use ($counterparty, $parsedAmount, $accountTitle, $itemName, $departmentName, $departmentLabelMap, $excludeMode) {
+                        $sub->selectRaw('1')
+                            ->from('dbo.mx_journal_entries as sibling')
+                            ->whereColumn('sibling.company_name_short', 'entry.company_name_short')
+                            ->whereColumn('sibling.occurred_at', 'entry.occurred_at')
+                            ->whereColumn('sibling.journal_breakdown', 'entry.journal_breakdown')
+                            ->when($counterparty !== '', fn($q) => $this->applyFieldFilter($q, ['sibling.debit_counterparty', 'sibling.credit_counterparty'], [$counterparty], $excludeMode))
+                            ->when($parsedAmount !== null, function ($q) use ($parsedAmount, $excludeMode) {
+                                if (!$excludeMode) {
+                                    $q->where(function ($subQuery) use ($parsedAmount) {
+                                        $subQuery->where('sibling.debit_amount', $parsedAmount)
+                                            ->orWhere('sibling.credit_amount', $parsedAmount);
+                                    });
+                                    return;
+                                }
+
+                                $q->where(function ($subQuery) use ($parsedAmount) {
+                                    $subQuery->where(function ($q2) use ($parsedAmount) {
+                                        $q2->where('sibling.debit_amount', '<>', $parsedAmount)->orWhereNull('sibling.debit_amount');
+                                    })->where(function ($q2) use ($parsedAmount) {
+                                        $q2->where('sibling.credit_amount', '<>', $parsedAmount)->orWhereNull('sibling.credit_amount');
+                                    });
+                                });
+                            })
+                            ->when($accountTitle !== '', fn($q) => $this->applyFieldFilter($q, ['sibling.debit_account_title', 'sibling.credit_account_title'], [$accountTitle], $excludeMode))
+                            ->when($itemName !== '', fn($q) => $this->applyFieldFilter($q, ['sibling.debit_item_name', 'sibling.credit_item_name'], [$itemName], $excludeMode))
+                            ->when($departmentName !== '', function ($q) use ($departmentName, $departmentLabelMap, $excludeMode) {
+                                // 入力欄には読める名前（さくら店舗 等）が入るが、保存されているのは
+                                // 生のコード（T_さくら 店舗 等）のため、検索前に読める名前→コードへ
+                                // 変換する（2026-09-14）。一致するコードが複数あればOR、無ければ
+                                // 入力値そのままで検索する（コードを直接入力・旧リンク等の保険）。
+                                $matchedCodes = array_keys($departmentLabelMap, $departmentName, true);
+                                $searchTerms = $matchedCodes !== [] ? $matchedCodes : [$departmentName];
+
+                                $this->applyFieldFilter($q, ['sibling.debit_department_name', 'sibling.credit_department_name'], $searchTerms, $excludeMode);
+                            });
+                    });
+                }
+            )
             ->orderByDesc('entry.occurred_at')
             ->orderByDesc('entry.journal_entry_id')
             ->get()
@@ -182,6 +237,7 @@ class AccountingV2Controller extends Controller
                     'occurred_at' => $first['occurred_at'] ?? '',
                     'management_number' => $first['management_number'] ?? '',
                     'company_name_short' => $first['company_name_short'] ?? '',
+                    'vault_name' => $first['vault_name'] ?? '',
                     'summary_text' => $first['summary_text'] ?? '',
                     'debit_total' => $this->formatMoneyValue($debitTotal),
                     'credit_total' => $this->formatMoneyValue($creditTotal),
@@ -197,6 +253,15 @@ class AccountingV2Controller extends Controller
         // クエリ自体は速い（インデックス済み）ので、グループ化した後の表示件数をページングで
         // 区切る（会計システム側も同じ考え方、2026-08-18）。
         $journalGroupsPerPage = 50;
+
+        // フラット表示から「この仕訳を編集」で対象のグループへ飛べるように、group_key →
+        // 何ページ目にあるかのマップを作る（2026-09-14、ユーザー要望：フラットで見つけた
+        // 修正対象を、いちいちグループ表示側で探し直すのが大変だった）。
+        $groupPageByKey = [];
+        foreach ($journalGroups as $index => $group) {
+            $groupPageByKey[$group['group_key']] = (int) floor($index / $journalGroupsPerPage) + 1;
+        }
+
         $journalGroupsPage = max(1, (int) $request->query('page', 1));
         $journalGroupsTotal = count($journalGroups);
         $journalGroupsLastPage = max(1, (int) ceil($journalGroupsTotal / $journalGroupsPerPage));
@@ -219,6 +284,7 @@ class AccountingV2Controller extends Controller
             'itemNameOptions' => $itemNameOptions,
             'departmentOptions' => $departmentOptions,
             'departmentSelectOptions' => $departmentSelectOptions,
+            'vaultNameOptions' => $vaultNameOptions,
             'managementNumberOptions' => $managementNumberOptions,
             'journalBreakdownOptions' => $journalBreakdownOptions,
             'selectedCompanyName' => $selectedCompanyName,
@@ -228,10 +294,91 @@ class AccountingV2Controller extends Controller
             'accountTitle' => $accountTitle,
             'itemName' => $itemName,
             'departmentName' => $departmentName,
+            'vaultName' => $vaultName,
+            'excludeMode' => $excludeMode,
+            'blankFilterSentinel' => self::BLANK_FILTER_SENTINEL,
+            'displayMode' => $displayMode,
+            'departmentLabelMap' => $departmentLabelMap,
+            'groupPageByKey' => $groupPageByKey,
             'managementNumber' => $managementNumber,
             'journalBreakdown' => $journalBreakdown,
             'journalImportedThrough' => $this->journalImportedThroughByCompany(),
         ]);
+    }
+
+    /**
+     * 絞り込み1項目分のWHERE条件を組み立てる。$exclude=falseなら従来通り「いずれかの
+     * 列がいずれかの値を含む」(OR)、$exclude=trueなら「除外モード」で「どの列もどの値も
+     * 含まない」(AND)にする（2026-09-14、ユーザー要望）。
+     *
+     * 除外モードはNULLの扱いに注意が必要：`NOT LIKE`はNULLに対してNULL（＝該当なし）を
+     * 返すため、そのままだと値が入っていない側の列を持つ行まで除外されてしまう。
+     * 「その列に値が無い＝除外対象を含んでいない」として扱うため、列ごとに
+     * `NOT LIKE ... OR IS NULL`にする。
+     *
+     * @param array<int, string> $columns
+     * @param array<int, string> $terms
+     */
+    private function applyFieldFilter($query, array $columns, array $terms, bool $exclude): void
+    {
+        if ($terms === [] || $columns === []) {
+            return;
+        }
+
+        // 入力値がそのまま「空白」（BLANK_FILTER_SENTINEL）なら、通常のLIKE検索ではなく
+        // 「対象列のどれかが空欄」の特別扱いにする（2026-09-14）。他の候補と混ぜて
+        // 「空白 OR 何か」のような複合検索はできない仕様（部門欄だけの要望のため、
+        // 単独で入っている時だけ特別扱いする）。
+        if ($terms === [self::BLANK_FILTER_SENTINEL]) {
+            $this->applyBlankFilter($query, $columns, $exclude);
+            return;
+        }
+
+        if (!$exclude) {
+            $query->where(function ($subQuery) use ($columns, $terms) {
+                foreach ($columns as $column) {
+                    foreach ($terms as $term) {
+                        $subQuery->orWhere($column, 'like', '%' . $term . '%');
+                    }
+                }
+            });
+            return;
+        }
+
+        $query->where(function ($subQuery) use ($columns, $terms) {
+            foreach ($columns as $column) {
+                foreach ($terms as $term) {
+                    $subQuery->where(function ($columnQuery) use ($column, $term) {
+                        $columnQuery->where($column, 'not like', '%' . $term . '%')->orWhereNull($column);
+                    });
+                }
+            }
+        });
+    }
+
+    /**
+     * 「空白」入力時の特別扱い：$exclude=falseなら対象列のどれか1つでも空欄の行を拾う
+     * （借方だけ・貸方だけ空欄でも拾う＝OR）。$exclude=trueなら逆に、対象列が全部
+     * 埋まっている行だけ拾う（AND）。
+     *
+     * @param array<int, string> $columns
+     */
+    private function applyBlankFilter($query, array $columns, bool $exclude): void
+    {
+        if (!$exclude) {
+            $query->where(function ($subQuery) use ($columns) {
+                foreach ($columns as $column) {
+                    $subQuery->orWhereNull($column)->orWhere($column, '');
+                }
+            });
+            return;
+        }
+
+        $query->where(function ($subQuery) use ($columns) {
+            foreach ($columns as $column) {
+                $subQuery->whereNotNull($column)->where($column, '<>', '');
+            }
+        });
     }
 
     // 事務側（PaymentConfirmationController）と同じ表示。取込担当がここまで入れたか確認できるように、
@@ -449,11 +596,22 @@ class AccountingV2Controller extends Controller
 
     public function importJournalEntries(Request $request): RedirectResponse
     {
+        // 2026-09-16、ユーザーが会社未選択のまま取込を実行して英語のバリデーションエラー
+        // （"The company name short field is required."）を踏んだ。日本語メッセージが
+        // 一つも無かったのが原因（target_monthの時と同じパターン）。
         $data = $request->validate([
             'csv_file' => ['required', 'file'],
             'date_from' => ['required', 'date'],
             'date_to' => ['required', 'date'],
             'company_name_short' => ['required', 'string', 'max:255'],
+        ], [
+            'csv_file.required' => 'CSVファイルを選択してください。',
+            'csv_file.file' => 'CSVファイルを選択してください。',
+            'date_from.required' => '取込対象の期間（開始日）を指定してください。',
+            'date_from.date' => '取込対象の期間（開始日）の形式が正しくありません。',
+            'date_to.required' => '取込対象の期間（終了日）を指定してください。',
+            'date_to.date' => '取込対象の期間（終了日）の形式が正しくありません。',
+            'company_name_short.required' => '取込先の会社を選択してください。',
         ]);
 
         $dateFrom = Carbon::parse((string) $data['date_from'])->startOfDay();
@@ -1345,6 +1503,36 @@ class AccountingV2Controller extends Controller
     }
 
     /**
+     * 複合仕訳のグループを丸ごと削除する。行単位の削除だと1行消すごとにページがリロードされて
+     * 最初から探し直しになり、複数行あるグループを消すのが大変だったため追加
+     * (2026-09-16、ユーザー要望)。対象行はgroup_key(会社+発生日+journal_breakdown)から
+     * 再検索せず、画面に描画済みのjournal_entry_idを明示的に渡してもらってそれだけを消す
+     * （表示後にデータが変わっていても、意図しない行まで巻き込まない）。
+     */
+    public function deleteJournalEntryGroup(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'journal_entry_ids' => ['required', 'array', 'min:1'],
+            'journal_entry_ids.*' => ['integer'],
+        ]);
+
+        $ids = array_map('intval', $data['journal_entry_ids']);
+
+        $affected = DB::connection('sqlsrv')
+            ->table('dbo.mx_journal_entries')
+            ->whereIn('journal_entry_id', $ids)
+            ->delete();
+
+        if ($affected === 0) {
+            return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
+                ->with('errorMessage', '削除対象の仕訳が見つかりません。画面を更新してから再度お試しください。');
+        }
+
+        return redirect()->route('admin.work.journal_entries', $this->journalEntriesRedirectParams($request))
+            ->with('statusMessage', "仕訳グループを削除しました（{$affected}行）。");
+    }
+
+    /**
      * 行単位でstr_getcsv()していた旧実装は、取引内容等のセル内に改行を含む行が来ると
      * そこで1レコードが分断され、以降の列がすべてズレて取り込まれていた。fgetcsv()は
      * クォート内の改行をレコードの区切りと見なさないため、この問題が起きない。
@@ -1476,6 +1664,29 @@ class AccountingV2Controller extends Controller
             })
             ->filter(fn(array $row): bool => $row['value'] !== '')
             ->values()
+            ->all();
+    }
+
+    /**
+     * store_short_name（保存値、例: T_さくら 店舗）→ store_category（表示名、例: さくら店舗）
+     * のマップ。絞り込み候補欄の表示専用のため、fetchDepartmentSelectOptions()と違って
+     * 閉鎖済み部門も含める（過去の仕訳を検索する時に閉鎖済み部門も引けないと困るため）。
+     *
+     * @return array<string, string>
+     */
+    private function fetchDepartmentLabelMap(): array
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_departments')
+            ->select(['store_short_name', 'store_category'])
+            ->whereNotNull('store_short_name')
+            ->where('store_short_name', '<>', '')
+            ->whereNotNull('store_category')
+            ->where('store_category', '<>', '')
+            ->get()
+            ->mapWithKeys(function ($row): array {
+                return [trim((string) $row->store_short_name) => trim((string) $row->store_category)];
+            })
             ->all();
     }
     // 日付で絞らずテーブル全体をGROUP BYすると、蓄積年数が長いほど毎回のページ表示が

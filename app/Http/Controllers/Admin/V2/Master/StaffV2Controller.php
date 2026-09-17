@@ -114,7 +114,7 @@ class StaffV2Controller extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $v = $request->validate($this->staffInfoRules());
+        $v = $request->validate($this->staffInfoRules(), $this->staffInfoMessages());
 
         $this->service->update($v);
 
@@ -129,7 +129,7 @@ class StaffV2Controller extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $v = $request->validate($this->staffInfoRules());
+        $v = $request->validate($this->staffInfoRules(), $this->staffInfoMessages());
 
         $this->service->create($v);
 
@@ -420,6 +420,17 @@ class StaffV2Controller extends Controller
             'memo' => ['nullable', 'string'],
             'syaho' => ['nullable', 'in:1'],
             'koyou' => ['nullable', 'in:1'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function staffInfoMessages(): array
+    {
+        return [
+            // 2026-09-16、仕訳帳CSV取込の会社未選択と同じパターンで英語エラーが出る
+            // 可能性に気づき、他の必須欄も洗い出した際に見つかった。新規スタッフ追加で
+            // スタッフIDを入力し忘れると"The staff id field is required."が出ていたはず。
+            'staff_id.required' => 'スタッフIDを入力してください。',
         ];
     }
 

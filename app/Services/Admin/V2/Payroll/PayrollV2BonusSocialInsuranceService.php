@@ -67,6 +67,15 @@ class PayrollV2BonusSocialInsuranceService
             $bonusRates['kodomo_shien'] ?? 0
         );
 
+        // 拠出金(jidou_office)は自己負担が無く会社が全額負担する項目なので、他の自己負担額とは
+        // 別枠でここで計算・保存する。以前は保存されておらず（recalculateBonus()に該当処理が
+        // 無かった）、会社負担一覧側がその場で再計算していたため「表示は必ず保存値」の原則に
+        // 反していた（2026-09-17、ユーザー指摘で発覚・追加）。
+        $jidouOffice = $this->officeInsuranceAmount(
+            $targets['kounen_target_standard'],
+            $bonusRates['jidou_rate'] ?? 0
+        );
+
         return DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_kyuyo_shou')
             ->where('kyuyo_sho_no', (int) $row->kyuyo_sho_no)
@@ -75,6 +84,7 @@ class PayrollV2BonusSocialInsuranceService
                 'kaigo' => $kaigo,
                 'kounen' => $kounen,
                 'child_support_funds' => $childSupportFunds,
+                'jidou_office' => $jidouOffice,
             ]);
     }
 
@@ -114,7 +124,9 @@ class PayrollV2BonusSocialInsuranceService
         }
         $kounenTotal = $this->officeInsuranceAmount($targets['kounen_target_standard'], $bonusRates['kounen_rate'] ?? 0);
         $childSupportTotal = $this->officeInsuranceAmount($targets['kenpo_target_standard'], $bonusRates['kodomo_shien'] ?? 0);
-        $jidouOffice = $this->officeInsuranceAmount($targets['kounen_target_standard'], $bonusRates['jidou_rate'] ?? 0);
+        // 拠出金は自己負担が無く、recalculate()が保存済みの値をそのまま使う（表示は必ず保存値。
+        // 他の項目と違い専用の保存列があるため、ここで再計算しない。2026-09-17）。
+        $jidouOffice = (int) round($this->num($summary['jidou_office'] ?? 0));
 
         $kenpoOffice = max(0, $kenpoTotal - $kenpoSelf);
         $kaigoOffice = max(0, $kaigoTotal - $kaigoSelf);
@@ -143,13 +155,18 @@ class PayrollV2BonusSocialInsuranceService
         ];
     }
 
+    /**
+     * PayrollV2SocialInsuranceAmountServiceと同じ修正（2026-09-17、実際の納付告知書との
+     * 突き合わせで確認済み）。ceil()だと実際の金額より1円多く出るケースがあったためfloor()に
+     * 変更。
+     */
     private function officeInsuranceAmount(float $standard, float $ratePercent): int
     {
         if ($standard <= 0 || $ratePercent <= 0) {
             return 0;
         }
 
-        return (int) ceil($standard * ($ratePercent / 100));
+        return (int) floor($standard * ($ratePercent / 100));
     }
 
     /**

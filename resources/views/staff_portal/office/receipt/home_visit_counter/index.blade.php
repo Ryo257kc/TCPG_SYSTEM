@@ -130,6 +130,11 @@
 <body>
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
+        {{-- 2026-09-16：この画面はerrorMessage/statusMessageの表示自体が一つも無く、
+        月次処理済みで保存を弾いた時のエラー（「月次処理済みのため編集できません。」）が
+        画面上どこにも出ずユーザーが気づけなかった。他のreceipt配下の画面と同じ
+        shared.status_messageを追加する。 --}}
+        @include('shared.status_message')
 
         <section class="panel content-panel home-visit-counter-panel staff-viewport-panel">
             <div class="content-head">
@@ -231,12 +236,12 @@
                             </td>
                             <td>
                                 <span class="home-visit-counter-readonly home-visit-counter-editable-display" data-home-visit-display="patient_name">{{ $row['patient_name'] }}</span>
-                                <select class="home-visit-counter-edit-control" data-home-visit-field="patient_name">
-                                    <option value=""></option>
-                                    @foreach (($patientNameOptions ?? []) as $patientNameOption)
-                                    <option value="{{ $patientNameOption }}" @selected($patientNameOption===($row['patient_name_raw'] ?? '' ))>{{ $patientNameOption }}</option>
-                                    @endforeach
-                                </select>
+                                {{-- 2026-09-16：以前は<select>で既存の患者名しか選べず、新しい患者を
+                                追加する手段がどこにも無かった（subject_nameは往診窓口専用カラムで、
+                                他画面からは一切書き込まれない）。候補一覧つきの自由入力に変更し、
+                                既存の患者は今まで通り一覧から選びつつ、新しい患者名も入力できる
+                                ようにする（ユーザー確認済み）。 --}}
+                                <input type="text" class="home-visit-counter-edit-control" list="home-visit-patient-name-options" data-home-visit-field="patient_name" value="{{ $row['patient_name_raw'] ?? '' }}">
                             </td>
                             <td>
                                 <span class="home-visit-counter-readonly @if($is_admin ?? false) home-visit-counter-editable-display @endif" data-home-visit-display="payment_date_text">{{ $row['payment_date_text'] }}</span>
@@ -295,9 +300,18 @@
                                         </div>
                                     </div>
                                     <div class="home-visit-counter-detail-actions">
-                                        @unless ($isReceiptMonthlyClosed ?? false)
+                                        {{-- 2026-09-16：月次処理済みでも入金日等の編集は認める運用のため、
+                                        保存・取消は出す。削除だけ月次処理済みなら引き続き不可にする
+                                        （入金確認は締め後に遅れて入金が届くことがあり、編集まで
+                                        止めると記録できなくなるとユーザー確認）。
+                                        判定は画面の絞り込み月（$isReceiptMonthlyClosed）ではなく、
+                                        この行自体の施術月（$row['is_row_monthly_closed']）で見る。
+                                        未入金絞り込み等で締まった月の行が別の月の画面に混ざる
+                                        ことがあり、画面側の月で判定すると削除ボタンの見た目と
+                                        実際にdelete()で弾かれるかどうかが食い違っていた。 --}}
                                         <button type="button" class="btn btn-primary" data-home-visit-save>保存</button>
                                         <button type="button" class="btn" data-home-visit-cancel>取消</button>
+                                        @unless ($row['is_row_monthly_closed'] ?? false)
                                         <button type="button" class="btn btn-danger" data-home-visit-delete>削除</button>
                                         @endunless
                                     </div>
@@ -375,12 +389,7 @@
             </td>
             <td>
                 <span class="home-visit-counter-readonly home-visit-counter-editable-display" data-home-visit-display="patient_name"></span>
-                <select class="home-visit-counter-edit-control" data-home-visit-field="patient_name">
-                    <option value=""></option>
-                    @foreach (($patientNameOptions ?? []) as $patientNameOption)
-                    <option value="{{ $patientNameOption }}">{{ $patientNameOption }}</option>
-                    @endforeach
-                </select>
+                <input type="text" class="home-visit-counter-edit-control" list="home-visit-patient-name-options" data-home-visit-field="patient_name">
             </td>
             <td>
                 <span class="home-visit-counter-readonly @if($is_admin ?? false) home-visit-counter-editable-display @endif" data-home-visit-display="payment_date_text"></span>

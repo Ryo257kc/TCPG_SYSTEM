@@ -42,6 +42,16 @@ class PatientController extends Controller
         ];
     }
 
+    /** @return array<string, string> */
+    private function patientValidationMessages(): array
+    {
+        // 2026-09-16、仕訳帳CSV取込の会社未選択と同じパターン（必須欄にメッセージが
+        // 無く英語のまま表示される）を他画面でも洗い出した際に見つかった。
+        return [
+            'patient_name.required' => '患者名を入力してください。',
+        ];
+    }
+
     // 患者一覧
     public function index(Request $request): RedirectResponse|View
     {
@@ -184,7 +194,7 @@ class PatientController extends Controller
             abort(403);
         }
 
-        $validated = $request->validate($this->patientValidationRules());
+        $validated = $request->validate($this->patientValidationRules(), $this->patientValidationMessages());
 
         $affected = DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')
@@ -299,7 +309,7 @@ class PatientController extends Controller
             abort(403);
         }
 
-        $validated = $request->validate($this->patientValidationRules());
+        $validated = $request->validate($this->patientValidationRules(), $this->patientValidationMessages());
 
         DB::connection('sqlsrv')
             ->table('dbo.hv_kanjya_info')

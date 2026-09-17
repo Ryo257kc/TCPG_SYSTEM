@@ -125,8 +125,8 @@
             'is_visit_management_user' => '往診管理',
             'is_view_only_user' => '往診閲覧',
             'is_store_management_user' => '店舗管理',
-            'is_daily_report_user' => '店舗日報',
-            'front_staff' => '店舗システム',
+            'is_daily_report_user' => '店舗システム',
+            'front_staff' => '店舗日報',
             ];
             @endphp
 
@@ -222,12 +222,12 @@
                             <td class="col-staff">店舗管理</td>
                         </tr>
                         <tr>
-                            <td class="col-staff">店舗日報</td>
+                            <td class="col-staff">店舗システム</td>
                             <td class="col-staff">店舗スタッフ向け。このLaravelシステムではなく、Accessで作られた店舗日報システムへのログイン可否・担当者名リストへの表示可否を制御する権限（このシステムのコードでは参照していない）。</td>
                             <td class="col-staff">（このダッシュボードには該当なし）</td>
                         </tr>
                         <tr>
-                            <td class="col-staff">店舗システム</td>
+                            <td class="col-staff">店舗日報</td>
                             <td class="col-staff">実体は施術担当（front_staff）権限。店舗日報詳細画面（daily_summary/detail）の
                                 「担当者」選択リストに表示されるかどうかを制御する（在職中のみ、退職者は表示されない）。
                                 旧来「店舗システム」という表示名だが、実際に効いているのはこの担当者リストのみ

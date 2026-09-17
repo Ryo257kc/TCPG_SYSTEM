@@ -227,6 +227,8 @@
             <a class="btn" href="{{ route('admin.bonus.transfer-list', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">振込一覧</a>
             <a class="btn" href="{{ route('admin.bonus.wage-ledger', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">賃金台帳</a>
             <a class="btn" href="{{ route('admin.bonus.company-burden-print', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">会社負担一覧</a>
+            <a class="btn" href="{{ route('admin.bonus.journal-csv', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">賞与仕訳CSV</a>
+            <a class="btn" href="{{ route('admin.bonus.company-burden-csv', ['payment_date' => $selectedPaymentDate, 'company_id' => $selectedCompanyId]) }}" target="_blank" rel="noopener noreferrer">会社負担一覧CSV</a>
           </div>
           @php
           $summary = (array) (($selectedRow['summary'] ?? []) ?: []);

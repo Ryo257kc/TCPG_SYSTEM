@@ -128,7 +128,9 @@ class PayrollV2Controller extends Controller
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
         $rows = (array) $pageData['rows'];
 
-        $csv = $this->journalCsvService->build($rows, $selectedPaymentDate);
+        $csv = $bonus
+            ? $this->journalCsvService->buildBonus($rows, $selectedPaymentDate)
+            : $this->journalCsvService->build($rows, $selectedPaymentDate);
 
         return $this->journalCsvResponse($csv, $selectedPaymentDate, (string) $pageData['selectedCompanyId'], $bonus ? '_賞与仕訳' : '_給与仕訳');
     }
@@ -544,12 +546,55 @@ class PayrollV2Controller extends Controller
         return $this->buildCompanyBurdenPrintView($request, true);
     }
 
+    public function companyBurdenCsv(Request $request): Response
+    {
+        return $this->buildCompanyBurdenCsvResponse($request, false);
+    }
+
+    public function bonusCompanyBurdenCsv(Request $request): Response
+    {
+        return $this->buildCompanyBurdenCsvResponse($request, true);
+    }
+
+    /**
+     * 会社負担一覧CSV。社保通知書と一致する金額のみ対象（雇用保険・労災は別通知のため含めない、
+     * 2026-09-16ユーザー指示）。発生日・管理番号は給与仕訳CSVと同じ（前月末・Y/n月給与)、
+     * 相手科目は未払金固定。部門は現状のCompanyBurdenPrintと同じ粒度（mx_stores.store_name、
+     * 店舗↔部門の1対1対応が未確定の往診系スタッフを含む店舗があるため、mx_departments名への
+     * 変換は別対応・保留中）。
+     */
+    private function buildCompanyBurdenCsvResponse(Request $request, bool $isBonus): Response
+    {
+        $groups = $this->computeCompanyBurdenGroups($request, $isBonus);
+        $selectedPaymentDate = $groups['selectedPaymentDate'];
+
+        $csv = $this->journalCsvService->buildCompanyBurden($groups['groupedStores'], $groups['grandTotals'], $selectedPaymentDate, $isBonus);
+
+        return $this->journalCsvResponse($csv, $selectedPaymentDate, $groups['selectedCompanyId'], $isBonus ? '_賞与社保会社負担' : '_給与社保会社負担');
+    }
+
     /**
      * 会社負担一覧は給与・賞与で保険料の計算経路が違うため（賞与は標準賞与額＋上限キャップ）、
      * $isBonusで金額の算出元だけ切り替える。帳票の様式・集計ロジックは1箇所にまとめる
      * （bonusWageLedger/buildWageLedgerViewと同じ方針）。
      */
     private function buildCompanyBurdenPrintView(Request $request, bool $isBonus): View
+    {
+        $groups = $this->computeCompanyBurdenGroups($request, $isBonus);
+
+        return view('admin_v2.work.payroll.company_burden_print', [
+            'selectedPaymentDate' => $groups['selectedPaymentDate'],
+            'selectedCompanyId' => $groups['selectedCompanyId'],
+            'selectedMonth' => $groups['selectedMonth'],
+            'isBonus' => $isBonus,
+            'companyLabel' => $this->resolveCompanyLabel($groups['rows']),
+            'groupedStores' => array_values($groups['groupedStores']),
+            'grandTotals' => $groups['grandTotals'],
+        ]);
+    }
+
+    /** @return array{selectedPaymentDate:string,selectedCompanyId:string,selectedMonth:string,rows:array,groupedStores:array,grandTotals:array} */
+    private function computeCompanyBurdenGroups(Request $request, bool $isBonus): array
     {
         $pageData = $this->buildPageData($request, $isBonus);
         $selectedPaymentDate = (string) $pageData['selectedPaymentDate'];
@@ -690,15 +735,14 @@ class PayrollV2Controller extends Controller
                 <=> [$b['company_name'], $b['store_code'], $b['store_name']];
         });
 
-        return view('admin_v2.work.payroll.company_burden_print', [
+        return [
             'selectedPaymentDate' => $selectedPaymentDate,
             'selectedCompanyId' => $selectedCompanyId,
             'selectedMonth' => $selectedMonth,
-            'isBonus' => $isBonus,
-            'companyLabel' => $this->resolveCompanyLabel($rows),
-            'groupedStores' => array_values($groupedStores),
+            'rows' => $rows,
+            'groupedStores' => $groupedStores,
             'grandTotals' => $grandTotals,
-        ]);
+        ];
     }
 
     public function homeVisitSalesPrint(Request $request): View

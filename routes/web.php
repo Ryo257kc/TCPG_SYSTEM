@@ -103,6 +103,7 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/work/journal-entries/update', [AccountingV2Controller::class, 'updateJournalEntry'])->name('admin.work.journal_entries.update');
         Route::post('/work/journal-entries/group-update', [AccountingV2Controller::class, 'updateJournalEntryGroup'])->name('admin.work.journal_entries.group_update');
         Route::post('/work/journal-entries/delete', [AccountingV2Controller::class, 'deleteJournalEntry'])->name('admin.work.journal_entries.delete');
+        Route::post('/work/journal-entries/delete-group', [AccountingV2Controller::class, 'deleteJournalEntryGroup'])->name('admin.work.journal_entries.delete_group');
         Route::get('/work/billing-list', [BillingListV2Controller::class, 'index'])->name('admin.work.billing_list');
         Route::get('/year-end-adjustments', [YearEndAdjustmentV2Controller::class, 'index'])->name('admin.work.year_end_adjustments');
         Route::post('/year-end-adjustments/create-targets', [YearEndAdjustmentV2Controller::class, 'createTargets'])->name('admin.work.year_end_adjustments.create_targets');

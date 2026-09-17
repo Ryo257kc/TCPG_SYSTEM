@@ -31,7 +31,99 @@ class PayrollV2JournalCsvService
      */
     public function build(array $rows, string $paymentDate): array
     {
-        return $this->buildFor($rows, $paymentDate, '業務委託', false, '給料手当');
+        return $this->buildFor($rows, $paymentDate, '業務委託', false, '給料手当', '役員報酬', false);
+    }
+
+    /**
+     * 賞与版。build()と同じ集計ロジックのまま、実データ(mx_journal_entries)で確認した差分だけ
+     * 差し替える: 勘定科目(基本給→「賞与」、役員→「役員賞与」)、発生日(前月末シフトせず支給日
+     * そのまま)、管理番号(「Y/n月給与」ではなく「Y/n月賞与」)。
+     */
+    public function buildBonus(array $rows, string $paymentDate): array
+    {
+        return $this->buildFor($rows, $paymentDate, '業務委託', false, '賞与', '役員賞与', true);
+    }
+
+    /**
+     * 社保通知書と一致する「会社が実際に払う社保総額」の仕訳をfreee取引インポート形式で出す。
+     * 雇用保険・労災は対象外（社保通知書と一致する金額のみにしたいというユーザー指示、
+     * 2026-09-16）。通知書の金額は事業主負担分だけでなく、給与から天引き済みの自己負担分
+     * （預り分）も含めた合計であることを実物の仕訳（2026-07-31付、事業主負担分20行＋
+     * 部門split無しの預り分4行の合計581,571円が実際の銀行支払額と一致）で確認済み。
+     * 相手科目は未払金固定（ユーザー指示）。
+     * 部門はPayrollV2Controller::computeCompanyBurdenGroups()と同じ粒度
+     * （mx_stores.store_name。店舗↔mx_departments部門の対応が未確定な往診系スタッフが
+     * いるため、正式な部門名への変換は別対応・保留中）。自己負担分は実物同様、部門split無し。
+     *
+     * 発生日・管理番号: 過去の実物の仕訳では給与と賞与の社保を1取引にまとめて前月末・
+     * 「Y/n月給与」で記録していたが、その運用はもうしない方針（2026-09-17、ユーザー指示）。
+     * 給与($isBonus=false)は従来通り前月末＋「Y/n月給与」、賞与($isBonus=true)は
+     * 給与仕訳CSV(buildBonus())と同じく支給日そのまま＋「Y/n月賞与」を使う。
+     *
+     * @param array<string, array{store_name:string, totals:array<string, float>}> $groupedStores
+     * @param array<string, float> $grandTotals
+     *   どちらもPayrollV2Controller::computeCompanyBurdenGroups()の結果
+     */
+    public function buildCompanyBurden(array $groupedStores, array $grandTotals, string $paymentDate, bool $isBonus = false): array
+    {
+        if ($isBonus) {
+            $occurredAt = $this->accrualDateBonus($paymentDate);
+            $managementLabel = $this->managementLabelBonus($paymentDate);
+        } else {
+            $accrualAt = CarbonImmutable::parse($paymentDate)->subMonthNoOverflow()->endOfMonth();
+            $occurredAt = $accrualAt->format('Y/m/d');
+            $managementLabel = $accrualAt->format('Y/n') . '月給与';
+        }
+
+        $lines = [];
+
+        foreach ($groupedStores as $group) {
+            $totals = (array) ($group['totals'] ?? []);
+            $storeName = trim((string) ($group['store_name'] ?? ''));
+
+            $items = [
+                ['健康保険料（事業主負担分）', $this->roundedAmount($totals, 'kenpo_office')],
+                ['介護保険料（事業主負担分）', $this->roundedAmount($totals, 'kaigo_office')],
+                ['厚生年金保険料（事業主負担分）', $this->roundedAmount($totals, 'kounen_office')],
+                ['子ども支援金（事業主負担分）', $this->roundedAmount($totals, 'child_support_funds')],
+                ['子育て拠出金', $this->roundedAmount($totals, 'jidou_office')],
+            ];
+
+            foreach ($items as [$item, $amount]) {
+                if ($amount === 0.0) {
+                    continue;
+                }
+                $lines[] = $this->line($occurredAt, '法定福利費', $item, '対象外', $amount, $storeName);
+            }
+        }
+
+        // 自己負担分(預り分)は実物の仕訳と同じく部門splitしない(会社全体で1行ずつ)。
+        $selfItems = [
+            ['健康保険料（預り分）', $this->roundedAmount($grandTotals, 'kenpo_self')],
+            ['介護保険料（預り分）', $this->roundedAmount($grandTotals, 'kaigo_self')],
+            ['厚生年金保険料（預り分）', $this->roundedAmount($grandTotals, 'kounen_self')],
+            ['子ども支援金（預り分）', $this->roundedAmount($grandTotals, 'child_support_self')],
+        ];
+        foreach ($selfItems as [$item, $amount]) {
+            if ($amount === 0.0) {
+                continue;
+            }
+            $lines[] = $this->line($occurredAt, '法定福利費', $item, '対象外', $amount, '');
+        }
+
+        // 未払金の行は出さない(給与仕訳CSV(buildFor())と同じ方針。決済期日・決済日を
+        // 空にした未決済分としてfreee側が自動的に扱う想定。相殺されて0円取引になると
+        // インポートできないため、2026-09-17ユーザー指示で削除)。
+
+        if ($lines !== []) {
+            $lines[0]['expense_income'] = '支出';
+            $lines[0]['management_number'] = $managementLabel;
+        }
+
+        return [
+            'content' => $this->toCsv($lines),
+            'row_count' => count($lines),
+        ];
     }
 
     /**
@@ -43,7 +135,6 @@ class PayrollV2JournalCsvService
     public function buildOutsource(array $rows, string $paymentDate): array
     {
         $occurredAt = $this->accrualDate($paymentDate);
-        $managementLabel = $this->managementLabel($paymentDate);
 
         $lines = [];
         foreach ($rows as $row) {
@@ -56,7 +147,6 @@ class PayrollV2JournalCsvService
             }
 
             $staffName = trim((string) ($row['staff_name'] ?? ''));
-            $storeName = trim((string) ($row['store_name'] ?? ''));
 
             $items = [
                 ['業務委託料', null, '課対仕入（控80）10%', $this->amount($summary, 'supply_sum') + $this->amount($summary, 'cost_liquidation')],
@@ -72,13 +162,12 @@ class PayrollV2JournalCsvService
                 if ($amount === 0.0) {
                     continue;
                 }
-                $lines[] = $this->line($occurredAt, $title, $item, $taxCategory, $amount, $storeName, $staffName);
+                $lines[] = $this->line($occurredAt, $title, $item, $taxCategory, $amount, '', $staffName);
             }
         }
 
         if ($lines !== []) {
             $lines[0]['expense_income'] = '支出';
-            $lines[0]['management_number'] = $managementLabel;
         }
 
         return [
@@ -87,10 +176,10 @@ class PayrollV2JournalCsvService
         ];
     }
 
-    private function buildFor(array $rows, string $paymentDate, string $division, bool $onlyDivision, string $basicSalaryTitle): array
+    private function buildFor(array $rows, string $paymentDate, string $division, bool $onlyDivision, string $basicSalaryTitle, string $officerTitle, bool $isBonus): array
     {
-        $occurredAt = $this->accrualDate($paymentDate);
-        $managementLabel = $this->managementLabel($paymentDate);
+        $occurredAt = $isBonus ? $this->accrualDateBonus($paymentDate) : $this->accrualDate($paymentDate);
+        $managementLabel = $isBonus ? $this->managementLabelBonus($paymentDate) : $this->managementLabel($paymentDate);
 
         /** @var array<string, array<string, mixed>> $groups */
         $groups = [];
@@ -113,26 +202,30 @@ class PayrollV2JournalCsvService
                 $groups[$groupKey] = $this->emptyGroup($storeName);
             }
 
-            $yakuin = $this->amount($summary, 'yakuin_sum');
-            $traffic = $this->amount($summary, 'traffic_addition');
-            $supply = $this->amount($summary, 'supply_sum');
+            $yakuin = $this->roundedAmount($summary, 'yakuin_sum');
+            // 通勤手当の実データはtraffic_addition列ではなくallowance_amo_6列(非課税通勤費)に
+            // 入っている(traffic_additionは実運用では常に0近辺で、通勤手当が給料手当に紛れて
+            // 別行にならないバグになっていた。2026-09-16、ユーザー指摘・実データで確認)。
+            // 両方足しておけばどちらが使われても取り込める。
+            $traffic = $this->roundedAmount($summary, 'traffic_addition') + $this->roundedAmount($summary, 'allowance_amo_6');
+            $supply = $this->roundedAmount($summary, 'supply_sum');
 
             $groups[$groupKey]['basic_salary'] += $supply - $yakuin - $traffic;
             $groups[$groupKey]['officer_compensation'] += $yakuin;
             $groups[$groupKey]['traffic_addition'] += $traffic;
-            $groups[$groupKey]['cost_liquidation'] += $this->amount($summary, 'cost_liquidation');
-            $groups[$groupKey]['kenpo'] += $this->amount($summary, 'kenpo');
-            $groups[$groupKey]['kaigo'] += $this->amount($summary, 'kaigo');
-            $groups[$groupKey]['kounen'] += $this->amount($summary, 'kounen');
-            $groups[$groupKey]['koyou'] += $this->amount($summary, 'koyou');
-            $groups[$groupKey]['child_support_funds'] += $this->amount($summary, 'child_support_funds');
-            $groups[$groupKey]['income_tax'] += $this->amount($summary, 'income_tax');
-            $groups[$groupKey]['resident_tax'] += $this->amount($summary, 'resident_tax');
+            $groups[$groupKey]['cost_liquidation'] += $this->roundedAmount($summary, 'cost_liquidation');
+            $groups[$groupKey]['kenpo'] += $this->roundedAmount($summary, 'kenpo');
+            $groups[$groupKey]['kaigo'] += $this->roundedAmount($summary, 'kaigo');
+            $groups[$groupKey]['kounen'] += $this->roundedAmount($summary, 'kounen');
+            $groups[$groupKey]['koyou'] += $this->roundedAmount($summary, 'koyou');
+            $groups[$groupKey]['child_support_funds'] += $this->roundedAmount($summary, 'child_support_funds');
+            $groups[$groupKey]['income_tax'] += $this->roundedAmount($summary, 'income_tax');
+            $groups[$groupKey]['resident_tax'] += $this->roundedAmount($summary, 'resident_tax');
         }
 
         $lines = [];
         foreach ($groups as $group) {
-            $lines = array_merge($lines, $this->groupLines($group, $occurredAt, $basicSalaryTitle));
+            $lines = array_merge($lines, $this->groupLines($group, $occurredAt, $basicSalaryTitle, $officerTitle));
         }
         if ($lines !== []) {
             $lines[0]['expense_income'] = '支出';
@@ -168,14 +261,14 @@ class PayrollV2JournalCsvService
      * @param array<string, mixed> $group
      * @return list<array<string, mixed>>
      */
-    private function groupLines(array $group, string $occurredAt, string $basicSalaryTitle): array
+    private function groupLines(array $group, string $occurredAt, string $basicSalaryTitle, string $officerTitle): array
     {
         $storeName = (string) $group['store_name'];
         $lines = [];
 
         $items = [
             [$basicSalaryTitle, null, '対象外', (float) $group['basic_salary']],
-            ['役員報酬', null, '対象外', (float) $group['officer_compensation']],
+            [$officerTitle, null, '対象外', (float) $group['officer_compensation']],
             ['旅費交通費', '通勤手当', '不課税', (float) $group['traffic_addition']],
             ['立替金', null, '対象外', (float) $group['cost_liquidation']],
             ['法定福利費', '健康保険料（預り分）', '対象外', -(float) $group['kenpo']],
@@ -313,6 +406,24 @@ class PayrollV2JournalCsvService
         }
     }
 
+    private function accrualDateBonus(string $paymentDate): string
+    {
+        try {
+            return CarbonImmutable::parse($paymentDate)->format('Y/m/d');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function managementLabelBonus(string $paymentDate): string
+    {
+        try {
+            return CarbonImmutable::parse($paymentDate)->format('Y/n') . '月賞与';
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
     private function amount(array $summary, string $key): float
     {
         $value = $summary[$key] ?? 0;
@@ -325,6 +436,21 @@ class PayrollV2JournalCsvService
 
         $text = str_replace([',', ' '], '', trim((string) $value));
         return $text !== '' && is_numeric($text) ? (float) $text : 0.0;
+    }
+
+    /**
+     * 支給した実際の金額(1円単位)に合わせるため、店舗合計にする前に人単位で丸める。
+     * 稀に保存値が整数でない人(2025-12-12支給分の尾内・宮崎の賞与社保等、kenpo列に
+     * 12598.4004等の小数が入っている)がいて、合計してから丸めると実際の支給額と1円ズレる
+     * (2026-09-16、ユーザー指摘で発覚)。丸め方向はround()ではなくceil()でないと実際の
+     * 仕訳額と一致しない(12598.4004→実際は12599、17983.1992→実際は17984と、両方とも
+     * 切り上げでのみ一致することをmx_journal_entriesの実データで確認済み。
+     * PayrollV2BonusSocialInsuranceService::employeeInsuranceAmount()がceil()で
+     * 個人負担額を計算している仕様と整合)。
+     */
+    private function roundedAmount(array $summary, string $key): float
+    {
+        return (float) ceil($this->amount($summary, $key));
     }
 
     private function csvMoney(float $value): string

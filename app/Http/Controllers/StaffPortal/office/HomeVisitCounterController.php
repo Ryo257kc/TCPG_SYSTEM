@@ -37,6 +37,19 @@ class HomeVisitCounterController extends Controller
         $monthlyClosingRow = $this->receiptMonthlyClosingRow($targetMonthEnd);
         $isReceiptMonthlyClosed = $monthlyClosingRow !== null;
 
+        // 2026-09-16発覚：$isReceiptMonthlyClosedは「今表示してるtarget_month（絞り込み月）」
+        // が締まってるかどうかであり、行自体の施術月（treatment_month）とは無関係。未入金の
+        // 絞り込み等で、締まった月の行が締まってない月の画面に混ざって表示されることがあり、
+        // その場合ここだけ見ると削除ボタンが出てしまう（実際に削除しようとするとdelete()側の
+        // 行自体の月チェックで正しく弾かれるが、ボタンの見た目と実際の動作が食い違っていた）。
+        // 行ごとに自分の施術月が締まっているかを見る必要がある。
+        $closedYearMonths = DB::connection('sqlsrv')
+            ->table('dbo.mx_monthly_closings')
+            ->where('authority', self::RECEIPT_MONTHLY_CLOSING_AUTHORITY)
+            ->pluck('closing_month')
+            ->map(fn($value): string => Carbon::parse((string) $value)->format('Y-m'))
+            ->all();
+
         $rowsQuery = DB::connection('sqlsrv')
             ->table('dbo.mx_insurance_claim_details as detail')
             ->leftJoin('dbo.mx_insurers as insurer', 'detail.insurer_number', '=', 'insurer.insurer_number')
@@ -90,6 +103,8 @@ class HomeVisitCounterController extends Controller
                 'insurance_claim_detail_id' => (int) ($row->insurance_claim_detail_id ?? 0),
                 'treatment_month' => $this->formatDateValue($row->treatment_month, 'Y/m/d'),
                 'treatment_month_raw' => $this->formatDateValue($row->treatment_month, 'Y/m/d'),
+                'is_row_monthly_closed' => $row->treatment_month !== null
+                    && in_array(Carbon::parse((string) $row->treatment_month)->format('Y-m'), $closedYearMonths, true),
                 'insurer_number' => trim((string) ($row->insurer_number ?? '')),
                 'insurer_name' => trim((string) ($row->insurer_name ?? '')),
                 'deposit_name' => trim((string) ($row->deposit_name ?? '')),
@@ -246,17 +261,12 @@ class HomeVisitCounterController extends Controller
                 ->startOfDay();
         }
 
-        // 要確認：isReceiptMonthlyClosed()が定義されているのに一度も呼ばれておらず、
-        // 月次処理済み（EntryControllerのレセ請求月次処理と同じauthority='入金確認'）でも
-        // ここだけ編集・削除できてしまっていた。EntryControllerと同じ判定を追加（2026-08-15）。
-        if ($this->isReceiptMonthlyClosed($targetMonth)) {
-            return redirect()->route('office.receipt.home_visit_counter', array_filter([
-                'target_month' => $data['target_month'],
-                'store_name' => trim((string) ($data['filter_store_name'] ?? '')),
-                'patient_name' => trim((string) ($data['filter_patient_name'] ?? '')),
-                'unpaid_only' => trim((string) ($data['filter_unpaid_only'] ?? '')) === '1' ? '1' : null,
-            ], fn($value): bool => $value !== null && $value !== ''))->with('errorMessage', '月次処理済みのため編集できません。');
-        }
+        // 2026-08-15に「月次処理済みでも保存・削除できてしまっていた」不具合の修正として
+        // save()/delete()両方にisReceiptMonthlyClosed()のブロックを追加したが、この画面
+        // （入金確認）に関しては「確定後も入金日の編集は可能、削除だけ不可」が正しい業務仕様
+        // だった（2026-09-16、ユーザー確認：入金が月次処理の締め後に遅れて届くことがあり、
+        // 編集まで止めると記録できなくなる）。保存側のブロックは誤りだったため外す。
+        // 削除側（delete()）のブロックはそのまま維持する。
 
         $submittedStoreName = trim((string) ($data['store_name'] ?? ''));
         $resolvedStoreShortName = '';

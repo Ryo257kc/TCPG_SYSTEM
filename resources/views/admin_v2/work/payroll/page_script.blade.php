@@ -477,6 +477,7 @@
     var homeVisitSalesDetailPrintUrl = @json(route('admin.payroll.home-visit-sales-detail-print'));
     var journalCsvUrl = @json(route('admin.payroll.journal-csv'));
     var outsourceJournalCsvUrl = @json(route('admin.payroll.outsource-journal-csv'));
+    var companyBurdenCsvUrl = @json(route('admin.payroll.company-burden-csv'));
 
     if (reportType) {
       reportType.addEventListener('change', function() {
@@ -501,7 +502,9 @@
                         ? journalCsvUrl
                         : (value === 'outsource-journal-csv'
                           ? outsourceJournalCsvUrl
-                          : homeVisitSalesDetailPrintUrl))))))));
+                          : (value === 'company-burden-csv'
+                            ? companyBurdenCsvUrl
+                            : homeVisitSalesDetailPrintUrl)))))))));
         var params = new URLSearchParams();
         if (selectedCompanyId) params.set('company_id', selectedCompanyId);
         if (document.getElementById('payment_date') && document.getElementById('payment_date').value) {

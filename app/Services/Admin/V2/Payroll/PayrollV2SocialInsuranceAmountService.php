@@ -124,7 +124,12 @@ class PayrollV2SocialInsuranceAmountService
         $kaigoOffice = max(0, $totals['kaigo_total'] - $kaigoSelf);
         $kounenOffice = max(0, $totals['kounen_total'] - $kounenSelf);
         $childSupportOffice = max(0, $totals['child_support_funds'] - $childSupportSelf);
-        $officeOnly = $totals['jidou_office'] + $childSupportOffice;
+        // 拠出金(jidou_office)はkoyou_office/rousai_officeと同じく、自己負担が無く会社が
+        // 全額負担する項目。総額をここで再計算せず、給与計算時に保存された値
+        // （mx_kyuyo_shou.jidou_office）をそのまま使う（表示は必ず保存値、2026-09-17、
+        // ユーザー指摘：会社負担一覧はそもそも保存値を使う設計のはずだった）。
+        $jidouOffice = (int) round($this->num($summary['jidou_office'] ?? 0));
+        $officeOnly = $jidouOffice + $childSupportOffice;
 
         return [
             'kenpo_standard' => $this->num($shaho['kenpo_monthly_amo'] ?? 0),
@@ -138,7 +143,7 @@ class PayrollV2SocialInsuranceAmountService
             'kounen_self' => $kounenSelf,
             'kounen_office' => $kounenOffice,
             'kounen_total' => $totals['kounen_total'],
-            'jidou_office' => $totals['jidou_office'],
+            'jidou_office' => $jidouOffice,
             'child_support_funds' => $childSupportOffice,
             // 要確認：child_support_fundsは元々「会社負担額」の意味で使われている
             // （mx_kyuyo_shou.child_support_fundsの「自己」値とは別物）ため、印刷帳票の
@@ -148,7 +153,7 @@ class PayrollV2SocialInsuranceAmountService
             'child_support_total' => $childSupportSelf + $childSupportOffice,
             'self_total' => $kenpoSelf + $kaigoSelf + $kounenSelf + $childSupportSelf,
             'office_total' => $kenpoOffice + $kaigoOffice + $kounenOffice + $officeOnly,
-            'grand_total' => $totals['kenpo_total'] + $totals['kaigo_total'] + $totals['kounen_total'] + $totals['jidou_office'] + $totals['child_support_funds'],
+            'grand_total' => $totals['kenpo_total'] + $totals['kaigo_total'] + $totals['kounen_total'] + $jidouOffice + $totals['child_support_funds'],
         ];
     }
 
@@ -239,14 +244,21 @@ class PayrollV2SocialInsuranceAmountService
         return (int) ceil($total / 2);
     }
 
+    /**
+     * 健保・介護・厚生年金・子ども支援金の「合計(折半前)」計算。ceil()だと実際の納付告知書より
+     * 1円多く出るケースがあった（プレッジ・榮一樹、健保58,000×10.12%=5869.6円→実際は5869円）。
+     * floor()に変更して告知書の金額（健保+介護+子ども支援金=108,390円）と完全一致することを
+     * 確認済み（2026-09-17）。
+     */
     private function officeInsuranceAmount(float $standard, float $ratePercent): int
     {
         if ($standard <= 0 || $ratePercent <= 0) {
             return 0;
         }
 
-        return (int) ceil($standard * ($ratePercent / 100));
+        return (int) floor($standard * ($ratePercent / 100));
     }
+
 
     private function num(mixed $value): float
     {

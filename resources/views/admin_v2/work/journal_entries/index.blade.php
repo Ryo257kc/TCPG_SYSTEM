@@ -110,7 +110,19 @@
 
         .journal-entries-meta {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .journal-entries-display-toggle {
+            display: flex;
+            gap: 6px;
+        }
+
+        .journal-entries-table th.num,
+        .journal-entries-table td.num {
+            text-align: right;
         }
 
         .journal-entries-panel {
@@ -143,6 +155,17 @@
         .journal-entries-table th,
         .journal-entries-table td {
             vertical-align: top;
+        }
+
+        /* フラット表示の見出しが一緒にスクロールされてた原因はposition:stickyを一度も
+           指定していなかっただけ（2026-09-14）。スクロールする親(.journal-entries-table-wrap、
+           overflow:auto)を基準に上端で固定する。背景色が無いと下の行が透けて見えるため
+           不透明な背景も指定する。 */
+        .journal-entries-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #edf4fd;
         }
 
         .journal-entries-flag-cell {
@@ -505,6 +528,11 @@
                         <label class="journal-entries-filter-label" for="journal-department-name">部門</label>
                         <input type="text" id="journal-department-name" name="department_name" list="journal-department-options" value="{{ $departmentName }}">
                     </div>
+
+                    <div class="journal-entries-filter-group">
+                        <label class="journal-entries-filter-label" for="journal-vault-name">金庫</label>
+                        <input type="text" id="journal-vault-name" name="vault_name" list="journal-vault-name-options" value="{{ $vaultName }}">
+                    </div>
                     <!-- </div>
 
                 <div class="journal-entries-filter-row"> -->
@@ -522,6 +550,10 @@
                         <input type="text" id="journal-summary-text" name="summary_text" list="journal-summary-text-options" value="{{ $summaryText }}">
                     </div>
                     <div class="journal-entries-filter-actions">
+                        <label class="journal-entries-exclude-toggle">
+                            <input type="checkbox" name="exclude_mode" value="1" @checked($excludeMode)>
+                            除外モード
+                        </label>
                         <button type="submit" class="btn btn-primary">表示</button>
                         {{-- 要確認：期間・会社選択だけ残す部分クリアだと「期間を今月に戻したい」時に
                         結局手で両方打ち直す必要があり紛らわしいという指摘のため、期間・会社を含む
@@ -563,8 +595,16 @@
                     @endforeach
                 </datalist>
                 <datalist id="journal-department-options">
+                    {{-- 「空白」を選ぶと部門未入力の明細だけを拾う特別扱いになる（2026-09-14、
+                    専用チェックボックスの代わりにこの欄の中で完結させる）。 --}}
+                    <option value="{{ $blankFilterSentinel }}"></option>
                     @foreach ($departmentOptions as $departmentOption)
                     <option value="{{ $departmentOption }}"></option>
+                    @endforeach
+                </datalist>
+                <datalist id="journal-vault-name-options">
+                    @foreach ($vaultNameOptions as $vaultNameOption)
+                    <option value="{{ $vaultNameOption }}"></option>
                     @endforeach
                 </datalist>
                 <datalist id="journal-management-number-options">
@@ -581,6 +621,14 @@
 
             <div class="journal-entries-meta">
                 <span class="meta-count">{{ count($journalGroups) }}件 / 明細 {{ count($rows) }}件</span>
+                {{-- 2026-09-14追加：グループ折りたたみ/フラット(明細1行=1行)の切り替え。
+                Accessでは全行フラットに並べて部門欄等を目視確認できていたが、今のグループ
+                折りたたみではそれができないという相談から。現在のフィルタ条件は
+                そのまま維持する（displayだけ差し替え）。 --}}
+                <div class="journal-entries-display-toggle margin_t20 margin_b10">
+                    <a class="btn btn-small {{ $displayMode === 'group' ? 'btn-primary' : '' }}" href="{{ request()->fullUrlWithQuery(['display' => 'group']) }}">グループ表示</a>
+                    <a class="btn btn-small {{ $displayMode === 'flat' ? 'btn-primary' : '' }}" href="{{ request()->fullUrlWithQuery(['display' => 'flat']) }}">フラット表示</a>
+                </div>
             </div>
 
             @php
@@ -594,15 +642,76 @@
             'filter_account_title' => $accountTitle,
             'filter_item_name' => $itemName,
             'filter_department_name' => $departmentName,
+            'filter_vault_name' => $vaultName,
+            'filter_exclude_mode' => $excludeMode ? '1' : '0',
             'filter_management_number' => $managementNumber,
             'filter_journal_breakdown' => $journalBreakdown,
             ];
             @endphp
 
             <div class="journal-entries-table-wrap">
+                @if ($displayMode === 'flat')
+                <table class="data-table journal-entries-table f_size12">
+                    <colgroup>
+                        <col style="width: 60px;">
+                        <col style="width: 90px;">
+                        <col style="width: 90px;">
+                        <col style="width: 60px;">
+                        <col style="width: 50px;">
+                        <col style="width: 90px;">
+                        <col style="width: 60px;">
+                        <col style="width: 50px;">
+                        <col style="width: 180px;">
+                        <col style="width: 60px;">
+                        <col style="width: 30px;">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>発生日</th>
+                            <th>管理番号</th>
+                            <th>借方科目</th>
+                            <th>借方部門</th>
+                            <th class="num">借方金額</th>
+                            <th>貸方科目</th>
+                            <th>貸方部門</th>
+                            <th class="num">貸方金額</th>
+                            <th>摘要</th>
+                            <th>取引先</th>
+                            <th>編集</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($rows as $row)
+                        @php
+                        // グループ表示側の group_key と同じ計算式（2026-09-14、フラットで見つけた
+                        // 仕訳をワンクリックでグループ表示側の該当箇所へ飛べるようにする）。
+                        $rowGroupKey = md5(($row['company_name_short'] ?? '') . '|' . ($row['occurred_at'] ?? '') . '|' . ($row['journal_breakdown'] ?? ''));
+                        $rowGroupPage = $groupPageByKey[$rowGroupKey] ?? 1;
+                        @endphp
+                        <tr>
+                            <td>{{ $row['occurred_at'] }}</td>
+                            <td>{{ $row['management_number'] }}</td>
+                            <td>{{ $row['debit_account_title'] }}</td>
+                            <td>{{ $departmentLabelMap[$row['debit_department_name']] ?? $row['debit_department_name'] }}</td>
+                            <td class="num">{{ $row['debit_amount'] }}</td>
+                            <td>{{ $row['credit_account_title'] }}</td>
+                            <td>{{ $departmentLabelMap[$row['credit_department_name']] ?? $row['credit_department_name'] }}</td>
+                            <td class="num">{{ $row['credit_amount'] }}</td>
+                            <td>{{ $row['summary_text'] }}</td>
+                            <td>{{ $row['debit_counterparty'] ?: $row['credit_counterparty'] }}</td>
+                            <td><a class="btn btn-small" href="{{ request()->fullUrlWithQuery(['display' => 'group', 'page' => $rowGroupPage]) }}#journal-group-{{ $rowGroupKey }}">編集</a></td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="11" class="empty">表示できる仕訳データがありません。</td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @else
                 <div class="journal-group-list">
                     @forelse ($journalGroupsPaged as $group)
-                    <details class="journal-group">
+                    <details class="journal-group" id="journal-group-{{ $group['group_key'] }}">
                         <summary class="journal-group-summary">
                             <div>
                                 <div class="journal-group-sub">発生日</div>
@@ -651,6 +760,18 @@
                                 <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
                                 @endforeach
                             </form>
+                            @php
+                            $journalGroupDeleteFormId = 'journal-entry-group-delete-form-' . $group['group_key'];
+                            @endphp
+                            <form id="{{ $journalGroupDeleteFormId }}" method="post" action="{{ route('admin.work.journal_entries.delete_group') }}">
+                                @csrf
+                                @foreach ($journalEntryFilterFields as $filterName => $filterValue)
+                                <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
+                                @endforeach
+                                @foreach ($group['details'] as $detailRow)
+                                <input type="hidden" name="journal_entry_ids[]" value="{{ $detailRow['journal_entry_id'] }}">
+                                @endforeach
+                            </form>
                             <div class="journal-detail-common">
                                 <div class="journal-detail-common-row">
                                     <div class="journal-detail-common-item">
@@ -690,8 +811,12 @@
                                         <label><input form="{{ $journalGroupFormId }}" type="checkbox" name="common[is_upload_unnecessary]" value="1" @checked($firstDetail['is_upload_unnecessary'])> UP不要</label>
                                         <label><input form="{{ $journalGroupFormId }}" type="checkbox" name="common[is_reward_excluded]" value="1" @checked($firstDetail['is_reward_excluded'])> 報酬計算除外</label>
                                     </div>
+                                    @php
+                                    $journalGroupDetailCount = $group['detail_count'];
+                                    @endphp
                                     <div class="journal-detail-common-actions">
                                         <button form="{{ $journalGroupFormId }}" type="submit" class="btn_small btn-primary">保存</button>
+                                        <button form="{{ $journalGroupDeleteFormId }}" type="submit" class="btn_small" onclick="return confirm('この仕訳グループ（{{ $journalGroupDetailCount }}件）をまとめて削除しますか？');">グループ削除</button>
                                     </div>
                                 </div>
                             </div> @endif
@@ -798,22 +923,26 @@
                     <div class="empty">表示できる仕訳データがありません。</div>
                     @endforelse
                 </div>
+                @endif
             </div>
 
-            @if ($journalGroupsLastPage > 1)
+            @if ($displayMode === 'group' && $journalGroupsLastPage > 1)
             @php
             $journalListParams = [
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
-                'company_name_short' => $selectedCompanyName,
-                'counterparty' => $counterparty,
-                'amount' => $amount,
-                'summary_text' => $summaryText,
-                'account_title' => $accountTitle,
-                'item_name' => $itemName,
-                'department_name' => $departmentName,
-                'management_number' => $managementNumber,
-                'journal_breakdown' => $journalBreakdown,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'company_name_short' => $selectedCompanyName,
+            'counterparty' => $counterparty,
+            'amount' => $amount,
+            'summary_text' => $summaryText,
+            'account_title' => $accountTitle,
+            'item_name' => $itemName,
+            'department_name' => $departmentName,
+            'vault_name' => $vaultName,
+            'exclude_mode' => $excludeMode ? '1' : '0',
+            'management_number' => $managementNumber,
+            'journal_breakdown' => $journalBreakdown,
+            'display' => $displayMode,
             ];
             @endphp
             <div class="journal-entries-pager">
@@ -840,6 +969,21 @@
         </section>
     </div>
     <script>
+        // フラット表示の「編集」リンクから飛んできた時、対象のグループを開いた状態で
+        // スクロール表示する（2026-09-14）。近年のブラウザは<details>内のフラグメントへ
+        // 遷移すると自動でopenになるが、確実にするため明示的にも開く。一覧自体が
+        // overflow:autoの入れ子スクロールコンテナのため、native anchor scrollが
+        // 効かないことがあり、scrollIntoViewも明示的に呼ぶ。
+        (function() {
+            if (!location.hash || location.hash.indexOf('#journal-group-') !== 0) return;
+            var target = document.querySelector(location.hash);
+            if (!target) return;
+            target.open = true;
+            target.scrollIntoView({
+                block: 'center'
+            });
+        })();
+
         (function() {
             var form = document.getElementById('journal-entries-import-form');
             var fileInput = document.getElementById('journal-import-csv-file');

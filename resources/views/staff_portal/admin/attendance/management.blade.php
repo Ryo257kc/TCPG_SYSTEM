@@ -15,7 +15,7 @@
         }
 
         .attendance-management-return-box {
-            width: min(360px, 100%);
+            width: min(450px, 100%);
             border: 1px solid #efc6c6;
             background: #fff7f7;
             color: #9f1f1f;
@@ -81,7 +81,7 @@
                     <div class="attendance-management-return-title">差戻し内容</div>
                     @forelse (($returnedSummaries ?? []) as $returnedSummary)
                     <div class="attendance-management-return-item">
-                        {{ $returnedSummary['work_date'] }} {{ $returnedSummary['return_note'] }}
+                        {{ $returnedSummary['staff_id'] }} {{ $returnedSummary['staff_name'] }}：{{ $returnedSummary['work_date'] }} {{ $returnedSummary['return_note'] }}
                     </div>
                     @empty
                     <div class="attendance-management-return-item">差戻しはありません。</div>

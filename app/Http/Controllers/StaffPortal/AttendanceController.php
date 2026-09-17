@@ -471,16 +471,21 @@ class AttendanceController extends Controller
 
         $returnedSummaries = DB::connection('sqlsrv')
             ->table('dbo.mx_time_cards as tc')
+            ->leftJoin('dbo.mx_staffs as s', DB::raw('LTRIM(RTRIM(tc.staff_name))'), '=', DB::raw('LTRIM(RTRIM(s.staff_id))'))
             ->whereRaw('YEAR(tc.work_date) = ?', [$year])
             ->whereRaw('MONTH(tc.work_date) = ?', [$month])
             ->where('tc.is_returned', 1)
             ->orderBy('tc.work_date')
             ->selectRaw("
+                LTRIM(RTRIM(COALESCE(tc.staff_name, ''))) as staff_id,
+                LTRIM(RTRIM(COALESCE(s.staff_name, tc.staff_name, ''))) as staff_name,
                 CONVERT(char(10), tc.work_date, 120) as work_date,
                 LTRIM(RTRIM(COALESCE(tc.return_note, ''))) as return_note
             ")
             ->get()
             ->map(fn($row): array => [
+                'staff_id' => trim((string) ($row->staff_id ?? '')),
+                'staff_name' => trim((string) ($row->staff_name ?? '')),
                 'work_date' => $this->formatFullDateLabel((string) ($row->work_date ?? '')),
                 'return_note' => trim((string) ($row->return_note ?? '')),
             ])
