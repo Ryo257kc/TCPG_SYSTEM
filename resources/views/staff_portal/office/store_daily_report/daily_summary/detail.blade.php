@@ -479,6 +479,7 @@
                         <input type="hidden" name="店舗" value="{{ $dailySummary['日報集計店舗'] }}">
                         <input type="hidden" name="日別順" value="{{ $nextDailyOrder ?? '' }}">
                         <input type="hidden" name="患者名" value="{{ $filterPatientName ?? '' }}" data-daily-summary-add-patient-name>
+                        <input type="time" name="時刻">
                         @if (!($isDailySummaryMonthlyClosed ?? false))
                         <button type="submit" class="btn">新規追加</button>
                         @endif
@@ -686,7 +687,7 @@
                                                         </tr>
                                                         <tr>
                                                             <th>時刻</th>
-                                                            <td>{{ $row['時刻'] }}</td>
+                                                            <td><input type="time" name="時刻" value="{{ $row['時刻'] }}"></td>
                                                         </tr>
                                                     </tbody>
                                                 </table>

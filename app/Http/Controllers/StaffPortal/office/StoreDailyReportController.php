@@ -1834,8 +1834,9 @@ class StoreDailyReportController extends Controller
                 return;
             }
 
-            // 時刻・新患・患者名は保存対象から外した（画面側もinputを外し表示のみにしたので、
-            // この一覧から消して既存値をそのまま残す）。保険請求・差額も画面では直接入力させず、
+            // 時刻は編集・保存できるようにした（新規追加行に時刻を入力する手段が無い問題、
+            // 2026-09-18、ユーザー要望で再度input化）。新患・患者名は引き続き保存対象から
+            // 外したまま（画面側もinputを外し表示のみ）。保険請求・差額も画面では直接入力させず、
             // レセ負担金だけを入力項目にしている（2026-08-20、ユーザー要望）。
             // 保険請求 = 請求金額計 − レセ負担金、差額 = 保険負担計 − レセ負担金
             // （8/3 ひなた・石田翼の実例：請求金額1227 − レセ負担金370 = 保険請求857、
@@ -1854,6 +1855,7 @@ class StoreDailyReportController extends Controller
                     'レセ負担金' => $receiptBurden,
                     '負担金ch' => $this->checkboxToDatabaseValue($request->input('負担金ch')),
                     '日報備考' => $this->blankToNull($request->input('日報備考')),
+                    '時刻' => $this->normalizeDateTimeValue($request->input('日付'), $request->input('時刻')),
                 ]);
 
             foreach ($detailRows as $detailRow) {
