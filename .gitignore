@@ -32,3 +32,6 @@ Thumbs.db
 *.laccdb
 /tests/empty（メモリ解放）/
 /tests/empty（メモリ解放）.rar
+
+# storage/app/から整理・退避した参考資料一式（アプリのソースではない、本番UP対象外）
+/reference/

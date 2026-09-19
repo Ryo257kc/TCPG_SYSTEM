@@ -636,6 +636,7 @@
                     <button class="btn" type="submit">勤怠一括反映</button>
                 </form>
             </div>
+            <p class="meta-count">件数: {{ number_format(count($rows)) }}</p>
             <div style="overflow:auto; border:1px solid #dce7f7; border-radius:10px; margin-bottom:10px;">
                 <table class="data-table f_size12">
                     <thead>

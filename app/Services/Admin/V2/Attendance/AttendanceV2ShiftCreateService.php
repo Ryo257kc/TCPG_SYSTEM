@@ -18,7 +18,7 @@ class AttendanceV2ShiftCreateService
 
     /**
      * @param list<string> $staffIds
-     * @return array{created:int,skipped:int,created_ids:list<string>,skipped_ids:list<string>}
+     * @return array{created:int,skipped:int,created_ids:list<string>,skipped_ids:list<string>,skipped_reasons:array<string,string>}
      */
     public function create(int $year, int $month, array $staffIds): array
     {
@@ -27,6 +27,11 @@ class AttendanceV2ShiftCreateService
             'skipped' => 0,
             'created_ids' => [],
             'skipped_ids' => [],
+            // スキップ理由をスタッフごとに残す（'existing'=対象月の行が既にある、
+            // 'no_dates'=対象月に日付が無い等の想定外ケース）。UI側で理由別に
+            // メッセージを分けるため（2026-09-19追加、理由を区別せず一律
+            // 「基本シフト未登録等」と表示していたのが実態と違うとユーザー指摘）。
+            'skipped_reasons' => [],
         ];
 
         $staffIds = $this->normalizeIds($staffIds);
@@ -44,15 +49,15 @@ class AttendanceV2ShiftCreateService
             if (isset($staffIdsWithExistingRows[$staffId])) {
                 $result['skipped']++;
                 $result['skipped_ids'][] = $staffId;
+                $result['skipped_reasons'][$staffId] = 'existing';
                 continue;
             }
 
+            // 基本シフトが1件も登録されてないスタッフも、空欄のカレンダー行だけは作る
+            // （シフト作成を楽にする機能であって、登録してない側の責任という判断。
+            // 以前は丸ごとスキップしていたが、日数が極端に少ないイレギュラーなスタッフ等に
+            // 対応できなかったため2026-09-19変更）。
             $shiftMap = $shiftMapByStaff[$staffId] ?? [];
-            if ($shiftMap === []) {
-                $result['skipped']++;
-                $result['skipped_ids'][] = $staffId;
-                continue;
-            }
 
             $inserted = 0;
             foreach ($monthDates as $date) {
@@ -93,6 +98,7 @@ class AttendanceV2ShiftCreateService
             } else {
                 $result['skipped']++;
                 $result['skipped_ids'][] = $staffId;
+                $result['skipped_reasons'][$staffId] = 'no_dates';
             }
         }
 

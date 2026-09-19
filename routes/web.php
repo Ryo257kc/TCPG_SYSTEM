@@ -77,6 +77,14 @@ Route::get('/', function () {
     return redirect()->route('login.portal');
 });
 
+// 旧サイト(レガシーPHP)のログインページのブックマーク救済（2026-09-20、URL移行で
+// user/login.phpへの直リンクが404になるため）。自動リダイレクトではなく、ブックマークの
+// 更新を促す案内ページで止める（ユーザー要望：黙って転送するとブックマークが古いまま
+// 放置され、後で「ログインできない」と問い合わせが来た実例があるため）。
+Route::get('/user/login.php', function () {
+    return view('shared.legacy_url_moved', ['newUrl' => route('login.portal')]);
+});
+
 // admin 側の大枠開始
 Route::prefix('admin')->group(function (): void {
     Route::get('/login', [LoginV2Controller::class, 'show'])->name('admin.login');

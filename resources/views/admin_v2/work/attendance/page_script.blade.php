@@ -29,6 +29,8 @@
     empty.hidden = true;
   }
 
+  var candidateNameById = {};
+
   function renderCandidates(candidates){
     if (!list || !empty) return;
     list.innerHTML = '';
@@ -36,6 +38,8 @@
     list.hidden = candidates.length === 0;
 
     candidates.forEach(function(candidate){
+      candidateNameById[candidate.staff_id] = candidate.staff_name;
+
       var wrapper = document.createElement('label');
       wrapper.className = 'create-inline-item' + (candidate.existing ? ' existing' : '');
 
@@ -111,6 +115,20 @@
       var json = payload.json || {};
       if (payload.status >= 400 || json.ok !== true) {
         throw new Error(json.message || 'action failed');
+      }
+      var skippedIds = (json.result && json.result.skipped_ids) || [];
+      if (skippedIds.length > 0) {
+        var skippedReasons = (json.result && json.result.skipped_reasons) || {};
+        var reasonLabels = {
+          existing: 'この月の勤怠が既に作成済みのため',
+          no_dates: '対象月の日付が取得できなかったため'
+        };
+        var lines = skippedIds.map(function(id){
+          var name = id + (candidateNameById[id] ? ' ' + candidateNameById[id] : '');
+          var reason = reasonLabels[skippedReasons[id]] || '原因不明のため';
+          return name + '（' + reason + '）';
+        });
+        alert('以下のスタッフは作成できませんでした：\n' + lines.join('\n'));
       }
       closeInline();
       location.reload();
