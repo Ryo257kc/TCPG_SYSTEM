@@ -17,13 +17,17 @@ class StoreDailyReportController extends Controller
     private const DAILY_SUMMARY_MONTHLY_CLOSING_AUTHORITY = '日報';
     private const DAILY_SUMMARY_MONTHLY_INPUT_AUTHORITY = '日報入力';
 
-    // 店舗日報（isDailyReport||isAdmin）権限が必要な画面共通のガード。
-    // ダッシュボードのメニューでは非表示にしていたが、コントローラー側のURL直叩き制限が
-    // 無かった（2026-08-23発覚）。
+    // 店舗日報（isPaymentCheck||isAdmin）権限が必要な画面共通のガード。
+    // ダッシュボードの「事務所」メニュー配下の他の全コントローラ（CashBook/Entry/
+    // HighMedical/HomeVisitCounter/Insurers/PaymentConfirmation等）はisPaymentCheck()で
+    // 入口を揃えており、メニューの表示条件（is_payment_check_user）とも一致する。
+    // 以前はisDailyReport()（is_daily_report_user）を使っていたが、メニュー側の表示条件と
+    // 別の権限だったため、事務所権限だけ持つスタッフがメニューには表示されるのにクリックすると
+    // 弾かれる不整合があった（2026-09-19、ユーザー指摘で発覚・他コントローラに揃えて修正）。
     private function requireDailyReport(Request $request): void
     {
         $staffId = $this->staffPortalStaffId($request);
-        if (!$this->isDailyReport($this->staffPortalStaffRow($staffId))) {
+        if (!$this->isPaymentCheck($this->staffPortalStaffRow($staffId))) {
             abort(403);
         }
     }

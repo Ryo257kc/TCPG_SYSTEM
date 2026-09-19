@@ -42,9 +42,9 @@
         .permissions-table thead th {
             background: #f5f8fd;
             color: #123c73;
-            writing-mode: vertical-rl;
+            /* writing-mode: vertical-rl; */
             text-orientation: mixed;
-            height: 90px;
+            height: 50px;
             padding: 6px 4px;
         }
 
@@ -126,7 +126,7 @@
             'is_view_only_user' => '往診閲覧',
             'is_store_management_user' => '店舗管理',
             'is_daily_report_user' => '店舗システム',
-            'front_staff' => '店舗日報',
+            'front_staff' => '店舗施術スタッフ',
             ];
             @endphp
 
@@ -221,17 +221,19 @@
                             <td class="col-staff">シフト・勤怠（他人の打刻修正など）の管理権限。</td>
                             <td class="col-staff">店舗管理</td>
                         </tr>
+                        {{-- 2026-09-19: 店舗日報画面の入口ガードをisDailyReport()(is_daily_report_user)から
+                             isPaymentCheck()(事務所権限)へ変更。事務所配下の他画面・メニュー表示条件と統一するため。
+                             is_daily_report_user自体は現在どの画面のアクセス制御にも使われていない。 --}}
                         <tr>
                             <td class="col-staff">店舗システム</td>
-                            <td class="col-staff">店舗スタッフ向け。このLaravelシステムではなく、Accessで作られた店舗日報システムへのログイン可否・担当者名リストへの表示可否を制御する権限（このシステムのコードでは参照していない）。</td>
-                            <td class="col-staff">（このダッシュボードには該当なし）</td>
+                            <td class="col-staff">実体はis_daily_report_user。Accessの店舗日報システムへのログイン権限。このLaravelシステムのアクセス制御では使われていないが、将来Web版を作る際に同様のログイン権限として使う想定。</td>
+                            <td class="col-staff">（該当なし）</td>
                         </tr>
                         <tr>
-                            <td class="col-staff">店舗日報</td>
-                            <td class="col-staff">実体は施術担当（front_staff）権限。店舗日報詳細画面（daily_summary/detail）の
+                            <td class="col-staff">店舗施術スタッフ</td>
+                            <td class="col-staff">実体はfront_staff。店舗日報詳細画面（daily_summary/detail）の
                                 「担当者」選択リストに表示されるかどうかを制御する（在職中のみ、退職者は表示されない）。
-                                旧来「店舗システム」という表示名だが、実際に効いているのはこの担当者リストのみ
-                                （2026-09-05確認。過去に実際使われた担当者IDは全てこの権限を持つスタッフと一致）。</td>
+                                実際に効いているのはこの担当者リストのみ。</td>
                             <td class="col-staff">（ダッシュボードには該当なし。店舗日報の担当者リストにのみ影響）</td>
                         </tr>
                     </tbody>

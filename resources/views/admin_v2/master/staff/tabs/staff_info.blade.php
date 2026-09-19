@@ -15,10 +15,10 @@ $bankPairs = [
 
 $rightsPairs = [
     [['is_admin', '全権管理者'], ['__none', '']],
-    [['oushin_staff', '往診スタッフ'], ['front_staff', '店舗システム']],
+    [['oushin_staff', '往診スタッフ'], ['front_staff', '店舗施術スタッフ']],
     [['is_accounting_user', '往診売上'], ['is_payment_check_user', '事務所']],
     [['is_visit_management_user', '往診管理'], ['is_view_only_user', '往診閲覧']],
-    [['is_store_management_user', '店舗管理'], ['is_daily_report_user', '店舗日報']],
+    [['is_store_management_user', '店舗管理'], ['is_daily_report_user', '店舗システム']],
 ];
 
 $singleFields = [
@@ -819,7 +819,7 @@ if (abs($numeric) < 0.0000001) {
               <div class="checkbox-line"><input type="checkbox" name="oushin_staff" value="1" @checked((string)($selectedRow['oushin_staff'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['oushin_staff'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
             <label class="detail-field detail-field-compact">
-              <span>店舗システム</span>
+              <span>店舗施術スタッフ</span>
               <div class="checkbox-line"><input type="checkbox" name="front_staff" value="1" @checked((string)($selectedRow['front_staff'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['front_staff'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
           </div>
@@ -849,7 +849,7 @@ if (abs($numeric) < 0.0000001) {
               <div class="checkbox-line"><input type="checkbox" name="is_store_management_user" value="1" @checked((string)($selectedRow['is_store_management_user'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['is_store_management_user'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
             <label class="detail-field detail-field-compact">
-              <span>店舗日報</span>
+              <span>店舗システム</span>
               <div class="checkbox-line"><input type="checkbox" name="is_daily_report_user" value="1" @checked((string)($selectedRow['is_daily_report_user'] ?? '' ) !=='' && !in_array(mb_strtolower((string)($selectedRow['is_daily_report_user'] ?? '' )), ['0','false','no','off','なし','無','null'], true))> 可</div>
             </label>
           </div>
