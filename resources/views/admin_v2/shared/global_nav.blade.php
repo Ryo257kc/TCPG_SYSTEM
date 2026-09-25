@@ -60,6 +60,7 @@ $navGroups = [
 ['label' => '会社マスタ', 'route' => 'admin.master.company', 'prefixes' => ['admin.master.company']],
 ['label' => 'スタッフマスタ', 'route' => 'admin.master.staff', 'prefixes' => ['admin.master.staff']],
 ['label' => '店舗マスタ', 'route' => 'admin.master.store', 'prefixes' => ['admin.master.store']],
+['label' => '部門マスタ', 'route' => 'admin.master.department', 'prefixes' => ['admin.master.department']],
 ['label' => '手当設定', 'route' => 'admin.master.allowance', 'prefixes' => ['admin.master.allowance']],
 ['label' => 'カレンダー', 'route' => 'admin.master.calendar', 'prefixes' => ['admin.master.calendar']],
 ]],

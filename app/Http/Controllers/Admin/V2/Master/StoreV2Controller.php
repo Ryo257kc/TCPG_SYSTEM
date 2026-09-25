@@ -39,6 +39,7 @@ class StoreV2Controller extends Controller
             'selectedStoreCode' => $selectedStoreCode,
             'selectedRow' => $selectedRow,
             'companyOptions' => $data['companyOptions'],
+            'departmentCandidatesByStoreCode' => $data['departmentCandidatesByStoreCode'],
             'rowCount' => count($rows),
             'source' => 'mx_stores',
         ]);
@@ -59,6 +60,7 @@ class StoreV2Controller extends Controller
             'category' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'is_closed' => ['nullable', 'in:0,1'],
+            'freee_department_name' => ['nullable', 'string', 'max:20'],
             'q' => ['nullable', 'string', 'max:200'],
         ]);
 

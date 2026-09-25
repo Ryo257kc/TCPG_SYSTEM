@@ -11,7 +11,8 @@ class PayrollV2JournalCsvService
      * 未払計上のCSVを作る。1取引(管理番号1つ)の中に、勘定科目1つ・符号付き金額1つの行を積み上げる形式。
      * 支給側(給料手当・役員報酬・旅費交通費・立替金)はプラス、天引き側(法定福利費・預り金)はマイナス。
      * 未払金の行は出さない(決済期日・決済日を空にした未決済分としてfreee側が自動的に扱う想定)。
-     * 部署はスタッフマスタのstore_nameをそのまま使う(店舗↔部署の対応関係は未確定のため)。
+     * 部署はmx_stores.freee_department_name(店舗マスタで設定するfreee取込用の部門名)を使う
+     * (2026-09-22、ユーザー指示。未設定の店舗は空欄のまま出す。フォールバックはしない)。
      *
      * 金額項目の対応は実物の仕訳(journal_breakdown=6043037)、および2026-06支給分をユーザーが
      * 手で取引仕訳形式に組み直したサンプル(2026.6.20-給与.csv)の両方と完全一致することを検証済み:
@@ -24,8 +25,8 @@ class PayrollV2JournalCsvService
      * staff_division='業務委託'は対象外(賃金台帳のPayrollV2Controller::shouldIncludeWageLedgerRow()と同じ判定)。
      * 除外しないとyakuin_sum列に業務委託の契約金額が紛れて役員報酬として誤集計される。
      *
-     * 部署はスタッフマスタのstore_nameをそのまま使う(店舗コード配下の個別部署へは分けない)。
-     * 6043037の実物でも複数人が同じ店舗の1部署名にまとまっていたため、この粒度で正しい。
+     * 集計は店舗単位(店舗コード配下の個別部署へは分けない)。6043037の実物でも複数人が
+     * 同じ店舗の1部署名にまとまっていたため、この粒度で正しい。
      *
      * @param list<array<string, mixed>> $rows PayrollV2SummaryService::mergeRows() の結果
      */
@@ -51,16 +52,16 @@ class PayrollV2JournalCsvService
      * （預り分）も含めた合計であることを実物の仕訳（2026-07-31付、事業主負担分20行＋
      * 部門split無しの預り分4行の合計581,571円が実際の銀行支払額と一致）で確認済み。
      * 相手科目は未払金固定（ユーザー指示）。
-     * 部門はPayrollV2Controller::computeCompanyBurdenGroups()と同じ粒度
-     * （mx_stores.store_name。店舗↔mx_departments部門の対応が未確定な往診系スタッフが
-     * いるため、正式な部門名への変換は別対応・保留中）。自己負担分は実物同様、部門split無し。
+     * 部門はmx_stores.freee_department_name(店舗マスタで設定するfreee取込用の部門名)を使う
+     * （2026-09-22、ユーザー指示。未設定の店舗は空欄のまま出す。フォールバックはしない）。
+     * 自己負担分は実物同様、部門split無し。
      *
      * 発生日・管理番号: 過去の実物の仕訳では給与と賞与の社保を1取引にまとめて前月末・
      * 「Y/n月給与」で記録していたが、その運用はもうしない方針（2026-09-17、ユーザー指示）。
      * 給与($isBonus=false)は従来通り前月末＋「Y/n月給与」、賞与($isBonus=true)は
      * 給与仕訳CSV(buildBonus())と同じく支給日そのまま＋「Y/n月賞与」を使う。
      *
-     * @param array<string, array{store_name:string, totals:array<string, float>}> $groupedStores
+     * @param array<string, array{store_name:string, freee_department_name?:string, totals:array<string, float>}> $groupedStores
      * @param array<string, float> $grandTotals
      *   どちらもPayrollV2Controller::computeCompanyBurdenGroups()の結果
      */
@@ -79,7 +80,7 @@ class PayrollV2JournalCsvService
 
         foreach ($groupedStores as $group) {
             $totals = (array) ($group['totals'] ?? []);
-            $storeName = trim((string) ($group['store_name'] ?? ''));
+            $departmentLabel = trim((string) ($group['freee_department_name'] ?? ''));
 
             $items = [
                 ['健康保険料（事業主負担分）', $this->roundedAmount($totals, 'kenpo_office')],
@@ -93,7 +94,7 @@ class PayrollV2JournalCsvService
                 if ($amount === 0.0) {
                     continue;
                 }
-                $lines[] = $this->line($occurredAt, '法定福利費', $item, '対象外', $amount, $storeName);
+                $lines[] = $this->line($occurredAt, '法定福利費', $item, '対象外', $amount, $departmentLabel);
             }
         }
 
@@ -196,10 +197,11 @@ class PayrollV2JournalCsvService
 
             $companyName = trim((string) ($row['company_name'] ?? ''));
             $storeName = trim((string) ($row['store_name'] ?? ''));
+            $freeeDepartmentName = trim((string) ($row['freee_department_name'] ?? ''));
             $groupKey = $companyName . '|' . $storeName;
 
             if (!isset($groups[$groupKey])) {
-                $groups[$groupKey] = $this->emptyGroup($storeName);
+                $groups[$groupKey] = $this->emptyGroup($freeeDepartmentName);
             }
 
             $yakuin = $this->roundedAmount($summary, 'yakuin_sum');
@@ -239,10 +241,10 @@ class PayrollV2JournalCsvService
     }
 
     /** @return array<string, mixed> */
-    private function emptyGroup(string $storeName): array
+    private function emptyGroup(string $departmentLabel): array
     {
         return [
-            'store_name' => $storeName,
+            'department_label' => $departmentLabel,
             'basic_salary' => 0.0,
             'officer_compensation' => 0.0,
             'traffic_addition' => 0.0,
@@ -263,7 +265,7 @@ class PayrollV2JournalCsvService
      */
     private function groupLines(array $group, string $occurredAt, string $basicSalaryTitle, string $officerTitle): array
     {
-        $storeName = (string) $group['store_name'];
+        $departmentLabel = (string) $group['department_label'];
         $lines = [];
 
         $items = [
@@ -283,7 +285,7 @@ class PayrollV2JournalCsvService
             if ($amount === 0.0) {
                 continue;
             }
-            $lines[] = $this->line($occurredAt, $title, $item, $taxCategory, $amount, $storeName);
+            $lines[] = $this->line($occurredAt, $title, $item, $taxCategory, $amount, $departmentLabel);
         }
 
         return $lines;

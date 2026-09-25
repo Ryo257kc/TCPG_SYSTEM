@@ -346,6 +346,7 @@ class ShiftController extends Controller
                     'ks.shift_entry',
                     'ks.shift_out',
                     'ks.section',
+                    'ks.holiday_category',
                     'st.store_short_name',
                     'st.store_name',
                 ])
@@ -362,6 +363,7 @@ class ShiftController extends Controller
                     'shift_in_out' => $this->formatTimeForInput($row->shift_entry),
                     'shift_end' => $this->formatTimeForInput($row->shift_out),
                     'shop_code' => trim((string) ($row->section ?? '')),
+                    'holiday_category' => trim((string) ($row->holiday_category ?? '')),
                     'shop_name' => $this->resolveStoreName(
                         trim((string) ($row->store_short_name ?? '')),
                         trim((string) ($row->store_name ?? '')),
@@ -416,6 +418,11 @@ class ShiftController extends Controller
         $redirectParams = ['month' => $selectedMonth, 'staff_id' => $selectedStaffId, 'back_route' => $backRoute];
         $action = (string) $request->input('_action', 'register');
         $payload = $this->extractShiftPayload($request);
+        // mx_kihon_shifts(基本シフト)の区分はmx_time_cardsとは語彙が違う(祝日・法休は使わず
+        // 平日/半日/休日のみ)。extractShiftPayload()はmx_time_cards側と共用のため、ここだけ
+        // 別に取り出す。
+        $kihonHolidayCategory = trim((string) $request->input('holiday_category', ''));
+        $kihonHolidayCategory = in_array($kihonHolidayCategory, ['平日', '半日', '休日'], true) ? $kihonHolidayCategory : null;
 
         if ($action !== 'clear') {
             if ($payload['has_any_time'] && $payload['shop_code'] === null) {
@@ -426,6 +433,11 @@ class ShiftController extends Controller
             }
             if ($payload['shift_exit'] !== null && $payload['shift_in_out'] === null) {
                 return redirect()->route('admin.basic-shift', $redirectParams)->with('statusMessage', 'Break time is required.');
+            }
+            // 区分が「休日」のまま時間を保存できてしまうと、シフト作成側が区分を優先して時間を
+            // 無視してしまう（2026-09-25、041・002で実際に発生。編集画面に区分が無かったのが原因）。
+            if ($kihonHolidayCategory === '休日' && $payload['has_any_time']) {
+                return redirect()->route('admin.basic-shift', $redirectParams)->with('statusMessage', '区分が「休日」のまま時間が入力されています。時間を消すか、区分を平日か半日に変更してください。');
             }
         }
 
@@ -439,6 +451,7 @@ class ShiftController extends Controller
                     'shift_entry' => null,
                     'shift_out' => null,
                     'section' => null,
+                    'holiday_category' => null,
                 ]
                 : [
                     'shift_in' => $payload['shift_start'],
@@ -446,6 +459,7 @@ class ShiftController extends Controller
                     'shift_entry' => $payload['shift_in_out'],
                     'shift_out' => $payload['shift_end'],
                     'section' => $payload['shop_code'],
+                    'holiday_category' => $kihonHolidayCategory,
                 ]);
 
         if ($affected === 0) {

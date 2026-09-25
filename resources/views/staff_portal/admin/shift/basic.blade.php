@@ -61,6 +61,7 @@
                         <col style="width: 60px;">
                         <col style="width: 60px;">
                         <col style="width: 60px;">
+                        <col style="width: 60px;">
                         <col style="width: 80px;">
                         @if ($canManageBasicShift)
                         <col style="width: 100px;">
@@ -69,6 +70,7 @@
                     <thead>
                         <tr>
                             <th>曜日</th>
+                            <th>区分</th>
                             <th>始業</th>
                             <th>退出</th>
                             <th>入出</th>
@@ -85,6 +87,14 @@
                         @php $formId = 'row-form-' . $row['shift_no']; @endphp
                         <tr data-row-form="{{ $formId }}">
                             <td>{{ $row['week'] }}</td>
+                            <td>
+                                <span class="display-value">{{ $row['holiday_category'] }}</span>
+                                <select form="{{ $formId }}" class="inline-input" name="holiday_category">
+                                    @foreach (['平日', '半日', '休日'] as $category)
+                                    <option value="{{ $category }}" @selected($row['holiday_category']===$category)>{{ $category }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
                             <td>
                                 <span class="display-value">{{ $row['shift_start'] }}</span>
                                 <input form="{{ $formId }}" class="inline-input" type="time" name="shift_start" step="900" value="{{ $row['shift_start'] }}">
@@ -121,10 +131,10 @@
                                     <input type="hidden" name="staff_id" value="{{ $selectedStaffId }}">
                                     <input type="hidden" name="back_route" value="{{ $backRoute }}">
                                 </form>
-                                <button type="button" class="btn edit-trigger">編集</button>
-                                <button form="{{ $formId }}" type="submit" name="_action" value="register" class="btn edit-only">登録</button>
-                                <button type="button" class="btn edit-only cancel-trigger">戻す</button>
-                                <button form="{{ $formId }}" type="submit" name="_action" value="clear" class="btn edit-only" formnovalidate>クリア</button>
+                                <button type="button" class="btn_small edit-trigger">編集</button>
+                                <button form="{{ $formId }}" type="submit" name="_action" value="register" class="btn_small edit-only">登録</button>
+                                <button type="button" class="btn_small edit-only cancel-trigger">戻す</button>
+                                <button form="{{ $formId }}" type="submit" name="_action" value="clear" class="btn_small edit-only" formnovalidate>クリア</button>
                             </td>
                             @endif
                         </tr>
@@ -189,6 +199,7 @@
                 var inOut = document.querySelector('input[name="shift_in_out"]' + selectorBase);
                 var end = document.querySelector('input[name="shift_end"]' + selectorBase);
                 var shop = document.querySelector('select[name="shop_code"]' + selectorBase);
+                var category = document.querySelector('select[name="holiday_category"]' + selectorBase);
                 var editBtn = row.querySelector('.edit-trigger');
                 var cancelBtn = row.querySelector('.cancel-trigger');
                 var preview = row.querySelector('.scheduled-hours-preview');
@@ -219,7 +230,8 @@
                     exit: exit.value,
                     inOut: inOut.value,
                     end: end.value,
-                    shop: shop.value
+                    shop: shop.value,
+                    category: category ? category.value : ''
                 };
 
                 function syncRequired() {
@@ -252,6 +264,7 @@
                         inOut.value = initial.inOut;
                         end.value = initial.end;
                         shop.value = initial.shop;
+                        if (category) category.value = initial.category;
                         setEditing(false);
                         if (row.updateScheduledHoursPreview) row.updateScheduledHoursPreview();
                     });

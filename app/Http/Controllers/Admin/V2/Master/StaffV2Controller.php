@@ -8,6 +8,7 @@ use App\Services\Admin\V2\Master\CompanyV2Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class StaffV2Controller extends Controller
@@ -177,9 +178,10 @@ class StaffV2Controller extends Controller
     {
         $v = $request->validate($this->basicShiftRules());
 
+        $this->assertBasicShiftConsistent($v);
         $this->service->createBasicShift($v);
 
-        return $this->redirectToBasicShift($v);
+        return $this->redirectToBasicShift($v, '基本シフトを保存しました。');
     }
 
     public function storeBasicShiftWeek(Request $request): RedirectResponse
@@ -193,7 +195,7 @@ class StaffV2Controller extends Controller
 
         $this->service->createBasicShiftWeek(trim((string) $v['staff_id']));
 
-        return $this->redirectToBasicShift($v);
+        return $this->redirectToBasicShift($v, '7日分を作成しました。');
     }
 
     public function updateBasicShift(Request $request): RedirectResponse
@@ -204,9 +206,13 @@ class StaffV2Controller extends Controller
             ...$this->basicShiftRules(),
         ]);
 
-        $this->service->updateBasicShift($v, (string) ($v['_action'] ?? 'register') === 'clear');
+        $isClear = (string) ($v['_action'] ?? 'register') === 'clear';
+        if (!$isClear) {
+            $this->assertBasicShiftConsistent($v);
+        }
+        $this->service->updateBasicShift($v, $isClear);
 
-        return $this->redirectToBasicShift($v);
+        return $this->redirectToBasicShift($v, $isClear ? 'クリアしました。' : '基本シフトを保存しました。');
     }
 
     public function updateKihon(Request $request): RedirectResponse
@@ -474,7 +480,29 @@ class StaffV2Controller extends Controller
             'shift_in_out' => ['nullable', 'string', 'max:20'],
             'shift_end' => ['nullable', 'string', 'max:20'],
             'shop_code' => ['nullable', Rule::in(array_column($this->service->storeOptions(), 'store_code'))],
+            'holiday_category' => ['nullable', Rule::in(['平日', '半日', '休日', '祝日'])],
         ];
+    }
+
+    // 区分が「休日」のまま時間が入力された状態で保存できてしまうと、シフト作成側が
+    // 区分を優先して時間を無視してしまう（2026-09-25、041・002で実際に発生し発覚）。
+    // 保存時点で矛盾を弾き、その場で気づけるようにする。
+    private function assertBasicShiftConsistent(array $v): void
+    {
+        if ((string) ($v['holiday_category'] ?? '') !== '休日') {
+            return;
+        }
+
+        $hasTime = trim((string) ($v['shift_start'] ?? '')) !== ''
+            || trim((string) ($v['shift_exit'] ?? '')) !== ''
+            || trim((string) ($v['shift_in_out'] ?? '')) !== ''
+            || trim((string) ($v['shift_end'] ?? '')) !== '';
+
+        if ($hasTime) {
+            throw ValidationException::withMessages([
+                'holiday_category' => '区分が「休日」のまま時間が入力されています。時間を消すか、区分を平日か半日に変更してください。',
+            ]);
+        }
     }
 
     private function redirectToKihon(array $values, string $status = ''): RedirectResponse
@@ -490,15 +518,17 @@ class StaffV2Controller extends Controller
         return $status !== '' ? $redirect->with('status', $status) : $redirect;
     }
 
-    private function redirectToBasicShift(array $values): RedirectResponse
+    private function redirectToBasicShift(array $values, string $status = ''): RedirectResponse
     {
-        return redirect()->route('admin.master.staff', [
+        $redirect = redirect()->route('admin.master.staff', [
             'q' => trim((string) ($values['q'] ?? '')),
             'employment_filter' => trim((string) ($values['employment_filter'] ?? 'active')),
             'company_filter' => trim((string) ($values['company_filter'] ?? '')),
             'staff_id' => trim((string) $values['staff_id']),
             'tab' => 'shift',
         ]);
+
+        return $status !== '' ? $redirect->with('status', $status) : $redirect;
     }
 
     /** @return array<string, array<int, string>> */

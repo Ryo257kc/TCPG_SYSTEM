@@ -25,6 +25,7 @@ class StoreV2Service
                 'st.category',
                 'st.phone',
                 'st.is_closed',
+                'st.freee_department_name',
             ])
             ->orderBy('st.is_closed')
             ->orderBy('st.store_code');
@@ -51,6 +52,7 @@ class StoreV2Service
             'category' => trim((string) ($r->category ?? '')),
             'phone' => trim((string) ($r->phone ?? '')),
             'is_closed' => (int) ($r->is_closed ?? 0),
+            'freee_department_name' => trim((string) ($r->freee_department_name ?? '')),
         ])->all();
 
         $companyOptions = DB::connection('sqlsrv')->table('dbo.mx_companies')
@@ -68,7 +70,37 @@ class StoreV2Service
             ->values()
             ->all();
 
-        return ['rows' => $rows, 'companyOptions' => $companyOptions];
+        return ['rows' => $rows, 'companyOptions' => $companyOptions, 'departmentCandidatesByStoreCode' => $this->departmentCandidatesByStoreCode()];
+    }
+
+    /**
+     * 店舗コード(mx_stores.store_code)ごとに、mx_departments.official_store_noが一致する
+     * 部門名の候補一覧を返す。1つの店舗コードに複数の部門が対応するケース（往診系スタッフが
+     * 個人ごとに別部門を持つ店舗等、2026-09-22実データで確認）があり、自動で1つに決められない
+     * ため、freee_department_name欄の入力補助として候補を見せるだけに使う。
+     *
+     * @return array<string, list<string>>
+     */
+    private function departmentCandidatesByStoreCode(): array
+    {
+        $rows = DB::connection('sqlsrv')
+            ->table('dbo.mx_departments')
+            ->whereNotNull('official_store_no')
+            ->whereRaw("LTRIM(RTRIM(official_store_no)) <> ''")
+            ->select(['official_store_no', 'store_category'])
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $storeCode = trim((string) ($row->official_store_no ?? ''));
+            $category = trim((string) ($row->store_category ?? ''));
+            if ($storeCode === '' || $category === '') {
+                continue;
+            }
+            $map[$storeCode][] = $category;
+        }
+
+        return $map;
     }
 
     public function update(array $validated): int
@@ -89,6 +121,7 @@ class StoreV2Service
                 'category' => trim((string) ($validated['category'] ?? '')),
                 'phone' => trim((string) ($validated['phone'] ?? '')),
                 'is_closed' => ((string) ($validated['is_closed'] ?? '0')) === '1' ? 1 : 0,
+                'freee_department_name' => trim((string) ($validated['freee_department_name'] ?? '')),
             ]);
     }
 }

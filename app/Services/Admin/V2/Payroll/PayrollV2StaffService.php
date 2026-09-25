@@ -57,11 +57,12 @@ class PayrollV2StaffService
         return DB::connection('sqlsrv')
             ->table('dbo.mx_stores as st')
             ->leftJoin('dbo.mx_companies as c', 'c.company_id', '=', 'st.company_id')
-            ->select(['st.store_code', 'st.store_name', 'c.company_name'])
+            ->select(['st.store_code', 'st.store_name', 'st.freee_department_name', 'c.company_name'])
             ->get()
             ->mapWithKeys(fn ($r) => [
                 trim((string) $r->store_code) => [
                     'store_name' => trim((string) ($r->store_name ?? '')),
+                    'freee_department_name' => trim((string) ($r->freee_department_name ?? '')),
                     'company_name' => trim((string) ($r->company_name ?? '')),
                 ],
             ])

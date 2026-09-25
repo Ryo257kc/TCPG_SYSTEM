@@ -702,6 +702,7 @@ class PayrollV2Controller extends Controller
             $companyName = trim((string) ($row['company_name'] ?? ''));
             $storeCode = trim((string) ($row['store_code'] ?? ''));
             $storeName = trim((string) ($row['store_name'] ?? ''));
+            $freeeDepartmentName = trim((string) ($row['freee_department_name'] ?? ''));
             $groupKey = $companyName . "\n" . $storeCode . "\n" . $storeName;
 
             if (!isset($groupedStores[$groupKey])) {
@@ -709,6 +710,7 @@ class PayrollV2Controller extends Controller
                     'company_name' => $companyName,
                     'store_code' => $storeCode,
                     'store_name' => $storeName,
+                    'freee_department_name' => $freeeDepartmentName,
                     'rows' => [],
                     'totals' => array_fill_keys($amountKeys, 0.0),
                 ];

@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\V2\Master\AllowanceV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CalendarV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CompanyV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StaffV2Controller;
+use App\Http\Controllers\Admin\V2\Master\DepartmentV2Controller;
 use App\Http\Controllers\Admin\V2\Master\StoreV2Controller;
 use App\Http\Controllers\Admin\V2\OnboardingRequestV2Controller;
 use App\Http\Controllers\Admin\V2\PayrollV2Controller;
@@ -223,6 +224,8 @@ Route::prefix('admin')->group(function (): void {
         Route::post('/master/staff/fuyo/delete', [StaffV2Controller::class, 'deleteFuyo'])->name('admin.master.staff.fuyo.delete');
         Route::get('/master/store', [StoreV2Controller::class, 'index'])->name('admin.master.store');
         Route::post('/master/store/update', [StoreV2Controller::class, 'update'])->name('admin.master.store.update');
+        Route::get('/master/department', [DepartmentV2Controller::class, 'index'])->name('admin.master.department');
+        Route::post('/master/department/update', [DepartmentV2Controller::class, 'update'])->name('admin.master.department.update');
         Route::get('/master/allowance', [AllowanceV2Controller::class, 'index'])->name('admin.master.allowance');
         Route::post('/master/allowance', [AllowanceV2Controller::class, 'update'])->name('admin.master.allowance.update');
         Route::get('/master/calendar', [CalendarV2Controller::class, 'index'])->name('admin.master.calendar');

@@ -499,10 +499,13 @@ class StaffV2Service
         // 入り、ブラウザ側で空欄表示になっていた。ここでは時刻列だけHH:MM形式で個別に
         // 抽出し、画面側が期待するキー名（shift_start/shift_in_out/shift_end/shop_code）
         // に合わせて返す。
+        // shift_noは登録順の連番で曜日順とは限らない(スタッフによっては過去に日・水・土だけ
+        // 後から追加された等で並びがバラバラだった)。曜日(月〜日)の順に並べ替えて表示する。
+        $weekOrder = array_flip($this->weekOptions());
+
         return DB::connection('sqlsrv')
             ->table('dbo.mx_kihon_shifts')
             ->where('staff_name', $staffId)
-            ->orderBy('shift_no')
             ->get()
             ->map(fn($row): array => [
                 'shift_no' => (string) ($row->shift_no ?? ''),
@@ -512,7 +515,10 @@ class StaffV2Service
                 'shift_in_out' => $this->extractTime($row->shift_entry ?? null),
                 'shift_end' => $this->extractTime($row->shift_out ?? null),
                 'shop_code' => trim((string) ($row->section ?? '')),
+                'holiday_category' => trim((string) ($row->holiday_category ?? '')),
             ])
+            ->sortBy(fn(array $row): int => $weekOrder[$row['week']] ?? 99)
+            ->values()
             ->all();
     }
 
@@ -642,7 +648,7 @@ class StaffV2Service
 
     public function updateBasicShift(array $values, bool $clear): void
     {
-        $payload = $clear ? array_fill_keys(['shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section'], null) : $this->basicShiftValues($values);
+        $payload = $clear ? array_fill_keys(['shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section', 'holiday_category'], null) : $this->basicShiftValues($values);
         $this->updateRow('mx_kihon_shifts', 'shift_no', $values['shift_no'] ?? '', $payload, array_keys($payload), 'sqlsrv');
     }
 
@@ -746,6 +752,7 @@ class StaffV2Service
             'shift_entry' => $values['shift_in_out'] ?? null,
             'shift_out' => $values['shift_end'] ?? null,
             'section' => $values['shop_code'] ?? null,
+            'holiday_category' => $values['holiday_category'] ?? null,
         ];
     }
 
@@ -865,7 +872,7 @@ class StaffV2Service
     /** @return list<string> */
     private function basicShiftColumns(): array
     {
-        return ['staff_name', 'week', 'shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section'];
+        return ['staff_name', 'week', 'shift_in', 'shift_exit', 'shift_entry', 'shift_out', 'section', 'holiday_category'];
     }
 
     private function tableHasColumn(string $connection, string $table, string $column): bool

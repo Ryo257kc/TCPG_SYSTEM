@@ -215,6 +215,45 @@
             color: #5b708f
         }
 
+        .linked-departments {
+            border-top: 1px solid #d3dff0
+        }
+
+        .linked-departments .panel-title {
+            font-size: 13px
+        }
+
+        .linked-departments .meta {
+            padding: 0 14px;
+            font-size: 12px;
+            color: #8ca0ba
+        }
+
+        .linked-department-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 14px
+        }
+
+        .linked-department-chip {
+            border: 1px solid #9db6d8;
+            background: #eef4fc;
+            color: #1f4e8c;
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 13px;
+            cursor: pointer
+        }
+
+        .linked-department-chip:hover {
+            background: #dceafb
+        }
+
+        .linked-departments .store-empty {
+            padding: 10px 14px
+        }
+
         @media (max-width: 980px) {
             .store-layout {
                 grid-template-columns: 1fr
@@ -362,6 +401,21 @@
                                     <input type="text" name="phone" value="{{ $selectedRow['phone'] }}">
                                 </div>
                             </label>
+                            <label class="detail-field">
+                                <span>freee用部門名</span>
+                                <div class="store-view detail-value {{ $selectedRow['freee_department_name'] === '' ? 'detail-value-empty' : '' }}">{{ $selectedRow['freee_department_name'] !== '' ? $selectedRow['freee_department_name'] : '---' }}</div>
+                                <div class="store-edit">
+                                    <input type="text" name="freee_department_name" value="{{ $selectedRow['freee_department_name'] }}" list="freee-department-candidates" maxlength="20">
+                                    <datalist id="freee-department-candidates">
+                                        @foreach (($departmentCandidatesByStoreCode[$selectedRow['store_code']] ?? []) as $candidate)
+                                        <option value="{{ $candidate }}"></option>
+                                        @endforeach
+                                    </datalist>
+                                    @if (count($departmentCandidatesByStoreCode[$selectedRow['store_code']] ?? []) > 1)
+                                    <div class="meta">この店舗コードには複数の部門候補があります。手入力で1つ確定してください。</div>
+                                    @endif
+                                </div>
+                            </label>
                             <label class="detail-field detail-field-check">
                                 <span>閉店</span>
                                 <div class="store-view detail-value">{{ (int) ($selectedRow['is_closed'] ?? 0) === 1 ? '閉店' : '営業中' }}</div>
@@ -378,6 +432,23 @@
                             <button type="button" class="btn-secondary store-edit" onclick="toggleStoreEdit(false)">取消</button>
                         </div>
                     </form>
+                    @php
+                    $linkedDepartments = $departmentCandidatesByStoreCode[$selectedRow['store_code'] ?? ''] ?? [];
+                    @endphp
+                    <div class="linked-departments">
+                        <div class="panel-title">この店舗コードに紐づいてる部門(mx_departments.official_store_no一致)</div>
+                        @if (count($linkedDepartments) > 0)
+                        <div class="meta">クリックすると上の「freee用部門名」欄に入力されます(保存ボタンを押すまで確定しません)</div>
+                        <div class="linked-department-chips">
+                            @foreach ($linkedDepartments as $candidate)
+                            <button type="button" class="linked-department-chip" data-value="{{ $candidate }}" onclick="selectFreeeDepartment(this.dataset.value)">{{ $candidate }}</button>
+                            @endforeach
+                        </div>
+                        @else
+                        <div class="store-empty">紐づいてる部門はありません</div>
+                        @endif
+                        <div class="meta"><a href="{{ route('admin.master.department', ['q' => $selectedRow['store_code'] ?? '']) }}">部門マスタでこの店舗コードの部門を編集する &raquo;</a></div>
+                    </div>
                     @else
                     <div class="store-empty">表示対象の店舗がありません</div>
                     @endif

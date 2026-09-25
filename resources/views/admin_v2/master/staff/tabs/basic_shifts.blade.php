@@ -1,6 +1,7 @@
 @php
   $weekOptions = $weekOptions ?? ['月', '火', '水', '木', '金', '土', '日'];
   $shiftRows = $shiftRows ?? [];
+  $holidayCategoryOptions = ['平日', '半日', '休日', '祝日'];
 @endphp
 
 <div class="related-card">
@@ -32,6 +33,7 @@
           <thead>
             <tr>
               <th>曜日</th>
+              <th>区分</th>
               <th>始業</th>
               <th>退出</th>
               <th>入出</th>
@@ -48,6 +50,13 @@
                   <select form="{{ $formId }}" name="week">
                     @foreach($weekOptions as $week)
                       <option value="{{ $week }}" @selected(($row['week'] ?? '') === $week)>{{ $week }}</option>
+                    @endforeach
+                  </select>
+                </td>
+                <td>
+                  <select form="{{ $formId }}" name="holiday_category">
+                    @foreach($holidayCategoryOptions as $category)
+                      <option value="{{ $category }}" @selected(($row['holiday_category'] ?? '') === $category)>{{ $category }}</option>
                     @endforeach
                   </select>
                 </td>

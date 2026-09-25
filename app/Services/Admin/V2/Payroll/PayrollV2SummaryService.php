@@ -104,7 +104,7 @@ class PayrollV2SummaryService
      * @return list<array{staff_id:string,staff_name:string,division:string,store_code:string,store_name:string,company_name:string,summary:array<string, mixed>,summary_prev:array<string, mixed>,kihon:array<string, mixed>,staff_master:array<string, mixed>,shaho:array<string, mixed>,resident:array<string, mixed>}>
      */
     /**
-     * @param array<string, array{store_name:string, company_name:string}> $storeCompanyMap
+     * @param array<string, array{store_name:string, freee_department_name:string, company_name:string}> $storeCompanyMap
      *   store_code -> 店舗名・会社名（PayrollV2StaffService::storeCompanyMap()）。
      *   給与レコードに焼き付けたsection（その月時点の所属）から会社・店舗を引き直すのに使う。
      */
@@ -135,10 +135,12 @@ class PayrollV2SummaryService
             $recordSection = trim((string) ($summary['section'] ?? ''));
             $storeCode = '';
             $storeName = '';
+            $freeeDepartmentName = '';
             $companyName = '';
             if ($recordSection !== '' && isset($storeCompanyMap[$recordSection])) {
                 $storeCode = $recordSection;
                 $storeName = $storeCompanyMap[$recordSection]['store_name'];
+                $freeeDepartmentName = $storeCompanyMap[$recordSection]['freee_department_name'] ?? '';
                 $companyName = $storeCompanyMap[$recordSection]['company_name'];
             }
 
@@ -148,6 +150,7 @@ class PayrollV2SummaryService
                 'division' => $staff['division'],
                 'store_code' => $storeCode,
                 'store_name' => $storeName,
+                'freee_department_name' => $freeeDepartmentName,
                 'company_name' => $companyName,
                 'summary' => $summary,
                 'summary_prev' => $previousSummaryMap[$staff['staff_id']] ?? [],
