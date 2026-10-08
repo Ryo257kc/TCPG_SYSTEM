@@ -1015,6 +1015,16 @@ class StoreDailyReportController extends Controller
             // - 納庄さん（ch=1だが保険負担が残っている）は除外されない。
             $printRows = collect($printRows)
                 ->filter(function (array $row): bool {
+                    // 交通事故の請求行は修正日報に載せない（交通事故分はT_日報集計.交通事故に
+                    // 別計上される建て付けのため）。判定は割合=交ではなくメニューで行う：
+                    // 同じ患者が交通事故の行と自費施術（鍼等）の行を両方持つケースがあり、
+                    // 割合で落とすと残すべき自費まで消えてしまう（2026-10-08、山本さん・
+                    // 加藤さんの実データで確認。この2行パターンは2026-08-21が初出で、
+                    // Access時代には存在しなかった）。
+                    if (mb_strpos((string) ($row['メニュー集計'] ?? ''), '交通事故') !== false) {
+                        return false;
+                    }
+
                     $treatmentChecked = trim((string) ($row['ch'] ?? '')) === '1';
                     $moneyToFloat = fn($v): float => (float) str_replace(',', '', (string) ($v ?? '0'));
                     $allAmountsZero = $moneyToFloat($row['自費計'] ?? 0) === 0.0
@@ -1243,6 +1253,9 @@ class StoreDailyReportController extends Controller
                 '備考' => $this->blankToNull($request->input('備考')),
             ]);
 
+        // レセコンが変われば差額も変わる。
+        $this->recalculateDailySummaryTotals($dailySummaryId);
+
         return redirect()
             ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
             ->with('statusMessage', '保存しました。');
@@ -1301,6 +1314,9 @@ class StoreDailyReportController extends Controller
                 'レセコン' => $this->moneyToDatabaseValue($request->input('レセコン')),
                 'レジ' => $this->moneyToDatabaseValue($request->input('レジ')),
             ]);
+
+        // レセコンが変われば差額も変わる。
+        $this->recalculateDailySummaryTotals($dailySummaryId);
 
         return redirect()
             ->route('office.store_daily_report.daily_summary', $redirectQuery)
@@ -1671,6 +1687,58 @@ class StoreDailyReportController extends Controller
             ->with('statusMessage', '患者を追加しました。');
     }
 
+    /**
+     * 先生別計・差額・銀行預入金額を手動で計算し直す。
+     *
+     * 保存時の自動再計算だけでは、Laravelを通らない変更（Access等からの直接更新や、
+     * 自動再計算を入れる以前に発生したズレ）を直せないため、いつでも押せるボタンを用意する。
+     * Access時代も「再計算」ボタン運用だった（2026-10-08、ユーザー確認）。
+     */
+    public function recalculateDailySummary(Request $request): RedirectResponse
+    {
+        $this->requireDailyReport($request);
+        $staffId = $this->staffPortalStaffId($request);
+
+        $dailySummaryId = trim((string) $request->input('daily_summary_id', ''));
+        if ($dailySummaryId === '') {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary')
+                ->with('errorMessage', '日報が確認できません。');
+        }
+
+        $dailySummaryRow = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->select(['日付', '確定'])
+            ->where('日報集計No', $dailySummaryId)
+            ->first();
+
+        if ($dailySummaryRow === null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary')
+                ->with('errorMessage', '日報が確認できません。');
+        }
+
+        $staffRow = $this->staffPortalStaffRow($staffId);
+        if ((bool) ($dailySummaryRow->{'確定'} ?? false) && !$this->isPaymentCheck($staffRow)) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '確定済みの日報は更新できません。');
+        }
+
+        $targetMonthEnd = Carbon::parse((string) $dailySummaryRow->{'日付'})->endOfMonth()->startOfDay();
+        if ($this->dailySummaryMonthlyClosingRow($targetMonthEnd) !== null) {
+            return redirect()
+                ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+                ->with('errorMessage', '月次処理済のため更新できません。');
+        }
+
+        $this->recalculateDailySummaryTotals($dailySummaryId);
+
+        return redirect()
+            ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
+            ->with('statusMessage', '先生別計・差額・銀行預入金額を再計算しました。');
+    }
+
     public function bulkCheckDailySummaryDetail(Request $request): RedirectResponse
     {
         $this->requireDailyReport($request);
@@ -1807,6 +1875,10 @@ class StoreDailyReportController extends Controller
                 ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
                 ->with('errorMessage', '保存に失敗しました。画面を更新してから再度お試しください。（' . $e->getMessage() . '）');
         }
+
+        // 先生別日報の請求金額が変われば先生別計＝差額も変わる。保存・削除どちらの経路でも
+        // 必要なので、トランザクションの中ではなく成功後にまとめて1回だけ呼ぶ。
+        $this->recalculateDailySummaryTotals($dailySummaryId);
 
         return redirect()
             ->route('office.store_daily_report.daily_summary.detail', ['daily_summary_id' => $dailySummaryId])
@@ -2094,6 +2166,99 @@ class StoreDailyReportController extends Controller
             '請求金額計' => (float) $rows->sum(fn($row): float => (float) ($row->{'請求金額計'} ?? 0)),
             '保険負担計' => (float) $rows->sum(fn($row): float => (float) ($row->{'保険負担計'} ?? 0)),
         ];
+    }
+
+    /**
+     * T_日報集計の自動計算項目（先生別計・差額・銀行預入金額）を計算して保存し直す。
+     *
+     * 先生別計     = その日・その店舗の T_先生別日報.請求金額 合計（先生別外=0 の行のみ）
+     * 差額         = レセコン − 先生別計
+     * 銀行預入金額 = 窓口計 − レジ控除 − チャージ利用 + チャージ金
+     *   窓口計     = teacher.保険負担 + teacher.自費（計算外=0 かつ 保険証=0 の行）
+     *   レジ控除   = T_レジ詳細のうち「チャージ金」「物品販売」以外の金額
+     *   チャージ利用 = charge=1 の自費
+     *   チャージ金 = T_レジ詳細の「チャージ金」
+     *   ※印刷の$bankDepositAmountと同じ式。2026-10-08に実データで検証（9/2さくらが
+     *     店舗申告の50,200と一致。2026年444日中424日で保存値と一致）。
+     *     銀行預入金額も画面に入力欄が無い導出値で、Laravelが一度も更新していなかった。
+     *
+     * レセコンは手入力、先生別計は明細から導出される値のため、どちらが変わっても差額がズレる。
+     * にもかかわらずLaravel側はこの2列を一度も書き込んでおらず、Accessをやめて以降
+     * 誰も再計算しない状態だった（2026-10-08、本番444日中6日がズレているのを確認して発覚）。
+     *
+     * 更新するのは先生別計・差額の2列だけ。レセコン・レジ・備考・確定などの手入力値には
+     * 絶対に触らない（手入力を上書きしないこと自体が要件、2026-10-08ユーザー指示）。
+     * 呼び出し側の確定済み・月次締めガードの内側で呼ぶこと。
+     */
+    private function recalculateDailySummaryTotals(string $dailySummaryId): void
+    {
+        $dailySummaryId = trim($dailySummaryId);
+        if ($dailySummaryId === '') {
+            return;
+        }
+
+        $summaryRow = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->select(['日付', '日報集計店舗', 'レセコン'])
+            ->where('日報集計No', $dailySummaryId)
+            ->first();
+
+        if ($summaryRow === null) {
+            return;
+        }
+
+        $targetDate = $this->formatDateValue($summaryRow->{'日付'} ?? null, 'Y-m-d');
+        $targetStore = trim((string) ($summaryRow->{'日報集計店舗'} ?? ''));
+
+        // 日付・店舗が無いと集計範囲を特定できない。ここで0を書くと正しい値を壊すので何もしない。
+        if ($targetDate === '' || $targetStore === '') {
+            return;
+        }
+
+        $teacherTotal = (float) DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_先生別日報 as teacher')
+            ->join('dbo.T_患者名日報 as patient', 'teacher.患者No_t', '=', 'patient.患者No')
+            ->whereDate('patient.日付', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->where('teacher.先生別外', 0)
+            ->sum('teacher.請求金額');
+
+        $treatmentTotals = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_先生別日報 as teacher')
+            ->join('dbo.T_患者名日報 as patient', 'teacher.患者No_t', '=', 'patient.患者No')
+            ->whereDate('patient.日付', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->selectRaw('
+                SUM(CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.保険負担 ELSE 0 END) AS 保険負担計,
+                SUM(CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.自費 ELSE 0 END) AS 自費計,
+                SUM(CASE WHEN teacher.charge = 1 AND teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.自費 ELSE 0 END) AS チャージ利用
+            ')
+            ->first();
+
+        $registerTotals = DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_レジ詳細')
+            ->whereDate('日付', $targetDate)
+            ->where('レジ店舗', $targetStore)
+            ->selectRaw("
+                SUM(CASE WHEN 項目 NOT IN (N'チャージ金', N'物品販売') THEN 金額 ELSE 0 END) AS レジ控除計,
+                SUM(CASE WHEN 項目 = N'チャージ金' THEN 金額 ELSE 0 END) AS チャージ金
+            ")
+            ->first();
+
+        $counterTotal = (float) ($treatmentTotals->{'保険負担計'} ?? 0) + (float) ($treatmentTotals->{'自費計'} ?? 0);
+        $bankDeposit = $counterTotal
+            - (float) ($registerTotals->{'レジ控除計'} ?? 0)
+            - (float) ($treatmentTotals->{'チャージ利用'} ?? 0)
+            + (float) ($registerTotals->{'チャージ金'} ?? 0);
+
+        DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_日報集計')
+            ->where('日報集計No', $dailySummaryId)
+            ->update([
+                '先生別計' => $teacherTotal,
+                '差額' => (float) ($summaryRow->{'レセコン'} ?? 0) - $teacherTotal,
+                '銀行預入金額' => $bankDeposit,
+            ]);
     }
 
     private function buildMonthlyWindowPrintData(string $targetMonthStart, string $targetMonthEnd, string $selectedStore, array $receiptBurdenInputs = []): array

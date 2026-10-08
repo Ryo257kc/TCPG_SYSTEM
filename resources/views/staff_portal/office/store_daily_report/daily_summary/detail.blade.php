@@ -490,6 +490,15 @@
                         <input type="hidden" name="daily_summary_id" value="{{ $dailySummary['日報集計No'] }}">
                         <button type="submit" class="btn" onclick="return confirm('一括chを更新しますか？')">一括ch</button>
                     </form>
+                    {{-- 先生別計・差額・銀行預入金額はレセコンや明細の保存時に自動で計算し直すが、
+                         Laravelを通らない変更や「計算が走る前に確定して閉じた」場合に古いまま
+                         残ることがあるため、手動でも実行できるようにしている
+                         （2026-10-08、Access時代の「再計算」ボタンと同じ役割）。 --}}
+                    <form method="post" action="{{ route('office.store_daily_report.daily_summary.detail.recalculate') }}">
+                        @csrf
+                        <input type="hidden" name="daily_summary_id" value="{{ $dailySummary['日報集計No'] }}">
+                        <button type="submit" class="btn" onclick="return confirm('先生別計・差額・銀行預入金額を再計算しますか？')">再計算</button>
+                    </form>
                     @endif
                 </div>
                 @endif

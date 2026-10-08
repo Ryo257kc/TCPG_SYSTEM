@@ -410,6 +410,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::post('/office/store_daily_report/daily_summary/summary-save', [StoreDailyReportController::class, 'saveDailySummarySummary'])->name('office.store_daily_report.daily_summary.summary_save');
     Route::post('/office/store_daily_report/daily_summary/detail/add-patient', [StoreDailyReportController::class, 'addDailySummaryPatient'])->name('office.store_daily_report.daily_summary.detail.add_patient');
     Route::post('/office/store_daily_report/daily_summary/detail/bulk-ch', [StoreDailyReportController::class, 'bulkCheckDailySummaryDetail'])->name('office.store_daily_report.daily_summary.detail.bulk_ch');
+    Route::post('/office/store_daily_report/daily_summary/detail/recalculate', [StoreDailyReportController::class, 'recalculateDailySummary'])->name('office.store_daily_report.daily_summary.detail.recalculate');
     Route::post('/office/store_daily_report/daily_summary/detail/save', [StoreDailyReportController::class, 'saveDailySummaryDetail'])->name('office.store_daily_report.daily_summary.detail.save');
     Route::post('/office/store_daily_report/daily_summary/detail/expense-save', [StoreDailyReportController::class, 'saveDailySummaryExpense'])->name('office.store_daily_report.daily_summary.detail.expense_save');
     Route::post('/office/store_daily_report/daily_summary/monthly-window-save', [StoreDailyReportController::class, 'saveMonthlyWindowInput'])->name('office.store_daily_report.daily_summary.monthly_window_save');
