@@ -61,9 +61,17 @@ return $value;
 };
 
 $valueClass = static function (string $field, array $row) use ($booleanFields): string {
-$base = trim((string) ($row[$field] ?? '')) === '' ? 'detail-value-empty' : '';
+$value = trim((string) ($row[$field] ?? ''));
+$base = $value === '' ? 'detail-value-empty' : '';
 if (in_array($field, $booleanFields, true)) {
 return trim('detail-value-bool ' . $base);
+}
+
+// StaffV2Service::formatJapaneseDate()が返す「（R8）2026/4/1」形式だけ折り返し禁止にする。
+// 日付カラムを列名で列挙せず値の形で判定するのは、どのタブ・どの項目でも同じ書式で
+// 来るため（新しい日付項目が増えても自動で効く）。
+if (preg_match('/^（[A-Z]\d+）/u', $value) === 1) {
+return trim('detail-value-date ' . $base);
 }
 
 return $base;
@@ -143,13 +151,13 @@ if (abs($numeric) < 0.0000001) {
             @if($leftExists)
             <label class="detail-field detail-field-compact">
               <span>{{ $leftLabel }}</span>
-              <div class="detail-value {{ ($selectedRow[$leftField] ?? '') === '' ? 'detail-value-empty' : '' }}">{{ ($selectedRow[$leftField] ?? '') !== '' ? $selectedRow[$leftField] : '---' }}</div>
+              <div class="detail-value {{ $valueClass($leftField, $selectedRow) }}">{{ ($selectedRow[$leftField] ?? '') !== '' ? $selectedRow[$leftField] : '---' }}</div>
             </label>
             @endif
             @if($rightExists)
             <label class="detail-field detail-field-compact">
               <span>{{ $rightLabel }}</span>
-              <div class="detail-value {{ ($selectedRow[$rightField] ?? '') === '' ? 'detail-value-empty' : '' }}">{{ ($selectedRow[$rightField] ?? '') !== '' ? $selectedRow[$rightField] : '---' }}</div>
+              <div class="detail-value {{ $valueClass($rightField, $selectedRow) }}">{{ ($selectedRow[$rightField] ?? '') !== '' ? $selectedRow[$rightField] : '---' }}</div>
             </label>
             @endif
           </div>

@@ -22,6 +22,12 @@ $raw = trim((string)($row['_raw_' . $key] ?? $row[$key] ?? ''));
 return $raw !== '' ? substr($raw, 0, 10) : '';
 };
 
+// 表示用。基本情報タブの入社日等と同じ和暦付き書式（（R6）2024/5/1）で出す。
+// 入力欄はtype=dateなのでY-m-dが必要で、そちらは$fuyoDateValue()のまま（2026-10-01）。
+$fuyoDateDisplay = function (array $row, string $key): string {
+return trim((string)($row[$key] ?? ''));
+};
+
 $fuyoAgeValue = function (array $row): string {
 $age = trim((string)($row['_age'] ?? ''));
 if ($age !== '') {
@@ -254,7 +260,7 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
         <div class="info-block-grid fuyo-grid">
           <label class="detail-field detail-field-compact">
             <span>年末設定年</span>
-            <div class="detail-value">{{ $fuyoDateValue($row, 'registration_date') !== '' ? $fuyoDateValue($row, 'registration_date') : '---' }}</div>
+            <div class="detail-value">{{ $fuyoDateDisplay($row, 'registration_date') !== '' ? $fuyoDateDisplay($row, 'registration_date') : '---' }}</div>
             <input type="date" name="registration_date" value="{{ $fuyoDateValue($row, 'registration_date') }}" required>
           </label>
           <label class="detail-field detail-field-compact">
@@ -317,7 +323,7 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
 
           <label class="detail-field detail-field-compact">
             <span>生年月日</span>
-            <div class="detail-value">{{ $fuyoDateValue($row, 'fuyo_birthday') !== '' ? $fuyoDateValue($row, 'fuyo_birthday') : '---' }}</div>
+            <div class="detail-value">{{ $fuyoDateDisplay($row, 'fuyo_birthday') !== '' ? $fuyoDateDisplay($row, 'fuyo_birthday') : '---' }}</div>
             <input type="date" name="fuyo_birthday" value="{{ $fuyoDateValue($row, 'fuyo_birthday') }}">
           </label>
           <label class="detail-field detail-field-compact">
@@ -362,7 +368,7 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
         <div class="info-block-grid fuyo-grid">
           <label class="detail-field detail-field-compact">
             <span>年末設定年</span>
-            <div class="detail-value">{{ $fuyoDateValue($row, 'registration_date') !== '' ? $fuyoDateValue($row, 'registration_date') : '---' }}</div>
+            <div class="detail-value">{{ $fuyoDateDisplay($row, 'registration_date') !== '' ? $fuyoDateDisplay($row, 'registration_date') : '---' }}</div>
           </label>
           <label class="detail-field detail-field-compact">
             <span>控除対象</span>
@@ -398,7 +404,7 @@ return is_numeric($value) ? number_format((float)$value) : trim((string)($row[$k
           </label>
           <label class="detail-field detail-field-compact">
             <span>生年月日</span>
-            <div class="detail-value">{{ $fuyoDateValue($row, 'fuyo_birthday') !== '' ? $fuyoDateValue($row, 'fuyo_birthday') : '---' }}</div>
+            <div class="detail-value">{{ $fuyoDateDisplay($row, 'fuyo_birthday') !== '' ? $fuyoDateDisplay($row, 'fuyo_birthday') : '---' }}</div>
           </label>
           <label class="detail-field detail-field-compact">
             <span>年齢</span>

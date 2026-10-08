@@ -72,23 +72,25 @@ return $text !== '' && !in_array(mb_strtolower($text), ['0', 'false', 'no', 'off
           <label class="detail-field detail-field-compact">
             <span>雇保加入</span>
             <div class="social-insurance-value">{{ $isChecked($selectedRow['koyou'] ?? '') ? '加入' : '未加入' }}</div>
-            <div class="checkbox-line"><input type="checkbox" name="koyou" value="1" @checked($isChecked($selectedRow['koyou'] ?? ''))> 加入</div>
+            <div class="checkbox-line"><input type="checkbox" name="koyou" value="1" @checked($isChecked($selectedRow['koyou'] ?? '' ))> 加入</div>
           </label>
           <label class="detail-field detail-field-compact">
             <span>社保加入</span>
             <div class="social-insurance-value">{{ $isChecked($selectedRow['syaho'] ?? '') ? '加入' : '未加入' }}</div>
-            <div class="checkbox-line"><input type="checkbox" name="syaho" value="1" @checked($isChecked($selectedRow['syaho'] ?? ''))> 加入</div>
+            <div class="checkbox-line"><input type="checkbox" name="syaho" value="1" @checked($isChecked($selectedRow['syaho'] ?? '' ))> 加入</div>
           </label>
         </div>
         <div class="detail-pair">
           <label class="detail-field detail-field-compact">
             <span>雇保加入日</span>
-            <div class="social-insurance-value">{{ str_replace('-', '/', (string) ($selectedRow['_raw_koyou_date'] ?? '---')) }}</div>
+            {{-- 表示は基本情報タブの入社日等と同じ和暦付き書式（（R6）2024/5/1）に揃える。
+                 入力欄はtype=dateなので_raw_(Y-m-d)のまま（2026-10-01）。 --}}
+            <div class="social-insurance-value">{{ trim((string) ($selectedRow['koyou_date'] ?? '')) !== '' ? $selectedRow['koyou_date'] : '---' }}</div>
             <input type="date" name="koyou_date" value="{{ $selectedRow['_raw_koyou_date'] ?? '' }}">
           </label>
           <label class="detail-field detail-field-compact">
             <span>社保加入日</span>
-            <div class="social-insurance-value">{{ str_replace('-', '/', (string) ($selectedRow['_raw_syaho_date'] ?? '---')) }}</div>
+            <div class="social-insurance-value">{{ trim((string) ($selectedRow['syaho_date'] ?? '')) !== '' ? $selectedRow['syaho_date'] : '---' }}</div>
             <input type="date" name="syaho_date" value="{{ $selectedRow['_raw_syaho_date'] ?? '' }}">
           </label>
         </div>
@@ -133,7 +135,7 @@ return $text !== '' && !in_array(mb_strtolower($text), ['0', 'false', 'no', 'off
 
         <div class="info-block-title">新規登録</div>
         <div class="info-block-grid">
-          <label class="detail-field detail-field-compact">
+          <label class="detail-field detail-field-compact info-block-wide">
             <span>適用年月</span>
             <input type="date" name="raise_year" required>
           </label>
@@ -173,9 +175,11 @@ return $text !== '' && !in_array(mb_strtolower($text), ['0', 'false', 'no', 'off
         <button type="button" class="btn-secondary master-edit-btn" data-edit-target="social-insurance-latest">編集</button>
       </div>
       <div class="info-block-grid">
-        <label class="detail-field detail-field-compact">
+        {{-- 適用年月は1行占有させる。2列グリッドの中で1セルだけ余分に入ると、以降の
+             健保/厚年が段違いになって履歴ブロックと並びが揃わないため（2026-10-01）。 --}}
+        <label class="detail-field detail-field-compact info-block-wide">
           <span>適用年月</span>
-          <div class="social-insurance-value">{{ str_replace('-', '/', substr((string)($row['_raw_raise_year'] ?? ''), 0, 10)) ?: '---' }}</div>
+          <div class="social-insurance-value">{{ trim((string) ($row['raise_year'] ?? '')) !== '' ? $row['raise_year'] : '---' }}</div>
           <input type="date" name="raise_year" value="{{ substr((string)($row['_raw_raise_year'] ?? ''), 0, 10) }}" required>
         </label>
         @foreach($shahoFields as $field => $label)

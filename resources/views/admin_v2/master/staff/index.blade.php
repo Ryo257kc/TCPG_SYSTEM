@@ -192,6 +192,13 @@
             line-height: 1.2;
         }
 
+        /* 和暦付きの日付（（R8）2026/4/1）は狭いセルだと「（R8）」と日付が2行に折り返される。
+           Access時代は1行のテキストボックス表示だったため違和感があるとのことで、日付値だけ
+           折り返さない（2026-10-01）。付与条件はstaff_info.blade.phpの$valueClass()。 */
+        .detail-value-date {
+            white-space: nowrap;
+        }
+
         .detail-field-wide {
             grid-column: 1 / -1;
         }
@@ -446,9 +453,15 @@
             box-sizing: border-box;
         }
 
-        .payroll-master-block .detail-field,
-        .social-insurance-block .detail-field {
+        .payroll-master-block .detail-field {
             grid-template-columns: max-content minmax(0, 140px);
+        }
+
+        /* max-contentだとラベルの文字数ごとに入力欄の開始位置がズレる（「健保等級」と
+           「健保標準報酬月額」で左端が揃わない）。ラベル列を固定幅にして入力欄を縦に
+           揃える。100pxは最長ラベル「健保標準報酬月額」(12px×8文字≒96px)が入る幅。 */
+        .social-insurance-block .detail-field {
+            grid-template-columns: 100px minmax(0, 140px);
         }
 
         .payroll-master-block .detail-field span,
@@ -505,6 +518,18 @@
         .master-editable.is-editing .resident-tax-memo-value,
         .master-editable.is-editing .detail-value {
             display: none;
+        }
+
+        /* 和暦ヒント(JSがinputの前に挿す.staff-date-era-field)は.detail-fieldの3つ目の
+           グリッド項目になるため、表示モードだとinputが隠れてヒントだけが次の行に残り、
+           日付の下に「R6」がぶら下がって見えていた。表示モードは値側(（R6）2024/5/1)に
+           和暦が入っているので、ヒントは編集中だけ出す（2026-10-01）。 */
+        .master-editable .staff-date-era-field {
+            display: none;
+        }
+
+        .master-editable.is-editing .staff-date-era-field {
+            display: inline-flex;
         }
 
         .master-edit-actions {
@@ -577,6 +602,9 @@
             font-size: 15px;
             font-weight: 700;
             text-align: right;
+            /* 和暦付きの日付（（R6）2024/12/25）が列幅ぎりぎりで折り返さないように。
+               ここに入る値は日付・金額・加入/未加入など短いものだけ。 */
+            white-space: nowrap;
         }
 
         .address-block-grid {

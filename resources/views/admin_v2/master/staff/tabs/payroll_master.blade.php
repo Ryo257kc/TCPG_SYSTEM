@@ -117,7 +117,9 @@ return '履歴 ' . $fallback;
       <div class="payroll-master-group-grid">
         <label class="detail-field detail-field-compact">
           <span>{{ $kihonLabels['decision_date'] }}</span>
-          <div class="payroll-master-value">{{ str_replace('-', '/', (string) ($row['_raw_decision_date'] ?? '---')) }}</div>
+          {{-- 表示は基本情報タブの入社日等と同じ和暦付き書式（（R6）2024/5/1）に揃える。
+               入力欄はtype=dateなので_raw_(Y-m-d)のまま（2026-10-01）。 --}}
+          <div class="payroll-master-value">{{ trim((string) ($row['decision_date'] ?? '')) !== '' ? $row['decision_date'] : '---' }}</div>
           <input type="date" name="decision_date" value="{{ $row['_raw_decision_date'] ?? '' }}" required>
         </label>
       </div>
