@@ -56,6 +56,46 @@
             font-weight: 700;
         }
 
+        /* 日付列を左に固定する。21列あって横スクロールが前提になるため、横に振っても
+           どの行を見ているか分かるようにする（2026-10-09、ユーザー要望）。
+           メディアクエリの中に入れるとPC幅で効かないので、幅に関係なく常に適用する
+           （横スクロールが起きていない時は見た目に影響しない）。
+           ヘッダーの日付はrowspan=2なので1行目のth:first-childだけが対象。
+           既存のthead thは top:0 / z-index:5 で上に固定済みなので、左右両方に
+           固定するぶんz-indexを上げる。 */
+        .attendance-management-detail-page .data-table thead tr:first-child th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 6;
+        }
+
+        /* 本文の日付セル。固定すると下の行が透けるので背景を不透明にする。
+           差戻し行の色は既存ルールが!important付きなのでそのまま優先される。 */
+        .attendance-management-detail-page .data-table tbody td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 4;
+            background-color: #fff;
+        }
+
+        /* tableにoverflowが掛かるとtable自身がスクロールコンテナになり、セルのstickyが
+           そのスクロール枠を基準にしてしまって固定されない（実際に横スクロールしているのは
+           外側の.table-wrap）。app-shell.cssが768px以下でtableにoverflow-xを掛けるため、
+           ここで打ち消す（2026-10-09、固定が効かなかった原因のひとつ）。 */
+        .attendance-management-detail-page .content-panel.staff-viewport-panel table {
+            overflow: visible;
+        }
+
+        /* ※日付列の固定について（2026-10-09、未解決のまま保留）
+           position:sticky自体はDevToolsで適用されている（打ち消されていない）ことを確認済み。
+           それでも固定されないため、横スクロールが.table-wrapの内側ではなくページ側で
+           起きている可能性が高い（その場合セルは「スクロールしない.table-wrap」を基準に
+           するため動かない）。
+           .table-wrapのmin-width/max-widthやoverflowを!importantで強制する案を試したが、
+           レイアウトを崩すリスクに対して確証が持てないためユーザー判断で取りやめた。
+           下のsticky指定は残しているが、現状は見た目に影響しない（効いていない）。
+           再開するなら .table-wrap の Computed幅が画面幅に収まっているかの確認から。 */
+
         /* スマホ対応。この画面は未対応で、集計カードが3列固定のまま潰れ、日別テーブルは
            21列を画面幅に詰め込むため1列20px以下になって読めなかった（2026-10-09、
            ユーザー指摘）。 */
@@ -124,25 +164,6 @@
                 line-height: 1.4;
             }
 
-            /* 21列あり横スクロールが前提になるため、日付列を左に固定して
-               どの行を見ているか見失わないようにする（2026-10-09、ユーザー要望）。
-               ヘッダーの日付はrowspan=2なので1行目のth:first-childだけが対象。
-               既存のthead thは top:0 / z-index:5 で上に固定済みなので、
-               左右両方に固定するぶんz-indexを上げる。 */
-            .attendance-management-detail-page .data-table thead tr:first-child th:first-child {
-                position: sticky;
-                left: 0;
-                z-index: 6;
-            }
-
-            /* 本文の日付セル。固定すると下の行が透けるので背景を不透明にする。
-               差戻し行の色は既存ルールが!important付きなのでそのまま優先される。 */
-            .attendance-management-detail-page .data-table tbody td:first-child {
-                position: sticky;
-                left: 0;
-                z-index: 4;
-                background-color: #fff;
-            }
         }
     </style>
 </head>
