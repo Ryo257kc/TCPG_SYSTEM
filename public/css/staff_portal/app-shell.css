@@ -294,6 +294,9 @@ button,
     white-space: nowrap;
     font-family: inherit;
     text-decoration: none;
+    /* <button>に付けた場合、既定のカーソルが矢印のままで押せると分からない
+       （2026-10-09、ユーザー指摘）。<a>に付けた場合は元から指マーク。 */
+    cursor: pointer;
 }
 
 /* 小さいボタン */
@@ -334,10 +337,55 @@ button,
 
 /* ボタンをセンターに */
 .apply-row,
-.back-row,
-.action-buttons {
+.back-row {
     margin-top: 14px;
     text-align: center;
+}
+
+/* 管理者承認・差戻しは横並びにする。縦に積むと画面が狭いときにボタンだけで
+   高さを取ってしまうため（2026-10-09、ユーザー指摘）。 */
+.action-buttons {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* 横並びにしたので、差戻しボタンに付いている上マージンは効かせない */
+.action-buttons .margin_t20 {
+    margin-top: 0;
+}
+
+/* .btn-approve/.btn-remandはクラスだけ使われていてCSSが無く、ブラウザ既定の
+   <button>（素の見た目・矢印カーソル）のままだった（2026-10-09、指マークに
+   ならない理由）。.btnと同じ作りに揃える。 */
+.btn-approve,
+.btn-remand {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.btn-approve {
+    background: linear-gradient(120deg, #4556dc, #3538ff);
+    border-color: #0004ff;
+    color: #fff;
+}
+
+.btn-remand {
+    background: linear-gradient(120deg, #ffd6ad, #ffc48f);
+    color: #6f4322;
 }
 
 /* ===============================

@@ -55,6 +55,68 @@
             color: #9f1f1f !important;
             font-weight: 700;
         }
+
+        /* スマホ対応。この画面は未対応で、集計カードが3列固定のまま潰れ、日別テーブルは
+           21列を画面幅に詰め込むため1列20px以下になって読めなかった（2026-10-09、
+           ユーザー指摘）。 */
+        @media (max-width: 768px) {
+
+            /* app-shell.cssの .content-panel.staff-viewport-panel は
+               height: calc(100vh - 150px) で高さを固定し中だけをスクロールさせる作り。
+               スマホでは画面の高さが足りず極端に窮屈になるため、この画面に限って解除し
+               ページ全体のスクロールに戻す（2026-10-09）。
+               ※app-shell.cssにも同じ内容がコメントアウトで残っているが、全画面に効かせると
+                 影響範囲が大きいので、まずこの画面だけで様子を見る。 */
+            .attendance-management-detail-page .content-panel.staff-viewport-panel {
+                height: auto;
+                min-height: 0;
+            }
+
+            /* 集計カードは縦積みにする（メモの2行ぶち抜きも解除） */
+            .summary-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+            }
+
+            .summary-grid .memo-card {
+                grid-column: auto;
+                grid-row: auto;
+            }
+
+            /* テーブルは幅を詰め込まず、最低幅を確保して横スクロールさせる
+               （.table-wrapが overflow-x: auto を持っている） */
+            .attendance-management-detail-page {
+                --data-table-min-width: 1100px;
+            }
+
+            /* flex/gridの子は既定で内容より小さくならないため、幅1100pxのテーブルが
+               パネルごと押し広げてページ全体が横にはみ出す（サマリーまではみ出すのは
+               この症状）。min-width:0で .table-wrap の内側だけにスクロールを閉じ込める。 */
+            .attendance-management-detail-page .content-panel.staff-viewport-panel>* {
+                min-width: 0;
+            }
+
+            .attendance-management-detail-page .table-wrap {
+                max-width: 100%;
+            }
+
+            /* サマリー側も同様に、長い文字で押し広げられないようにする */
+            .summary-grid,
+            .summary-grid>* {
+                min-width: 0;
+            }
+
+            .summary-row {
+                flex-wrap: wrap;
+                gap: 2px 6px;
+            }
+
+            /* app-shell.cssの768px指定がtableにnowrapを掛けるが、data_table.cssは
+               セル内で折り返す前提なので元に戻す */
+            .attendance-management-detail-page .content-panel.staff-viewport-panel table {
+                white-space: normal;
+            }
+        }
     </style>
 </head>
 
