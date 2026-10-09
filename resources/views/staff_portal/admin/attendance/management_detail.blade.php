@@ -105,10 +105,15 @@
                 gap: 2px 6px;
             }
 
-            /* app-shell.cssの768px指定がtableにnowrapを掛けるが、data_table.cssは
-               セル内で折り返す前提なので元に戻す */
+            /* app-shell.cssの768px指定を打ち消す。
+               - white-space: nowrap → data_table.cssはセル内で折り返す前提なので戻す
+               - overflow-x: auto → table自身がスクロールコンテナになると、セルの
+                 position:stickyがそのスクロール枠を基準にしてしまい、実際にスクロール
+                 しているのは外側の.table-wrapなので日付列が固定されない
+                 （2026-10-09、固定が効かない原因）。 */
             .attendance-management-detail-page .content-panel.staff-viewport-panel table {
                 white-space: normal;
+                overflow: visible;
             }
 
             /* セルの余白が padding: 4px 2px で、実機だと行が詰まって読みにくい
