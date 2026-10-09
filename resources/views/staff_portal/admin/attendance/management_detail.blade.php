@@ -72,16 +72,10 @@
                 min-height: 0;
             }
 
-            /* 集計カードは縦積みにする（メモの2行ぶち抜きも解除） */
-            .summary-grid {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto;
-            }
-
-            .summary-grid .memo-card {
-                grid-column: auto;
-                grid-row: auto;
-            }
+            /* 集計カードの段組みはPC表示（2fr 1fr 1fr）のまま。縦積みや2列にすると
+               段数が増えて高さを食い、本題の日別テーブルが下に押し下げられる。
+               テーブルの都合で横幅はこれ以上詰められないので、段組みを変える利点が無い
+               （2026-10-09、実機確認のうえユーザー判断）。 */
 
             /* テーブルは幅を詰め込まず、最低幅を確保して横スクロールさせる
                （.table-wrapが overflow-x: auto を持っている） */
