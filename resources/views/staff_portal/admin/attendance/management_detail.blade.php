@@ -116,6 +116,34 @@
             .attendance-management-detail-page .content-panel.staff-viewport-panel table {
                 white-space: normal;
             }
+
+            /* セルの余白が padding: 4px 2px で、実機だと行が詰まって読みにくい
+               （2026-10-09、実機確認）。スマホでは行を広げる。 */
+            .attendance-management-detail-page .data-table th,
+            .attendance-management-detail-page .data-table td {
+                padding: 9px 4px;
+                line-height: 1.4;
+            }
+
+            /* 21列あり横スクロールが前提になるため、日付列を左に固定して
+               どの行を見ているか見失わないようにする（2026-10-09、ユーザー要望）。
+               ヘッダーの日付はrowspan=2なので1行目のth:first-childだけが対象。
+               既存のthead thは top:0 / z-index:5 で上に固定済みなので、
+               左右両方に固定するぶんz-indexを上げる。 */
+            .attendance-management-detail-page .data-table thead tr:first-child th:first-child {
+                position: sticky;
+                left: 0;
+                z-index: 6;
+            }
+
+            /* 本文の日付セル。固定すると下の行が透けるので背景を不透明にする。
+               差戻し行の色は既存ルールが!important付きなのでそのまま優先される。 */
+            .attendance-management-detail-page .data-table tbody td:first-child {
+                position: sticky;
+                left: 0;
+                z-index: 4;
+                background-color: #fff;
+            }
         }
     </style>
 </head>
