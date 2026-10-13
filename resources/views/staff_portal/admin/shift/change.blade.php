@@ -10,7 +10,9 @@
     <link rel="stylesheet" href="{{ asset('css/staff_portal/daily_table_item_plain.css') }}">
 </head>
 
-<body>
+{{-- mobile-scroll-page: スマホ時だけ画面高さ固定を解除してページ全体でスクロールさせる。
+     定義はapp-shell.cssの「スマホ対応（opt-in）」ブロック。外せば元の挙動に戻る。 --}}
+<body class="mobile-scroll-page">
     <main class="container shift-change-page">
         @php
         $showPunchColumns = (bool) ($showPunchColumns ?? false);
