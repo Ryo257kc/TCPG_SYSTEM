@@ -359,6 +359,83 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 categorySelect.addEventListener('change', syncCategoryTimeLock);
                 syncCategoryTimeLock();
             }
+
+            // 変更実績の時刻を直したら、変更所定を計算し直して入力欄に反映する。
+            // 以前は表示用に自動計算された値がそのまま<input>に入って送信されるため、
+            // 打刻を間違えた日（退勤を20時のつもりで2時と入力→14時間）を後から直しても
+            // change_scheduledには14が保存されたままになり、手で入れ直すしかなかった
+            // （2026-10-13、ユーザー報告）。時刻を触ったら常に再計算する方針
+            // （手で別の値にしたい場合は、時刻を触った後に入力欄を直せば従来どおり優先される）。
+            const changeTimeInputs = [
+                row.querySelector('.daily-edit-input[name="change_start"]'),
+                row.querySelector('.daily-edit-input[name="change_leave"]'),
+                row.querySelector('.daily-edit-input[name="change_break_out"]'),
+                row.querySelector('.daily-edit-input[name="change_end"]'),
+            ];
+            const changeScheduledInput = row.querySelector('.daily-edit-input-num[name="change_scheduled"]');
+
+            if (changeScheduledInput && changeTimeInputs.every((input) => input !== null)) {
+                // 計算式は App\Support\AttendanceTime::scheduledHours() と揃える。
+                // 始業〜退出 + 入出〜終業。退出/入出のどちらかが欠けていれば始業〜終業のみ。
+                const parseMinutes = (value) => {
+                    const text = String(value ?? '').trim();
+                    if (text === '') return null;
+
+                    if (/^\d+(\.\d+)?$/.test(text)) {
+                        const numeric = Number(text);
+                        if (numeric === 0) return null;
+                        if (numeric <= 24) return Math.round(numeric * 60);
+                    }
+
+                    const parts = text.split(':');
+                    if (parts.length >= 2) {
+                        const h = Number(parts[0]);
+                        const m = Number(parts[1]);
+                        if (!Number.isNaN(h) && !Number.isNaN(m)) {
+                            if (h === 0 && m === 0) return null;
+                            return (h * 60) + m;
+                        }
+                    }
+
+                    const digits = text.replace(/\D+/g, '');
+                    if (/^\d{3,4}$/.test(digits)) {
+                        const h = Number(digits.slice(0, digits.length - 2));
+                        const m = Number(digits.slice(-2));
+                        if (h === 0 && m === 0) return null;
+                        return (h * 60) + m;
+                    }
+
+                    return null;
+                };
+
+                const minutesBetween = (start, end) => {
+                    let to = end;
+                    if (to < start) to += 24 * 60;
+                    return Math.max(0, to - start);
+                };
+
+                const recalcChangeScheduled = () => {
+                    const [start, leave, breakOut, end] = changeTimeInputs.map((input) => parseMinutes(input.value));
+                    if (start === null || end === null) {
+                        changeScheduledInput.value = '';
+                        return;
+                    }
+
+                    const minutes = (leave !== null && breakOut !== null)
+                        ? minutesBetween(start, leave) + minutesBetween(breakOut, end)
+                        : minutesBetween(start, end);
+
+                    const hours = minutes / 60;
+                    changeScheduledInput.value = Math.abs(hours - Math.round(hours)) < 0.0001
+                        ? String(Math.round(hours))
+                        : String(Math.round(hours * 100) / 100);
+                };
+
+                changeTimeInputs.forEach((input) => {
+                    input.addEventListener('input', recalcChangeScheduled);
+                    input.addEventListener('change', recalcChangeScheduled);
+                });
+            }
         });
     </script>
     @else
