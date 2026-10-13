@@ -53,6 +53,14 @@
     background: #fff4e8;
 }
 
+/* 日付セルのボタン。.btnが持つ margin-left: 5px のぶん、2桁月＋2桁日
+   （10/19(月)など）で70pxの日付列からはみ出していた（2026-10-13、ユーザー報告）。
+   列幅70px − セル余白4px − ボタンのpadding/border12px = 文字に使える54pxに対し、
+   最長ラベルは約50pxなので、この余白を消すだけで収まる。 */
+.date-cell-btn {
+    margin-left: 0;
+}
+
 /* ヘッダー固定（theadではなくthに直接効かせる方が安定する） */
 .table-wrap .data-table thead th {
     position: sticky;

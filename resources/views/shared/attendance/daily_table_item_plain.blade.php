@@ -73,7 +73,7 @@ $showNightOvertime = (bool) ($showNightOvertime ?? false);
             <tr @class([$resolvedRowClass=> $resolvedRowClass !== ''])>
                 <td>
                     @if (!empty($row['date_url']))
-                    <a class="btn btn_small" href="{{ $row['date_url'] }}">{{ $row['date_label'] ?? '' }}</a>
+                    <a class="btn btn_small date-cell-btn" href="{{ $row['date_url'] }}">{{ $row['date_label'] ?? '' }}</a>
                     @else
                     {{ $row['date_label'] ?? '' }}
                     @endif
