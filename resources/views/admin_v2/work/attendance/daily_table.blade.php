@@ -372,9 +372,18 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                 row.querySelector('.daily-edit-input[name="change_break_out"]'),
                 row.querySelector('.daily-edit-input[name="change_end"]'),
             ];
+            // シフト側の時刻も対象にする。変更実績が無い日は表示側がシフトから所定を出すため、
+            // シフトを消したのに変更所定が残ると「休みなのに所定8時間」が焼き付く
+            // （2026-10-14、休日のシフトを消したら消す前の8が保存された件）。
+            const shiftTimeInputs = [
+                row.querySelector('.daily-edit-input[name="shift_start"]'),
+                row.querySelector('.daily-edit-input[name="shift_leave"]'),
+                row.querySelector('.daily-edit-input[name="shift_break_out"]'),
+                row.querySelector('.daily-edit-input[name="shift_end"]'),
+            ];
             const changeScheduledInput = row.querySelector('.daily-edit-input-num[name="change_scheduled"]');
 
-            if (changeScheduledInput && changeTimeInputs.every((input) => input !== null)) {
+            if (changeScheduledInput && changeTimeInputs.every((input) => input !== null) && shiftTimeInputs.every((input) => input !== null)) {
                 // 計算式は App\Support\AttendanceTime::scheduledHours() と揃える。
                 // 始業〜退出 + 入出〜終業。退出/入出のどちらかが欠けていれば始業〜終業のみ。
                 const parseMinutes = (value) => {
@@ -414,24 +423,36 @@ $hasManagerApproval = collect($dailyRows)->contains(static fn ($row) => ($row['h
                     return Math.max(0, to - start);
                 };
 
-                const recalcChangeScheduled = () => {
-                    const [start, leave, breakOut, end] = changeTimeInputs.map((input) => parseMinutes(input.value));
+                const scheduledHours = (inputs) => {
+                    const [start, leave, breakOut, end] = inputs.map((input) => parseMinutes(input.value));
                     if (start === null || end === null) {
-                        changeScheduledInput.value = '';
-                        return;
+                        return null;
                     }
 
                     const minutes = (leave !== null && breakOut !== null)
                         ? minutesBetween(start, leave) + minutesBetween(breakOut, end)
                         : minutesBetween(start, end);
 
-                    const hours = minutes / 60;
+                    return minutes / 60;
+                };
+
+                // 参照する時刻の優先順位は表示側（AttendanceV2DailyTableItemBuilder）と揃える。
+                // 変更実績があればそれ、無ければシフトから出す。どちらも空なら空欄にする。
+                const recalcChangeScheduled = () => {
+                    const hasChangeTime = changeTimeInputs.some((input) => parseMinutes(input.value) !== null);
+                    const hours = hasChangeTime ? scheduledHours(changeTimeInputs) : scheduledHours(shiftTimeInputs);
+
+                    if (hours === null) {
+                        changeScheduledInput.value = '';
+                        return;
+                    }
+
                     changeScheduledInput.value = Math.abs(hours - Math.round(hours)) < 0.0001
                         ? String(Math.round(hours))
                         : String(Math.round(hours * 100) / 100);
                 };
 
-                changeTimeInputs.forEach((input) => {
+                [...changeTimeInputs, ...shiftTimeInputs].forEach((input) => {
                     input.addEventListener('input', recalcChangeScheduled);
                     input.addEventListener('change', recalcChangeScheduled);
                 });
