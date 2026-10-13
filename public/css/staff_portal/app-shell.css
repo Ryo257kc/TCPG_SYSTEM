@@ -265,14 +265,11 @@ body {
         min-width: 0;
     }
 
-    /* 表は width:100% で画面幅に圧縮されるため、列数が多いと1列20px前後まで潰れて読めない
-       （月間勤怠は21列、シフト変更は13列）。data_table.cssが用意している
-       --data-table-min-width フックに max-content を入れ、colgroupで指定された本来の幅
-       （それぞれ約1010px・750px）を保ったまま.table-wrapの中で横スクロールさせる。
-       ページごとに数値を決め打ちしなくてよい。 */
-    .mobile-scroll-page {
-        --data-table-min-width: max-content;
-    }
+    /* ※ --data-table-min-width: max-content を入れると、シフト変更で表の中身が消えて
+       枠線だけになった（2026-10-13、ユーザー報告のため撤回）。table-layout:fixed との
+       組み合わせで列幅の解決が壊れるのが原因と思われる。
+       列が画面幅に圧縮される件を直すなら、ページごとに実測値（シフト変更は約750px、
+       月間勤怠は約1010px）を指定する方式で、1ページずつ確認しながら入れること。 */
 
     /* 上のブロックがtableにnowrapを掛けるが、data_table.cssはセル内で
        折り返す前提なので戻す */
