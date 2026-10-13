@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\V2;
 
 use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\Master\CompanyV2Service;
+use App\Services\Admin\V2\PaidLeave\PaidLeaveV2SummaryService;
 use App\Services\Admin\V2\Sales\SalesV2Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -171,22 +172,12 @@ class DashboardV2Controller extends Controller
     }
 
     // 今月が有休加算月（yukyu_month）に該当する在職スタッフ。
+    // 判定は有休管理画面と共用するためPaidLeaveV2SummaryServiceに集約してある
+    // （2026-10-13、同じお知らせを有休管理にも出すことになったため）。
     /** @return list<string> */
     private function paidLeaveGrantTargetStaffNames(): array
     {
-        $currentMonth = (string) (int) now('Asia/Tokyo')->format('n');
-
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_staffs')
-            ->where('yukyu', 1)
-            ->where('employment', '在職')
-            ->whereRaw('LTRIM(RTRIM(yukyu_month)) = ?', [$currentMonth])
-            ->selectRaw("LTRIM(RTRIM(staff_name)) as staff_name")
-            ->pluck('staff_name')
-            ->map(static fn($name): string => self::compactStaffName((string) $name))
-            ->filter(static fn(string $name): bool => $name !== '')
-            ->values()
-            ->all();
+        return app(PaidLeaveV2SummaryService::class)->grantTargetStaffNamesForCurrentMonth();
     }
 
     // 今月から介護保険料の徴収が始まる（40歳到達の前日を含む月）在職スタッフ。

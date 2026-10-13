@@ -94,6 +94,9 @@ class PaidLeaveV2Controller extends Controller
             'summary' => $payload['summary'],
             'historyRows' => $payload['historyRows'],
             'historyPager' => $payload['historyPager'],
+            // 管理ダッシュボードと同じ「今月が有休付与月のスタッフ」のお知らせを、
+            // 実際に作業する有休管理画面にも出す（2026-10-13、ユーザー要望）。
+            'paidLeaveGrantTargetStaff' => $summaryService->grantTargetStaffNamesForCurrentMonth(),
         ]);
     }
 

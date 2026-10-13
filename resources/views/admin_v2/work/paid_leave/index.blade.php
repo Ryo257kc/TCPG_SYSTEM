@@ -267,6 +267,34 @@
                 grid-template-columns: 1fr 1fr;
             }
         }
+
+        /* 「今月が有休付与月のスタッフがいます」のお知らせ。管理ダッシュボードと同じ見た目に
+           揃えている（定義はdashboard.cssにあるが、この画面はそれを読み込んでいないため
+           ここに持たせる。2026-10-13）。 */
+        .dashboard-notice {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border: 1px solid #bcd6f0;
+            border-radius: 12px;
+            background: #eaf3ff;
+            color: #1f4f8f;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .dashboard-notice-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #1f4f8f;
+            color: #fff;
+            font-size: 12px;
+            white-space: nowrap;
+        }
     </style>
 </head>
 
@@ -277,6 +305,13 @@
         <div class="top">
             <h1 class="title">TCPG SYSTEM 有休管理</h1>
         </div>
+
+        @if (!empty($paidLeaveGrantTargetStaff))
+        <section class="dashboard-notice">
+            <span class="dashboard-notice-badge">今月</span>
+            <span>今月が有休付与月のスタッフがいます: {{ implode('、', $paidLeaveGrantTargetStaff) }}</span>
+        </section>
+        @endif
 
         <section class="panel paid-leave-filter-panel">
             <form method="GET" action="{{ route('admin.paid-leave.index') }}" class="paid-leave-filter-form">

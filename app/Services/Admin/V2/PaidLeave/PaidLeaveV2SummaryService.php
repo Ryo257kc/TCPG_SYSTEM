@@ -315,4 +315,31 @@ class PaidLeaveV2SummaryService
 
         return rtrim(rtrim(number_format($value, 2, '.', ','), '0'), '.');
     }
+
+    /**
+     * 今月が有休加算月（mx_staffs.yukyu_month）に該当する在職スタッフ名。
+     *
+     * 管理ダッシュボードの「今月が有休付与月のスタッフがいます」と、有休管理画面の
+     * 同じお知らせで共用する（2026-10-13、有休管理にも出してほしいとの要望。
+     * 同じ業務ルールを画面ごとに書くと片方だけ直されてズレるため、ここに集約した）。
+     *
+     * @return list<string>
+     */
+    public function grantTargetStaffNamesForCurrentMonth(): array
+    {
+        $currentMonth = (string) (int) now('Asia/Tokyo')->format('n');
+
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_staffs')
+            ->where('yukyu', 1)
+            ->where('employment', '在職')
+            ->whereRaw('LTRIM(RTRIM(yukyu_month)) = ?', [$currentMonth])
+            ->selectRaw('LTRIM(RTRIM(staff_name)) as staff_name')
+            ->pluck('staff_name')
+            // 一覧表示用に姓名区切りの空白（全角・半角）を詰める
+            ->map(static fn($name): string => str_replace(["\u{3000}", ' '], '', trim((string) $name)))
+            ->filter(static fn(string $name): bool => $name !== '')
+            ->values()
+            ->all();
+    }
 }
