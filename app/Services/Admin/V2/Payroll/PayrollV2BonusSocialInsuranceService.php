@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin\V2\Payroll;
 
+use App\Support\InsuranceAmount;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -162,11 +163,8 @@ class PayrollV2BonusSocialInsuranceService
      */
     private function officeInsuranceAmount(float $standard, float $ratePercent): int
     {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-
-        return (int) floor($standard * ($ratePercent / 100));
+        // 計算の実体はApp\Support\InsuranceAmountに集約してある（2026-10-13）。
+        return InsuranceAmount::officeShare($standard, $ratePercent);
     }
 
     /**
@@ -408,10 +406,8 @@ class PayrollV2BonusSocialInsuranceService
 
     private function employeeInsuranceAmount(float $standard, float $ratePercent): int
     {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-        $total = (int) ceil($standard * ($ratePercent / 100));
-        return (int) ceil($total / 2);
+        // 計算の実体はApp\Support\InsuranceAmountに集約してある（2026-10-13）。
+        // 自己負担はceil、会社負担はfloorで丸めが違う点に注意。
+        return InsuranceAmount::employeeShare($standard, $ratePercent);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin\V2\Payroll;
 
+use App\Support\InsuranceAmount;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -126,11 +127,16 @@ class PayrollV2EmploymentInsuranceService
         // 要確認：jidou_rateは%表記（例：0.36=0.36%）なので÷100が正しいが、
         // 以前は÷1000になっており児童手当拠出金が本来の1/10で保存されていた。
         // 賞与用のjidou_shoyo（%×10で保存、÷1000用）と桁が違うことをmx_syahoの
-        // 実データで確認した上で修正（2026-08-17）。会社負担一覧側の
-        // PayrollV2SocialInsuranceAmountService::fullAmounts()と同じceil/÷100に揃える。
-        $jidouOffice = ($jidouRitu > 0 && $jidouBase > 0)
-            ? (int) ceil($jidouBase * ($jidouRitu / 100.0))
-            : 0;
+        // 実データで確認した上で修正（2026-08-17）。
+        //
+        // 丸めは floor。2026-08-17時点では会社負担一覧側に合わせてceilにしていたが、
+        // 2026-09-17に社保納付告知書の実額と突き合わせた結果floorが正しいと判明し、
+        // PayrollV2SocialInsuranceAmountService と PayrollV2BonusSocialInsuranceService の
+        // officeInsuranceAmount() は floor へ修正済み。保存side であるここだけ ceil のまま
+        // 取り残されており、再計算のたびに1円多い値が書き込まれていた
+        // （2026-10-13、ユーザー報告。例：厚年標準88,000円×0.36%=316.8 → ceil 317 / floor 316。
+        // 以前316へ手修正した行が再計算で317に戻る状態だった）。
+        $jidouOffice = InsuranceAmount::officeShare($jidouBase, $jidouRitu);
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;
         // 要確認：以前は店舗コード003だけ労災料率を3.5固定で上書きしていたが、根拠不明の
@@ -272,9 +278,14 @@ class PayrollV2EmploymentInsuranceService
             $currentStandard
         );
         $jidouBase = $targets['kounen_target_standard'];
-        $jidouOffice = ($jidouRitu > 0 && $jidouBase > 0)
-            ? (int) ceil($jidouBase * ($jidouRitu / 1000.0))
-            : 0;
+        // 丸めは月給側と同じくfloor。2026-09-17に社保納付告知書と突き合わせてfloorが正しいと
+        // 判明し他サービスは修正済みだったが、保存sideのここはceilのまま残っていた
+        // （2026-10-13、再計算で値がズレるとのユーザー報告で発覚）。
+        // ※÷1000なのは賞与用のjidou_shoyoが%×10で保存されているため（月給のjidou_rateは%表記で÷100）。
+        // jidou_shoyoは%×10で保存されているため、÷10して%に揃えてから共通部品へ渡す
+        // （月給のjidou_rateは%表記なのでそのまま）。丸めはInsuranceAmount側でfloor。
+        // 変換で誤差が出ないことは実在料率6種×標準賞与額1,500通りで差0件を確認済み。
+        $jidouOffice = InsuranceAmount::officeShare($jidouBase, $jidouRitu / 10.0);
 
         $rousaiBase = floor($target / 1000.0) * 1000.0;
         // 要確認：以前は店舗コード003だけ労災料率を3.5固定で上書きしていたが、根拠不明の

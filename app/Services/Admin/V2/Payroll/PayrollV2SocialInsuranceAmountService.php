@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin\V2\Payroll;
 
+use App\Support\InsuranceAmount;
 use Illuminate\Support\Facades\DB;
 
 class PayrollV2SocialInsuranceAmountService
@@ -236,27 +237,19 @@ class PayrollV2SocialInsuranceAmountService
 
     private function employeeInsuranceAmount(float $standard, float $ratePercent): int
     {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-
-        $total = (int) ceil($standard * ($ratePercent / 100));
-        return (int) ceil($total / 2);
+        // 計算の実体はApp\Support\InsuranceAmountに集約してある（2026-10-13）。
+        // 自己負担はceil、会社負担はfloorで丸めが違う点に注意。
+        return InsuranceAmount::employeeShare($standard, $ratePercent);
     }
 
     /**
-     * 健保・介護・厚生年金・子ども支援金の「合計(折半前)」計算。ceil()だと実際の納付告知書より
-     * 1円多く出るケースがあった（プレッジ・榮一樹、健保58,000×10.12%=5869.6円→実際は5869円）。
-     * floor()に変更して告知書の金額（健保+介護+子ども支援金=108,390円）と完全一致することを
-     * 確認済み（2026-09-17）。
+     * 健保・介護・厚生年金・子ども支援金の「合計(折半前)」計算。
+     * 計算の実体はApp\Support\InsuranceAmountに集約してある（2026-10-13、丸めルールが
+     * 4箇所に複製されていて片方だけ直され事故ったため。経緯はInsuranceAmountのコメント参照）。
      */
     private function officeInsuranceAmount(float $standard, float $ratePercent): int
     {
-        if ($standard <= 0 || $ratePercent <= 0) {
-            return 0;
-        }
-
-        return (int) floor($standard * ($ratePercent / 100));
+        return InsuranceAmount::officeShare($standard, $ratePercent);
     }
 
 
