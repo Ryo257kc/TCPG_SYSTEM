@@ -8,6 +8,21 @@
     <link rel="stylesheet" href="{{ asset('css/staff_portal/app-shell.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/data_table.css') }}">
     <link rel="stylesheet" href="{{ asset('css/staff_portal/daily_table_item_plain.css') }}">
+
+    <style>
+        /* スマホ時の行の高さ。共通のmobile-scroll-pageは上下9pxだが、この画面は
+           セルに入力欄（input[type=time]・select）が入っていて元から高さがあるため、
+           9pxだと行が間延びする（2026-10-13、ユーザー指摘）。この画面だけ詰める。
+           月間勤怠は素のテキストセルで9pxがちょうど良いので共通側は変えない。 */
+        @media (max-width: 768px) {
+
+            .mobile-scroll-page .data-table th,
+            .mobile-scroll-page .data-table td {
+                padding-top: 5px;
+                padding-bottom: 5px;
+            }
+        }
+    </style>
 </head>
 
 {{-- mobile-scroll-page: スマホ時だけ画面高さ固定を解除してページ全体でスクロールさせる。
