@@ -43,7 +43,9 @@
 
 </head>
 
-<body class="attendance-monthly-page">
+{{-- mobile-scroll-page: スマホ時だけ画面高さ固定を解除してページ全体でスクロールさせる。
+     定義はapp-shell.cssの「スマホ対応（opt-in）」ブロック。外せば元の挙動に戻る。 --}}
+<body class="attendance-monthly-page mobile-scroll-page">
     <main class="container">
         @include('staff_portal.shared.app_header', ['displayName' => $displayName, 'hidePayrollLinks' => $hidePayrollLinks ?? false])
         @include('shared.status_message')

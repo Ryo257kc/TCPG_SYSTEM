@@ -230,6 +230,54 @@ body {
         white-space: nowrap;
     }
 }
+
+/* ===============================
+   ■ スマホ対応（opt-in）
+   ===============================
+
+   <body class="... mobile-scroll-page"> を付けたページだけに効く。
+   全画面へ一斉に適用すると、崩れたページが出たときに業務が止まるため、
+   ページ単位で手を挙げる方式にしている（2026-10-13、ユーザー判断）。
+   クラスを外せばCSSを触らずに元へ戻せる。
+
+   この画面群はPCでは「パネルを画面高さに固定して中身だけスクロール」する作りだが、
+   スマホでは縦が足りず極端に窮屈になる（iPhone SEだと表の表示領域が実質350px程度＝
+   11行ほどしか見えない）。スマホではページ全体のスクロールに戻す。
+   PC表示は変えない（max-width:768pxの中だけ）。 */
+@media (max-width: 768px) {
+
+    /* パネルの高さ固定を解除してページ全体でスクロールさせる */
+    .mobile-scroll-page .content-panel.staff-viewport-panel {
+        height: auto;
+        min-height: 0;
+    }
+
+    /* 表の内部スクロール（高さ制限）も解除する */
+    .mobile-scroll-page .table-wrap.staff-viewport-list-wrap {
+        height: auto;
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    /* flexの子は既定で内容より小さくならず、幅の広い表がパネルごと画面外へ
+       押し広げてしまう。横スクロールは.table-wrapの内側だけで起こす。 */
+    .mobile-scroll-page .content-panel.staff-viewport-panel>* {
+        min-width: 0;
+    }
+
+    /* 上のブロックがtableにnowrapを掛けるが、data_table.cssはセル内で
+       折り返す前提なので戻す */
+    .mobile-scroll-page .content-panel.staff-viewport-panel table {
+        white-space: normal;
+    }
+
+    /* セルのpaddingが4px 2pxで、実機では行が詰まって読みにくい */
+    .mobile-scroll-page .data-table th,
+    .mobile-scroll-page .data-table td {
+        padding: 9px 4px;
+        line-height: 1.4;
+    }
+}
 /* ===============================
    ■ リンク共通（デフォルト）
 ================================ */
