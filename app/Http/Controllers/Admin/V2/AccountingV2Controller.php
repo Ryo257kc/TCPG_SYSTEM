@@ -652,28 +652,61 @@ class AccountingV2Controller extends Controller
             ->all();
 
         $journalColumns = array_flip(Schema::connection('sqlsrv')->getColumnListing('mx_journal_entries'));
+        // 要確認：以前は「対象期間外・除外科目等」の1つの数字にまとめていたため、CSV全行が
+        // 弾かれても理由が分からなかった（2026-10-16、647件全部がこの数字に入り、日付が
+        // 読めないのか期間指定が違うのか切り分けられなかった実例）。理由別に数える。
         $skippedCount = 0;
+        $skippedUnparsableDateCount = 0;
+        $skippedOutOfRangeCount = 0;
+        $skippedExcludedAccountCount = 0;
+        $skippedNoJournalNoCount = 0;
+        $unparsableDateSamples = [];
+        $csvDateMin = null;
+        $csvDateMax = null;
         $invalidAmountCount = 0;
         $groupedPayloads = [];
         $csvDebitTotals = [];
         $csvCreditTotals = [];
 
         foreach ($csvRows as $csvRow) {
-            $occurredAt = $this->parseCsvDate($this->csvValue($csvRow, '取引日'));
-            if ($occurredAt === null || $occurredAt->lt($dateFrom) || $occurredAt->gt($dateTo)) {
+            $occurredAtRaw = $this->csvValue($csvRow, '取引日');
+            $occurredAt = $this->parseCsvDate($occurredAtRaw);
+            if ($occurredAt === null) {
                 $skippedCount++;
+                $skippedUnparsableDateCount++;
+                if (count($unparsableDateSamples) < 3 && $occurredAtRaw !== '') {
+                    $unparsableDateSamples[] = $occurredAtRaw;
+                }
+                continue;
+            }
+
+            // CSVに実際に入っていた取引日の範囲。期間指定が合っていないのか日付が読めて
+            // いないのかを、画面のメッセージだけで切り分けられるようにする。
+            $occurredAtYmd = $occurredAt->format('Y-m-d');
+            if ($csvDateMin === null || $occurredAtYmd < $csvDateMin) {
+                $csvDateMin = $occurredAtYmd;
+            }
+            if ($csvDateMax === null || $occurredAtYmd > $csvDateMax) {
+                $csvDateMax = $occurredAtYmd;
+            }
+
+            if ($occurredAt->lt($dateFrom) || $occurredAt->gt($dateTo)) {
+                $skippedCount++;
+                $skippedOutOfRangeCount++;
                 continue;
             }
 
             $creditAccountTitle = $this->csvValue($csvRow, '貸方勘定科目');
             if (in_array($creditAccountTitle, ['保険収入', '自費収入', '窓口収入'], true)) {
                 $skippedCount++;
+                $skippedExcludedAccountCount++;
                 continue;
             }
 
             $journalBreakdown = $this->journalBreakdownValue($this->csvValue($csvRow, '仕訳番号'));
             if ($journalBreakdown === '') {
                 $skippedCount++;
+                $skippedNoJournalNoCount++;
                 continue;
             }
 
@@ -814,7 +847,17 @@ class AccountingV2Controller extends Controller
         $summaryMessage = 'CSVを確認しました。新規追加候補: ' . $pendingNewCount . '件'
             . ' / 要確認: ' . $reviewLineCount . '件'
             . ' / 既存と完全一致（対応不要）: ' . $identicalCount . '件'
-            . ' / 対象期間外・除外科目等: ' . $skippedCount . '件'
+            . ' / 対象外: ' . $skippedCount . '件'
+            . ($skippedCount > 0
+                ? '（うち 取引日が読めない: ' . $skippedUnparsableDateCount . '件'
+                    . ($unparsableDateSamples !== [] ? '［例: ' . implode('、', $unparsableDateSamples) . '］' : '')
+                    . ' / 指定期間外: ' . $skippedOutOfRangeCount . '件'
+                    . ' / 除外科目（保険収入・自費収入・窓口収入）: ' . $skippedExcludedAccountCount . '件'
+                    . ' / 仕訳番号が空欄: ' . $skippedNoJournalNoCount . '件）'
+                : '')
+            . ($csvDateMin !== null ? ' / CSVの取引日の範囲: ' . $csvDateMin . '〜' . $csvDateMax : '')
+            . ' / 指定した期間: ' . $dateFrom->format('Y-m-d') . '〜' . $dateTo->format('Y-m-d')
+            . ' / 指定した会社: ' . $companyNameShort
             . ($invalidAmountCount > 0 ? ' / 金額が数値でないため未取込: ' . $invalidAmountCount . '件' : '')
             . '（まだ何も書き込んでいません。内容を確認してから反映してください）';
 

@@ -111,6 +111,13 @@
             background: #fff7a8;
         }
 
+        /* 確認済（保存値）と明細合計が食い違っている行。残額が0でも処理済みではないので、
+           目で拾えるようにする（2026-10-16）。 */
+        .payment-confirmation-detail-gap {
+            color: #c0392b;
+            font-weight: 700;
+        }
+
         .payment-confirmation-edit-control {
             display: none;
         }
@@ -304,6 +311,7 @@
                                 <col style="width: 60px;">
                                 <col style="width: 60px;">
                                 <col style="width: 60px;">
+                                <col style="width: 60px;">
                                 <col style="width: 90px;">
                                 <col style="width: 100px;">
                                 <col style="width: 40px;">
@@ -315,6 +323,7 @@
                                     <th>入金日</th>
                                     <th>入金額</th>
                                     <th>確認済</th>
+                                    <th>明細差</th>
                                     <th>残額</th>
                                     <th>通帳</th>
                                     <th>備考</th>
@@ -329,6 +338,12 @@
                                     <td>{{ $row['occurred_at'] }}</td>
                                     <td class="right">{{ $row['deposit_amount'] }}</td>
                                     <td class="right"><span data-payment-entry-confirmed="{{ $row['journal_entry_id'] }}">{{ $row['confirmed_amount'] }}</span></td>
+                                    {{-- 確認済は保存値なので、明細の紐付けが落ちていても古い値が残る。
+                                         確認済と明細合計の差だけを出し、合っていれば空欄にする。 --}}
+                                    <td @class(['right', 'payment-confirmation-detail-gap' => ($row['detail_gap_amount'] ?? '') !== ''])
+                                        @if (($row['detail_gap_amount'] ?? '') !== '') title="確認済と明細の合計がこの金額だけ食い違っています" @endif>
+                                        {{ $row['detail_gap_amount'] }}
+                                    </td>
                                     <td class="right"><span data-payment-entry-remaining="{{ $row['journal_entry_id'] }}">{{ $row['remaining_amount'] }}</span></td>
                                     <td class="staff-wrap-text">{{ $row['bank_account_selection'] }}</td>
                                     <td class="payment-confirmation-wrap staff-wrap-text">{{ $row['remarks'] }}</td>
@@ -340,7 +355,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="9">対象データがありません。</td>
+                                    <td colspan="10">対象データがありません。</td>
                                 </tr>
                                 @endforelse
                             </tbody>

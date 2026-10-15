@@ -59,6 +59,23 @@ class PaymentConfirmationController extends Controller
             ->table('dbo.mx_journal_entries as entry')
             ->leftJoin('dbo.mx_departments as department', 'entry.credit_department_name', '=', 'department.store_short_name')
             ->leftJoin('dbo.mx_stores as entry_store', 'department.official_store_no', '=', 'entry_store.store_code')
+            // 明細側の入金合計。確認済（received_amount）は「候補内訳の明細を保存した時にだけ」
+            // 書き戻される保存値なので、明細の紐付けが落ちても古い値が残り続ける。その古い値が
+            // 入金額と一致していると残額0＝処理済みに見えて、未入金一覧から消える
+            // （2026-10-16発覚。入金日No 0123001の31,618円と5121801の53円が、明細が1件も
+            // 紐付いていないのに確認済だけ入っていて、画面のどこにも出てこなかった）。
+            // 残額の計算式は保存値ベースのまま変えず（既存の数字を動かさないため）、ここで
+            // 明細合計を併せて取得して一覧に並べ、ズレを隠さないようにする。
+            ->leftJoinSub(
+                $this->detailPaymentTotalQuery(),
+                'detail_total',
+                function ($join): void {
+                    $join->whereRaw('LTRIM(RTRIM(entry.journal_breakdown)) = detail_total.journal_breakdown_key')
+                        ->whereRaw(
+                            'LTRIM(RTRIM(CAST(entry_store.company_id AS NVARCHAR(255)))) = detail_total.company_id_key'
+                        );
+                }
+            )
             ->select([
                 'entry.journal_entry_id',
                 'entry.journal_breakdown',
@@ -76,24 +93,49 @@ class PaymentConfirmationController extends Controller
                 'department.store_category',
                 'department.bank_account_selection',
                 'entry_store.company_id',
+                'detail_total.detail_payment_total',
             ])
             ->whereNull('entry.vault_name')
             ->where('entry.credit_account_title', '医療未収入金')
+            // 返戻は入金確認の対象外。返戻の印は貸方品目だけでなく借方品目にも付く
+            // （借方=保険収入／借方品目=返戻の売上取消振替。入金名称も部門名も持たず
+            // received_amountが永久に0のため、借方側を除外しないと未入金に居座り続ける。
+            // 2026-10-16発覚。未入金87件のうち66件がこの返戻振替だった）。
             ->where(function ($query): void {
                 $query->where('entry.credit_item_name', '<>', '返戻')
                     ->orWhereNull('entry.credit_item_name');
             })
-            ->where('entry.month_date', '>=', $targetMonthStart)
-            ->where('entry.month_date', '<', $targetMonthNext);
+            ->where(function ($query): void {
+                $query->where('entry.debit_item_name', '<>', '返戻')
+                    ->orWhereNull('entry.debit_item_name');
+            });
+
+        // 未入金は「入金確認の漏れを探す」ために使うので、作成月では絞らず全期間から拾う
+        // （2026-10-16、ユーザー指示。古い未入金はその月を選ばない限り永久に画面へ出て
+        // こない状態だった）。入金済・全ては件数が多く一覧が見づらくなるため作成月で絞る。
+        if ($paymentCheck !== 'unchecked') {
+            $rowsQuery->where('entry.month_date', '>=', $targetMonthStart)
+                ->where('entry.month_date', '<', $targetMonthNext);
+        }
 
         if ($selectedBankAccount !== '') {
             $rowsQuery->where('department.bank_account_selection', $selectedBankAccount);
         }
 
+        // 入金済・未入金の判定は「残額が0か」だけでは足りない。確認済が古いまま入金額と
+        // 一致している行は残額0になり、明細が1件も紐付いていなくても処理済みに見えてしまう。
+        // 「確認済＝明細合計」かどうかも条件に入れることで、入金済と未入金が重複なしで
+        // 全件を分けられる（2026-10-16、ユーザー指示。残額だけ見ていると漏れが隠れる）。
+        $remainingIsZero = '(COALESCE(entry.debit_amount, 0) - COALESCE(entry.received_amount, 0)) = 0';
+        $confirmedMatchesDetail = '(COALESCE(entry.received_amount, 0) = COALESCE(detail_total.detail_payment_total, 0))';
+
         if ($paymentCheck === 'checked') {
-            $rowsQuery->whereRaw('(COALESCE(entry.debit_amount, 0) - COALESCE(entry.received_amount, 0)) = 0');
+            $rowsQuery->whereRaw($remainingIsZero)->whereRaw($confirmedMatchesDetail);
         } elseif ($paymentCheck === 'unchecked') {
-            $rowsQuery->whereRaw('(COALESCE(entry.debit_amount, 0) - COALESCE(entry.received_amount, 0)) <> 0');
+            $rowsQuery->where(function ($query) use ($remainingIsZero, $confirmedMatchesDetail): void {
+                $query->whereRaw('NOT ' . $remainingIsZero)
+                    ->orWhereRaw('NOT ' . $confirmedMatchesDetail);
+            });
         }
 
         $paymentRows = $rowsQuery
@@ -102,6 +144,10 @@ class PaymentConfirmationController extends Controller
             ->get()
             ->map(function ($row): array {
                 $remainingAmount = ((float) ($row->debit_amount ?? 0)) - ((float) ($row->received_amount ?? 0));
+                // 確認済（保存値）と明細合計の差。一覧には明細合計そのものではなく差だけを出す。
+                // 両方並べると列が増えて追いかけにくいので、合っていれば空欄、ズレていれば
+                // その金額だけが出る形にした（2026-10-16、ユーザー判断）。
+                $detailGapAmount = ((float) ($row->received_amount ?? 0)) - ((float) ($row->detail_payment_total ?? 0));
 
                 return [
                     'journal_entry_id' => (int) ($row->journal_entry_id ?? 0),
@@ -113,6 +159,7 @@ class PaymentConfirmationController extends Controller
                     'item_name' => trim((string) ($row->debit_item_name ?? '')),
                     'deposit_amount' => $this->formatMoneyValue($row->debit_amount),
                     'confirmed_amount' => $this->formatMoneyValue($row->received_amount),
+                    'detail_gap_amount' => $detailGapAmount == 0.0 ? '' : $this->formatMoneyValue($detailGapAmount),
                     'remaining_amount' => $remainingAmount == 0.0 ? '0' : $this->formatMoneyValue($remainingAmount),
                     'bank_account_selection' => trim((string) ($row->bank_account_selection ?? '')),
                     'company_id' => trim((string) ($row->company_id ?? '')),
@@ -494,6 +541,8 @@ class PaymentConfirmationController extends Controller
             'remaining_amount' => $remainingAmount == 0.0 ? '0' : $this->formatMoneyValue($remainingAmount),
             'confirmed_amount' => $journalEntryAmounts['confirmed_amount'],
             'entry_remaining_amount' => $journalEntryAmounts['remaining_amount'],
+            // 確認済を集計できなかった理由。明細の保存自体は成功しているので、警告として返す。
+            'sync_error' => $journalEntryAmounts['sync_error'] ?? '',
             'patient_name' => trim((string) ($savedRow?->patient_name ?? '')),
             'remarks' => trim((string) ($savedRow?->remarks ?? '')),
             'is_high_cost_medical' => (bool) ($savedRow?->is_high_cost_medical ?? false),
@@ -556,9 +605,25 @@ class PaymentConfirmationController extends Controller
             ];
         }
 
+        // 明細の合計は「仕訳内訳＋会社」で引くため、仕訳の貸方部門名が空欄などで会社が
+        // 引けないと合計が常に0になる。そのまま確認済へ0を書くと、明細がちゃんと紐付いて
+        // いるのに確認済だけ0に上書きされ、残額が入金額まるごと残ってしまう
+        // （2026-10-16発覚。入金日No 5032505の66,888円。部門名が空欄で、明細側は
+        // P_織田マッサージに66,888が正しく紐付いていた）。会社が引けないときは0で代替せず、
+        // 書き込まずに理由を返す。
+        $companyId = trim((string) ($journalEntry->company_id ?? ''));
+        if ($companyId === '') {
+            return [
+                'confirmed_amount' => '',
+                'remaining_amount' => '',
+                'sync_error' => 'この仕訳は貸方部門名が未設定のため、明細の合計を集計できません。'
+                    . '仕訳の部門名を入れてから、もう一度保存してください（確認済は変更していません）。',
+            ];
+        }
+
         $confirmedAmount = $this->confirmedPaymentAmountForJournalBreakdown(
             $journalEntry->journal_breakdown ?? null,
-            $journalEntry->company_id ?? null
+            $companyId
         );
         $remainingAmount = ((float) ($journalEntry->debit_amount ?? 0)) - $confirmedAmount;
 
@@ -571,6 +636,33 @@ class PaymentConfirmationController extends Controller
             'confirmed_amount' => $this->formatMoneyValue($confirmedAmount),
             'remaining_amount' => $remainingAmount == 0.0 ? '0' : $this->formatMoneyValue($remainingAmount),
         ];
+    }
+
+    /**
+     * 入金日No（仕訳内訳）＋会社ごとの、明細側の入金合計。一覧で確認済（保存値）と並べて
+     * 見せるために使う。
+     *
+     * 合計の条件はconfirmedPaymentAmountForJournalBreakdown()（保存時に確認済へ書き戻す側）と
+     * 必ず揃えること。片方だけ条件を変えると、一覧ではズレているのに保存しても直らない
+     * （またはその逆）という状態になる。
+     */
+    private function detailPaymentTotalQuery()
+    {
+        return DB::connection('sqlsrv')
+            ->table('dbo.mx_insurance_claim_details as detail')
+            ->leftJoin('dbo.mx_departments as detail_department', 'detail_department.store_short_name', '=', 'detail.store_name')
+            ->leftJoin('dbo.mx_stores as detail_store', 'detail_department.official_store_no', '=', 'detail_store.store_code')
+            ->selectRaw(
+                'LTRIM(RTRIM(CAST(detail.payment_date_text AS NVARCHAR(255)))) as journal_breakdown_key,
+                 LTRIM(RTRIM(CAST(detail_store.company_id AS NVARCHAR(255)))) as company_id_key,
+                 SUM(COALESCE(detail.payment_amount, 0)) as detail_payment_total'
+            )
+            ->whereRaw("ISNULL(LTRIM(RTRIM(CAST(detail.payment_date_text AS NVARCHAR(255)))), '') <> ''")
+            ->whereNotNull('detail_store.company_id')
+            ->groupByRaw(
+                'LTRIM(RTRIM(CAST(detail.payment_date_text AS NVARCHAR(255)))),
+                 LTRIM(RTRIM(CAST(detail_store.company_id AS NVARCHAR(255))))'
+            );
     }
 
     private function confirmedPaymentAmountForJournalBreakdown(mixed $journalBreakdown, mixed $companyId): float

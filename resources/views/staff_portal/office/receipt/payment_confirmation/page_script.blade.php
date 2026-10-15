@@ -268,7 +268,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (remainingReadonly) {
             remainingReadonly.textContent = payload.remaining_amount || '';
         }
-        if (payload.journal_entry_id) {
+        // 確認済を集計できなかった場合（仕訳の部門名が未設定など）は、サーバー側も確認済を
+        // 書き換えていない。画面の確認済・残額を空で上書きすると実際の値と食い違うため、
+        // そのまま残して理由だけ伝える。
+        if (payload.sync_error) {
+            alert(payload.sync_error);
+        } else if (payload.journal_entry_id) {
             document.querySelectorAll('[data-payment-entry-confirmed="' + payload.journal_entry_id + '"]').forEach(function (element) {
                 element.textContent = payload.confirmed_amount || '';
             });
