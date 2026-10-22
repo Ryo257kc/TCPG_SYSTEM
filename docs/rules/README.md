@@ -14,20 +14,25 @@
    - 全ページ共通のルール（計算・データ整合性）。
    - どの画面を触る時も先に確認する。
 
-2. `01_code_structure.md`
+2. `../WORK_RULES.md`
+   - このLaravelプロジェクト専用の作業ルール。本番DBの事前承認、管理者2FA・セッションの維持を含む。
+   - 共通ルールを読んだ後、対象機能にかかわらず確認する。
+
+3. `01_code_structure.md`
    - ファイル配置・CSS・ルーティング・Controller分割など、コード構成のルール。
 
-3. 対象ページのフォルダ
+4. 対象ページのフォルダ
    - 例: `payroll_bonus/`
    - 業務ごとの細かいルール、計算根拠（`10_calculation_basis.md`の「実装:」欄でコードへ）、
      触ってはいけないものを書く。
 
-4. `change_log`
+5. `change_log`
    - なぜ変更したかを短く確認する。
 
 ## 置き場所のルール
 
 - 全ページ共通（計算・データ整合性）: `docs/rules/00_global.md`
+- このLaravelプロジェクト専用の作業・本番DB・認証運用: `docs/WORK_RULES.md`
 - コード配置・構成: `docs/rules/01_code_structure.md`
 - 給与・賞与: `docs/rules/payroll_bonus/`
 - 勤怠: `docs/rules/attendance/`

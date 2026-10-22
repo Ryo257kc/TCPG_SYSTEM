@@ -5,6 +5,7 @@
 ## 必読
 
 - どの画面・機能を触る前も、まず `docs/rules/00_global.md` を読む。
+- 続いてプロジェクト専用の `docs/WORK_RULES.md` を読む（本番DBの事前承認・管理者2FA・セッションの維持ルールを含む）。
 - 次に対象ページの `docs/rules/{domain}/` フォルダを読む（`README.md` に読む順番あり）。
 - 計算ロジックを触る前は、対象ドメインの `10_calculation_basis.md` の「実装:」欄で
   対応コードを確認する。
