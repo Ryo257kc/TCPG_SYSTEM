@@ -7,9 +7,11 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "bacon/bacon-qr-code": "^3.0",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "phpoffice/phpspreadsheet": "^5.5",
+        "pragmarx/google2fa": "^9.0",
         "robrichards/xmlseclibs": "^4.0",
         "setasign/fpdf": "^1.9",
         "setasign/fpdi": "^2.6",

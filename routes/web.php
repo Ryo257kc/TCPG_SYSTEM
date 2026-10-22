@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\V2\DashboardV2Controller;
 use App\Http\Controllers\Admin\V2\InformationV2Controller;
 use App\Http\Controllers\Admin\V2\MaintenanceV2Controller;
 use App\Http\Controllers\Admin\V2\LoginV2Controller;
+use App\Http\Controllers\Admin\V2\AdminTwoFactorController;
 use App\Http\Controllers\Admin\V2\AccountingV2Controller;
 use App\Http\Controllers\Admin\V2\Master\AllowanceV2Controller;
 use App\Http\Controllers\Admin\V2\Master\CalendarV2Controller;
@@ -91,6 +92,12 @@ Route::prefix('admin')->group(function (): void {
     Route::get('/login', [LoginV2Controller::class, 'show'])->name('admin.login');
     Route::post('/login', [LoginV2Controller::class, 'login'])->name('admin.login.submit');
     Route::post('/logout', [LoginV2Controller::class, 'logout'])->name('admin.logout');
+    Route::get('/two-factor', [AdminTwoFactorController::class, 'challenge'])->name('admin.two_factor.challenge');
+    Route::post('/two-factor/enroll', [AdminTwoFactorController::class, 'enroll'])->block()->name('admin.two_factor.enroll');
+    Route::post('/two-factor/verify', [AdminTwoFactorController::class, 'verify'])->block()->name('admin.two_factor.verify');
+    Route::get('/two-factor/recovery-codes', [AdminTwoFactorController::class, 'recovery'])->name('admin.two_factor.recovery');
+    Route::post('/two-factor/recovery-codes/continue', [AdminTwoFactorController::class, 'continueAfterRecovery'])->block()->name('admin.two_factor.continue');
+    Route::post('/two-factor/cancel', [AdminTwoFactorController::class, 'cancel'])->block()->name('admin.two_factor.cancel');
 
     // admin 側のログイン後だけ
     Route::middleware('admin.auth')->group(function (): void {
@@ -244,7 +251,7 @@ Route::prefix('admin')->group(function (): void {
 Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::get('/', [AuthController::class, 'dashboard'])->name('staff_portal.dashboard');
     Route::get('/dashboard', [AuthController::class, 'dashboard'])->name('dashboard');
-    Route::get('/admin-login', [AuthController::class, 'adminLogin'])->withoutMiddleware('staff.auth')->name('staff_portal.admin_login');
+    Route::get('/admin-login', [AuthController::class, 'adminLogin'])->withoutMiddleware('staff.auth')->middleware('admin.auth')->name('staff_portal.admin_login');
 
     Route::get('/login', [AuthController::class, 'index'])->withoutMiddleware('staff.auth')->name('login.portal');
     Route::post('/login', [AuthController::class, 'login'])->withoutMiddleware('staff.auth')->name('login.portal.submit');

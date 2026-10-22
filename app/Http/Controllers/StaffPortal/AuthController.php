@@ -154,10 +154,10 @@ class AuthController extends Controller
             return back()->with('errorMessage', '初期パスワード以外を入力してください。');
         }
 
-        $updated = DB::connection('sqlsrv')
+        $updated = app(\App\Services\Admin\V2\AdminTrustedDeviceService::class)->changePassword($staffId, fn() => DB::connection('sqlsrv')
             ->table('dbo.mx_staffs')
             ->whereRaw('LTRIM(RTRIM(CAST(staff_id as nvarchar(50)))) = ?', [$staffId])
-            ->update(['password' => $password]);
+            ->update(['password' => $password]));
 
         if ($updated < 1) {
             return back()->with('errorMessage', 'パスワードを更新できませんでした。');
