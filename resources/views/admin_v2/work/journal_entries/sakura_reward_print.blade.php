@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>さくら報酬計算</title>
+    <title>井上報酬計算</title>
     <link rel="stylesheet" href="{{ asset('css/print.css') }}">
     <style>
         @page {

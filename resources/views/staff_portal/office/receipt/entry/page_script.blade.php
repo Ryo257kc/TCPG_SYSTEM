@@ -419,7 +419,7 @@
         if (insurer) {
             if (receiptType.indexOf('柔整') !== -1) {
                 depositName = insurer.scheduled_payment_name || '';
-            } else if (receiptType.indexOf('鍼灸') !== -1) {
+            } else if (receiptType.indexOf('鍼灸') !== -1 || receiptType.indexOf('マッサージ') !== -1) {
                 depositName = insurer.scheduled_payment_name_2 || '';
             }
         }

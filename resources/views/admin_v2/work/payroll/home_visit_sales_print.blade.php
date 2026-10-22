@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>往診個人別売上</title>
+    <title>個人別売上一覧</title>
     <link rel="stylesheet" href="{{ asset('css/print.css') }}">
     <style>
         @page {
@@ -84,7 +84,7 @@
     $count = static fn($value): string => (int) $value === 0 ? '' : number_format((int) $value);
     @endphp
     <section class="print-page landscape">
-        <h1 class="home-visit-sales-title">{{ $salesYear }}年{{ $salesMonth }}月 個人別売上集計</h1>
+        <h1 class="home-visit-sales-title">{{ $salesYear }}年{{ $salesMonth }}月 個人別売上一覧</h1>
         <div class="home-visit-sales-meta">
             <div>支給日：{{ $selectedPaymentDate }}</div>
             <div>

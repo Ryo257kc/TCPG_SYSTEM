@@ -331,7 +331,7 @@
     $dailySalesAmount = $counterTotal - $registerDeductionTotal;
     $bankDepositAmount = $isModifiedPrint
     ? $dailySalesAmount - $moneyToInt($printTotals['カード計'] ?? 0)
-    : $dailySalesAmount - $chargeUseTotal + $chargeDepositTotal;
+    : \App\Services\StaffPortal\DailySummaryBankDepositCalculator::calculate($printRowsCollection, $cashRegisterRowsCollection);
     $bankDepositDifference = $bankDepositAmount - $moneyToInt($dailySummary['銀行預入金額'] ?? 0);
 
     $displayInsuranceAmount = static function (array $row) use ($moneyToInt, $isModifiedPrint): int {

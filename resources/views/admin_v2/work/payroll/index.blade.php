@@ -69,7 +69,7 @@
           <option value="company-burden">会社負担一覧</option>
           <option value="outsource-menu-sales">委託メニュー売上</option>
           <option value="home-visit-sales-detail">往診売上詳細</option>
-          <option value="home-visit-sales">往診個人別売上</option>
+          <option value="home-visit-sales">個人別売上一覧</option>
           <option value="journal-csv">給与仕訳CSV</option>
           <option value="outsource-journal-csv">業務委託仕訳CSV</option>
           <option value="company-burden-csv">会社負担一覧CSV</option>

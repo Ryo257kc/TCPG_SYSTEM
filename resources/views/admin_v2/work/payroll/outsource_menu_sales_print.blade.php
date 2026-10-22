@@ -80,12 +80,28 @@
             margin-top: 4mm;
         }
 
+        .right {
+            text-align: right;
+        }
+
         @media print {
             .print-page {
                 width: auto;
                 min-height: auto;
                 margin: 0;
                 padding: 0;
+            }
+
+            /* 2人目以降は新しいページから */
+            .staff-sales-block+.staff-sales-block {
+                break-before: page;
+                page-break-before: always;
+            }
+
+            /* スタッフの表をできるだけ分割しない */
+            .staff-sales-block {
+                break-inside: avoid;
+                page-break-inside: avoid;
             }
         }
     </style>
@@ -97,19 +113,20 @@
     $money = static fn($value): string => (float) $value == 0.0 ? '' : number_format((float) $value);
     $count = static fn($value): string => (int) $value === 0 ? '' : number_format((int) $value);
     @endphp
-    <section class="print-page">
-        <h1 class="outsource-sales-title">{{ $salesYear }}年{{ $salesMonth }}月 委託メニュー売上</h1>
-        <div class="outsource-sales-meta">
-            <div>期間：{{ date('Y/m/d', strtotime($fromDate)) }} - {{ date('Y/m/d', strtotime($toDate)) }}</div>
-            <div>支給日：{{ $selectedPaymentDate }}</div>
-            <div>会社：{{ $selectedCompanyId !== '' ? $selectedCompanyId : '全社' }}</div>
-        </div>
 
-        @if (count($groupedRows) === 0)
-        <div class="empty-message">表示するデータがありません。</div>
-        @else
-        @foreach ($groupedRows as $staffGroup)
-        <section class="staff-sales-block">
+
+    @if (count($groupedRows) === 0)
+    <div class="empty-message">表示するデータがありません。</div>
+    @else
+    @foreach ($groupedRows as $staffGroup)
+    <section class="staff-sales-block">
+        <section class="print-page">
+            <h1 class="outsource-sales-title">{{ $salesYear }}年{{ $salesMonth }}月 委託メニュー売上</h1>
+            <div class="outsource-sales-meta">
+                <div>期間：{{ date('Y/m/d', strtotime($fromDate)) }} - {{ date('Y/m/d', strtotime($toDate)) }}</div>
+                <div>支給日：{{ $selectedPaymentDate }}</div>
+                <div>会社：{{ $selectedCompanyId !== '' ? $selectedCompanyId : '全社' }}</div>
+            </div>
             <h2 class="staff-sales-name">{{ $staffGroup['staff_name'] !== '' ? $staffGroup['staff_name'] : $staffGroup['staff_id'] }}</h2>
             <table class="print-table outsource-sales-table">
                 <colgroup>
@@ -168,6 +185,9 @@
                     </tr>
                 </tfoot>
             </table>
+            <div class="right">
+                <h2>合計　{{ $money($staffGroup['totals']['row_total'] ?? 0) }}円</h2>
+            </div>
         </section>
         @endforeach
 

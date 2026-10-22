@@ -861,7 +861,7 @@ class EntryController extends Controller
         // CSV取込は店舗を1つだけ選んで行うため、取込全体で1回だけ決まる。
         $scheduledPaymentColumn = match (true) {
             str_contains($receiptType, '柔整') => 'scheduled_payment_name',
-            str_contains($receiptType, '鍼灸') => 'scheduled_payment_name_2',
+            str_contains($receiptType, '鍼灸') || str_contains($receiptType, 'マッサージ') => 'scheduled_payment_name_2',
             default => null,
         };
 
@@ -869,6 +869,7 @@ class EntryController extends Controller
             ->table('dbo.mx_insurance_claim_details')
             ->whereDate('treatment_month', $treatmentMonth->format('Y-m-d'))
             ->where('store_name', $resolvedStoreShortName)
+            ->where('insurer_number', '<>', '99999999')
             ->exists();
 
         if ($alreadyImported) {

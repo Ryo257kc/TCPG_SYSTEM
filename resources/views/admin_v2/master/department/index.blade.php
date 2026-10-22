@@ -72,7 +72,8 @@
         }
 
         td input[type="text"],
-        td input[type="date"] {
+        td input[type="date"],
+        td select {
             width: 100%;
             box-sizing: border-box;
         }
@@ -100,13 +101,14 @@
             <div class="department-table-wrap">
                 <table class="f_size12">
                     <colgroup>
-                        <col style="width: 40px;">
+                        <col style="width: 30px;">
                         <col style="width: 90px;">
                         <col style="width: 120px;">
                         <col style="width: 60px;">
-                        <col style="width: 120px;">
-                        <col style="width: 120px;">
+                        <col style="width: 100px;">
+                        <col style="width: 100px;">
                         <col style="width: 70px;">
+                        <col style="width: 110px;">
                         <col style="width: 50px;">
                         <col style="width: 110px;">
                         <col style="width: 100px;">
@@ -121,6 +123,7 @@
                             <th>店舗名(参考)</th>
                             <th>会社(参考)</th>
                             <th>レセ店舗No</th>
+                            <th>レセ種別</th>
                             <th>レセ有</th>
                             <th>通帳選択</th>
                             <th>閉店日</th>
@@ -141,6 +144,14 @@
                                 <td>{{ $row['store_name'] }}</td>
                                 <td>{{ $row['company_name'] }}</td>
                                 <td><input type="text" name="receipt_store_no" value="{{ $row['receipt_store_no'] }}"></td>
+                                <td>
+                                    <select name="receipt_type">
+                                        <option value="" @selected($row['receipt_type']==='' )>未設定</option>
+                                        @foreach(['柔整', '鍼灸', 'マッサージ'] as $receiptType)
+                                        <option value="{{ $receiptType }}" @selected($row['receipt_type']===$receiptType)>{{ $receiptType }}</option>
+                                        @endforeach
+                                    </select>
+                                </td>
                                 <td><input class="chk" type="checkbox" name="has_receipt" value="1" @checked($row['has_receipt']===1)></td>
                                 <td><input type="text" name="bank_account_selection" value="{{ $row['bank_account_selection'] }}"></td>
                                 <td><input type="date" name="closed_on" value="{{ $row['closed_on'] }}"></td>
@@ -149,7 +160,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="11">データがありません。</td>
+                            <td colspan="12">データがありません。</td>
                         </tr>
                         @endforelse
                     </tbody>

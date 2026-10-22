@@ -34,6 +34,7 @@ class DepartmentV2Controller extends Controller
             'store_category' => ['nullable', 'string', 'max:255'],
             'official_store_no' => ['nullable', 'string', 'max:50'],
             'receipt_store_no' => ['nullable', 'string', 'max:50'],
+            'receipt_type' => ['nullable', 'string', 'in:柔整,鍼灸,マッサージ'],
             'has_receipt' => ['nullable', 'in:1'],
             'bank_account_selection' => ['nullable', 'string', 'max:255'],
             'closed_on' => ['nullable', 'date'],

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TCPG SYSTEM {{ !empty($isBonus) ? '賞与' : '給与' }}賃金台帳</title>
+  <title>TCPG{{ !empty($isBonus) ? '賞与' : '給与' }}賃金台帳</title>
   <!-- <link rel="stylesheet" href="{{ asset('css/admin_v2/wage_ledger.css') }}"> -->
   <style>
     @page {

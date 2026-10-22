@@ -4,6 +4,7 @@ namespace App\Http\Controllers\StaffPortal\office;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\StaffPortal\Concerns\HandlesStaffPortalContext;
+use App\Services\StaffPortal\DailySummaryBankDepositCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -939,22 +940,7 @@ class StoreDailyReportController extends Controller
         $isModifiedPrint = $printMode === 'modified';
         $moneyTextToFloat = static fn(mixed $value): float => (float) str_replace(',', '', trim((string) ($value ?? '')));
 
-        $normalRowsQuery = $this->dailySummaryDetailBaseQuery()
-            ->select($this->dailySummaryDetailSelects(false, $isModifiedPrint))
-            ->whereDate('patient.日付', $targetDate)
-            ->where('patient.店舗', $targetStore)
-            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
-
-        // 保険証忘れ回収分は、施術日ではなくレジ金が動いた回収日基準で当日の日報に載せる。
-        $insuranceCardRowsQuery = $this->dailySummaryDetailBaseQuery()
-            ->select($this->dailySummaryDetailSelects(true, $isModifiedPrint))
-            ->whereDate('patient.回収日', $targetDate)
-            ->where('patient.店舗', $targetStore)
-            ->where('patient.保険証', 2)
-            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
-
-        $printRows = $normalRowsQuery
-            ->union($insuranceCardRowsQuery)
+        $printRows = $this->dailySummaryPrintRowsQuery($targetDate, $targetStore, $isModifiedPrint)
             ->orderBy('時刻')
             ->orderBy('患者名')
             ->orderBy('日別順')
@@ -1056,25 +1042,7 @@ class StoreDailyReportController extends Controller
             })
             ->all();
 
-        $cashRegisterRows = DB::connection('sqlsrv_dailyreport')
-            ->table('dbo.T_レジ詳細')
-            ->select([
-                '項目',
-                '品名',
-                '日付',
-                'レジ店舗',
-                '非表示ch',
-                'レジＮｏ',
-                DB::raw('SUM(金額) as 金額の合計'),
-            ])
-            ->whereDate('日付', $targetDate)
-            ->where('レジ店舗', $targetStore)
-            ->groupBy('項目', '品名', '日付', 'レジ店舗', '非表示ch', 'レジＮｏ')
-            ->havingRaw('SUM(金額) <> 0')
-            ->where(function ($query): void {
-                $query->where('非表示ch', 0)
-                    ->orWhere('項目', 'チャージ金');
-            })
+        $cashRegisterRows = $this->dailySummaryPrintRegisterRowsQuery($targetDate, $targetStore)
             ->orderByDesc('レジＮｏ')
             ->get()
             ->map(fn($row): array => [
@@ -2013,6 +1981,39 @@ class StoreDailyReportController extends Controller
         });
     }
 
+    private function dailySummaryPrintRowsQuery(string $targetDate, string $targetStore, bool $isModifiedPrint = false)
+    {
+        $normalRowsQuery = $this->dailySummaryDetailBaseQuery()
+            ->select($this->dailySummaryDetailSelects(false, $isModifiedPrint))
+            ->whereDate('patient.日付', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
+
+        // 保険証忘れ回収分は、施術日ではなく回収日基準で集計する。
+        $collectionRowsQuery = $this->dailySummaryDetailBaseQuery()
+            ->select($this->dailySummaryDetailSelects(true, $isModifiedPrint))
+            ->whereDate('patient.回収日', $targetDate)
+            ->where('patient.店舗', $targetStore)
+            ->where('patient.保険証', 2)
+            ->groupByRaw($this->dailySummaryDetailGroupByColumns());
+
+        return $normalRowsQuery->union($collectionRowsQuery);
+    }
+
+    private function dailySummaryPrintRegisterRowsQuery(string $targetDate, string $targetStore)
+    {
+        return DB::connection('sqlsrv_dailyreport')
+            ->table('dbo.T_レジ詳細')
+            ->select(['項目', '品名', '日付', 'レジ店舗', '非表示ch', 'レジＮｏ', DB::raw('SUM(金額) as 金額の合計')])
+            ->whereDate('日付', $targetDate)
+            ->where('レジ店舗', $targetStore)
+            ->groupBy('項目', '品名', '日付', 'レジ店舗', '非表示ch', 'レジＮｏ')
+            ->havingRaw('SUM(金額) <> 0')
+            ->where(function ($query): void {
+                $query->where('非表示ch', 0)->orWhere('項目', 'チャージ金');
+            });
+    }
+
     private function dailySummaryDetailBaseQuery()
     {
         return DB::connection('sqlsrv_dailyreport')
@@ -2174,19 +2175,17 @@ class StoreDailyReportController extends Controller
      * 先生別計     = その日・その店舗の T_先生別日報.請求金額 合計（先生別外=0 の行のみ）
      * 差額         = レセコン − 先生別計
      * 銀行預入金額 = 窓口計 − レジ控除 − チャージ利用 + チャージ金
-     *   窓口計     = teacher.保険負担 + teacher.自費（計算外=0 かつ 保険証=0 の行）
-     *   レジ控除   = T_レジ詳細のうち「チャージ金」「物品販売」以外の金額
+     *   窓口計     = 通常日報の保険負担 + 自費（回収日の保険証忘れ分を含む）
+     *   レジ控除   = 通常日報に表示する「チャージ金」「物品販売」以外の金額
      *   チャージ利用 = charge=1 の自費
      *   チャージ金 = T_レジ詳細の「チャージ金」
-     *   ※印刷の$bankDepositAmountと同じ式。2026-10-08に実データで検証（9/2さくらが
-     *     店舗申告の50,200と一致。2026年444日中424日で保存値と一致）。
-     *     銀行預入金額も画面に入力欄が無い導出値で、Laravelが一度も更新していなかった。
+     *   通常印刷と明細・レジの抽出条件および計算処理を共有する。
      *
      * レセコンは手入力、先生別計は明細から導出される値のため、どちらが変わっても差額がズレる。
      * にもかかわらずLaravel側はこの2列を一度も書き込んでおらず、Accessをやめて以降
      * 誰も再計算しない状態だった（2026-10-08、本番444日中6日がズレているのを確認して発覚）。
      *
-     * 更新するのは先生別計・差額の2列だけ。レセコン・レジ・備考・確定などの手入力値には
+     * 更新するのは先生別計・差額・銀行預入金額の3列だけ。レセコン・レジ・備考・確定などの手入力値には
      * 絶対に触らない（手入力を上書きしないこと自体が要件、2026-10-08ユーザー指示）。
      * 呼び出し側の確定済み・月次締めガードの内側で呼ぶこと。
      */
@@ -2223,33 +2222,21 @@ class StoreDailyReportController extends Controller
             ->where('teacher.先生別外', 0)
             ->sum('teacher.請求金額');
 
-        $treatmentTotals = DB::connection('sqlsrv_dailyreport')
-            ->table('dbo.T_先生別日報 as teacher')
-            ->join('dbo.T_患者名日報 as patient', 'teacher.患者No_t', '=', 'patient.患者No')
-            ->whereDate('patient.日付', $targetDate)
-            ->where('patient.店舗', $targetStore)
-            ->selectRaw('
-                SUM(CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.保険負担 ELSE 0 END) AS 保険負担計,
-                SUM(CASE WHEN teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.自費 ELSE 0 END) AS 自費計,
-                SUM(CASE WHEN teacher.charge = 1 AND teacher.計算外 = 0 AND patient.保険証 = 0 THEN teacher.自費 ELSE 0 END) AS チャージ利用
-            ')
-            ->first();
-
-        $registerTotals = DB::connection('sqlsrv_dailyreport')
-            ->table('dbo.T_レジ詳細')
-            ->whereDate('日付', $targetDate)
-            ->where('レジ店舗', $targetStore)
-            ->selectRaw("
-                SUM(CASE WHEN 項目 NOT IN (N'チャージ金', N'物品販売') THEN 金額 ELSE 0 END) AS レジ控除計,
-                SUM(CASE WHEN 項目 = N'チャージ金' THEN 金額 ELSE 0 END) AS チャージ金
-            ")
-            ->first();
-
-        $counterTotal = (float) ($treatmentTotals->{'保険負担計'} ?? 0) + (float) ($treatmentTotals->{'自費計'} ?? 0);
-        $bankDeposit = $counterTotal
-            - (float) ($registerTotals->{'レジ控除計'} ?? 0)
-            - (float) ($treatmentTotals->{'チャージ利用'} ?? 0)
-            + (float) ($registerTotals->{'チャージ金'} ?? 0);
+        $treatmentRows = $this->dailySummaryPrintRowsQuery($targetDate, $targetStore)
+            ->get()
+            ->map(fn($row): array => [
+                '保険負担計' => $this->formatMoneyValue($row->{'保険負担計'} ?? null),
+                '自費計' => $this->formatMoneyValue($row->{'自費計'} ?? null),
+                '計算外' => $row->{'計算外'} ?? 0,
+                'charge' => $row->charge ?? 0,
+            ]);
+        $registerRows = $this->dailySummaryPrintRegisterRowsQuery($targetDate, $targetStore)
+            ->get()
+            ->map(fn($row): array => [
+                '項目' => $row->{'項目'},
+                '金額の合計' => $this->formatMoneyValue($row->{'金額の合計'} ?? null),
+            ]);
+        $bankDeposit = DailySummaryBankDepositCalculator::calculate($treatmentRows, $registerRows);
 
         DB::connection('sqlsrv_dailyreport')
             ->table('dbo.T_日報集計')
