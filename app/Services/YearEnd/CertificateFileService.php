@@ -4,6 +4,7 @@ namespace App\Services\YearEnd;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 /**
  * 年末調整の証憑ファイル（保険料控除・住宅ローン控除・前職源泉徴収票など）の保存先。
@@ -17,9 +18,30 @@ class CertificateFileService
 
     private const MAX_IMAGE_SIDE = 1600;
 
+    public function validateUpload(UploadedFile $file): void
+    {
+        if (!$file->isValid()) {
+            $message = match ($file->getError()) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'ファイルサイズが上限を超えています。画像を小さくするかPDFで添付してください。',
+                UPLOAD_ERR_PARTIAL => 'ファイルの送信が途中で止まりました。通信状態を確認して選択し直してください。',
+                default => 'ファイルを受け取れませんでした。選択し直して再度保存してください。',
+            };
+            throw ValidationException::withMessages(['certificate_file' => $message]);
+        }
+        $mime = strtolower((string) $file->getMimeType());
+        if (in_array($mime, ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'], true) ||
+            (in_array(strtolower($file->getClientOriginalExtension()), ['heic', 'heif'], true) && !in_array($mime, ['image/jpeg', 'image/png'], true))) {
+            throw ValidationException::withMessages(['certificate_file' => 'HEIC／HEIF形式には対応していません。JPEG・PNG・PDFに変換して添付してください。']);
+        }
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'application/pdf', 'application/xml', 'text/xml'], true)) {
+            throw ValidationException::withMessages(['certificate_file' => '対応していないファイル形式です。JPEG・PNG・PDF（保険証明書はXMLも可）を添付してください。']);
+        }
+    }
+
     /** @return array{path: string, original_name: string, uploaded_at: \Illuminate\Support\Carbon} */
     public function store(UploadedFile $file, string $directory, string $baseName): array
     {
+        $this->validateUpload($file);
         $extension = strtolower((string) $file->getClientOriginalExtension());
         $mime = strtolower((string) $file->getMimeType());
         $directory = trim($directory, '/');
@@ -35,12 +57,18 @@ class CertificateFileService
             if ($compressed !== null) {
                 $fileName = $baseName . '.jpg';
                 $storedPath = $directory . '/' . $fileName;
-                Storage::disk(self::DISK)->put($storedPath, $compressed);
+                if (!Storage::disk(self::DISK)->put($storedPath, $compressed)) {
+                    throw ValidationException::withMessages(['certificate_file' => '添付ファイルを保存できませんでした。時間をおいて再度お試しください。']);
+                }
             } else {
-                $fallbackExtension = in_array($extension, ['jpg', 'jpeg', 'png'], true) ? $extension : 'jpg';
+                $fallbackExtension = $mime === 'image/png' ? 'png' : 'jpg';
                 $fileName = $baseName . '.' . $fallbackExtension;
                 $storedPath = $file->storeAs($directory, $fileName, self::DISK);
             }
+        }
+
+        if (!$storedPath) {
+            throw ValidationException::withMessages(['certificate_file' => '添付ファイルを保存できませんでした。時間をおいて再度お試しください。']);
         }
 
         $originalName = (string) $file->getClientOriginalName();
@@ -77,6 +105,11 @@ class CertificateFileService
     public function getContents(string $path): string
     {
         return (string) Storage::disk(self::DISK)->get($path);
+    }
+
+    public function mimeType(string $path): string
+    {
+        return (string) Storage::disk(self::DISK)->mimeType($path);
     }
 
     /** @return \Symfony\Component\HttpFoundation\StreamedResponse */

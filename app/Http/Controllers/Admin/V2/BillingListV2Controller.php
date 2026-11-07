@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Admin\V2\BillingListV2Service;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 
 class BillingListV2Controller extends Controller
@@ -39,11 +40,34 @@ class BillingListV2Controller extends Controller
             ->with('status', '請求書を登録しました。');
     }
 
+    public function duplicateInvoice(Request $request): RedirectResponse
+    {
+        $values = $request->validate(['invoice_id' => ['required', 'integer', 'min:1']]);
+        $invoiceId = $this->service->duplicateInvoice((int) $values['invoice_id']);
+
+        return redirect()
+            ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
+            ->with('status', '請求書を複製しました。入金済額は0円です。請求日・件名・備考をご確認ください。');
+    }
+
     public function updateInvoice(Request $request): RedirectResponse
     {
         $values = $this->validateInvoice($request);
         $invoiceId = (int) $request->input('invoice_id');
-        $affected = $this->service->updateInvoice($invoiceId, $values);
+        $payload = $request->validate(['detail_changes' => ['nullable', 'json']]);
+        $changes = json_decode($payload['detail_changes'] ?? '{}', true);
+        $rules = [
+            'rows' => ['sometimes', 'array'],
+            'rows.*' => ['array'],
+            'rows.*.invoice_detail_id' => ['required', 'integer', 'min:1', 'distinct'],
+            'new_detail' => ['nullable', 'array'],
+        ];
+        foreach ($this->detailRules() as $field => $fieldRules) {
+            $rules['rows.*.' . $field] = $fieldRules;
+            $rules['new_detail.' . $field] = $fieldRules;
+        }
+        $changes = Validator::make(is_array($changes) ? $changes : [], $rules)->validate();
+        $affected = $this->service->updateInvoiceWithDetails($invoiceId, $values, $changes['rows'] ?? [], $changes['new_detail'] ?? null);
 
         if ($affected === 0) {
             return redirect()
@@ -53,7 +77,7 @@ class BillingListV2Controller extends Controller
 
         return redirect()
             ->route('admin.work.billing_list', ['invoice_id' => $invoiceId])
-            ->with('status', '請求書を保存しました。');
+            ->with('status', '請求書と明細を保存しました。');
     }
 
     public function deleteInvoice(Request $request): RedirectResponse
@@ -146,6 +170,13 @@ class BillingListV2Controller extends Controller
         return $request->validate([
             'invoice_id' => ['required', 'integer'],
             'invoice_detail_id' => ['nullable', 'integer'],
+        ] + $this->detailRules());
+    }
+
+    /** @return array<string, array> */
+    private function detailRules(): array
+    {
+        return [
             'item_name' => ['nullable', 'string', 'max:50'],
             'category' => ['nullable', 'string', 'max:30'],
             'quantity' => ['nullable', 'integer'],
@@ -155,6 +186,6 @@ class BillingListV2Controller extends Controller
             'tax_category' => ['nullable', 'string', 'max:50'],
             'store_name' => ['nullable', 'string', 'max:50'],
             'remarks' => ['nullable', 'string', 'max:100'],
-        ]);
+        ];
     }
 }

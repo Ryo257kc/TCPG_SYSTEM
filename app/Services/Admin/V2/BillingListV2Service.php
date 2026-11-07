@@ -2,14 +2,14 @@
 
 namespace App\Services\Admin\V2;
 
-use App\Services\Shared\StoreDisplayNameService;
+use App\Services\Shared\ReceiptStoreOptionsService;
 use App\Support\ParsedInput;
 use Illuminate\Support\Facades\DB;
 
 class BillingListV2Service
 {
     public function __construct(
-        private readonly StoreDisplayNameService $storeDisplayNameService,
+        private readonly ReceiptStoreOptionsService $receiptStoreOptionsService,
     ) {}
 
     /** @return array<string, mixed> */
@@ -127,31 +127,10 @@ class BillingListV2Service
     /** @return list<array{value:string,label:string}> */
     private function storeOptions(): array
     {
-        // 要確認：valueはmx_invoice_detailsの store_name 列（正規名の生テキスト）との
-        // 一致に使うため store_name のまま。表示ラベルだけ短縮名優先にする
-        // （StoreDisplayNameServiceと同じ規則、2026-08-17）。
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_stores')
-            ->select(['store_name', 'store_short_name'])
-            ->where(function ($query): void {
-                $query->where('is_closed', false)
-                    ->orWhere('is_closed', 0)
-                    ->orWhereNull('is_closed');
-            })
-            ->whereNotNull('store_name')
-            ->where('store_name', '<>', '')
-            ->orderBy('store_code')
-            ->get()
-            ->map(fn($row): array => [
-                'value' => trim((string) ($row->store_name ?? '')),
-                'label' => $this->storeDisplayNameService->resolve(
-                    (string) ($row->store_name ?? ''),
-                    (string) ($row->store_short_name ?? '')
-                ),
-            ])
-            ->filter(fn(array $row): bool => $row['value'] !== '')
-            ->values()
-            ->all();
+        return array_map(
+            fn(string $name): array => ['value' => $name, 'label' => $name],
+            $this->receiptStoreOptionsService->names(),
+        );
     }
 
     /** @param list<array<string, string>> $companyOptions */
@@ -185,6 +164,61 @@ class BillingListV2Service
         ], 'invoice_id');
 
         return (int) $id;
+    }
+
+    public function duplicateInvoice(int $invoiceId): int
+    {
+        $connection = DB::connection('sqlsrv');
+
+        return $connection->transaction(function () use ($connection, $invoiceId): int {
+            $invoice = $connection->table('dbo.mx_invoices')->where('invoice_id', $invoiceId)->first();
+            abort_if($invoice === null, 404, '複製元の請求書が見つかりません。');
+
+            $newId = $this->createInvoice([
+                'invoice_date' => $invoice->invoice_date,
+                'recipient_name' => $invoice->recipient_name,
+                'subject' => $invoice->subject,
+                'billing_source' => $invoice->billing_source,
+                'paid_amount' => 0,
+                'remarks' => $invoice->remarks,
+                'accounting_remarks' => $invoice->accounting_remarks,
+            ]);
+
+            foreach ($connection->table('dbo.mx_invoice_details')->where('invoice_id', $invoiceId)->orderBy('invoice_detail_id')->get() as $detail) {
+                // 項目・数量は引き継ぎ、金額は複製先で入力し直す。
+                $values = array_intersect_key((array) $detail, array_flip([
+                    'item_name', 'category', 'quantity', 'unit', 'unit_price', 'total_amount',
+                    'tax_category', 'store_name', 'remarks',
+                ]));
+                $values['unit_price'] = null;
+                $values['total_amount'] = null;
+                $connection->table('dbo.mx_invoice_details')->insert(['invoice_id' => $newId] + $values);
+            }
+
+            $this->refreshInvoiceTotal($newId);
+
+            return $newId;
+        });
+    }
+
+    public function updateInvoiceWithDetails(int $invoiceId, array $values, array $details, ?array $newDetail = null): int
+    {
+        return DB::connection('sqlsrv')->transaction(function () use ($invoiceId, $values, $details, $newDetail): int {
+            $affected = $this->updateInvoice($invoiceId, $values);
+            if ($affected === 0) {
+                return 0;
+            }
+
+            foreach ($details as $detail) {
+                $updated = $this->updateDetail($invoiceId, (int) $detail['invoice_detail_id'], $detail);
+                abort_if($updated === 0, 409, '保存対象の明細が見つかりません。画面を更新してください。変更は保存されていません。');
+            }
+            if ($newDetail !== null) {
+                $this->createDetail($invoiceId, $newDetail);
+            }
+
+            return $affected;
+        });
     }
 
     public function updateInvoice(int $invoiceId, array $values): int
@@ -355,11 +389,6 @@ class BillingListV2Service
 
     private function detailTotal(array $values): float
     {
-        $total = ParsedInput::number($values['total_amount'] ?? null);
-        if ($total !== null) {
-            return $total;
-        }
-
         $quantity = ParsedInput::intOrNull($values['quantity'] ?? null);
         $unitPrice = ParsedInput::intOrNull($values['unit_price'] ?? null);
 

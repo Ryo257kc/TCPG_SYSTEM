@@ -65,6 +65,11 @@
     </div>
     @endif
 
+    @foreach ($fields as $previewField)
+    @if (($previewField['type'] ?? '') === 'file' && !empty($yearEndCertificateUrls[$previewField['name']] ?? null))
+    <p class="year-end-field-current-file"><a href="{{ $yearEndCertificateUrls[$previewField['name']] }}" target="_blank" rel="noopener">保存済みの添付をプレビュー{{ !empty($previewField['value']) ? '：' . $previewField['value'] : '' }}</a></p>
+    @endif
+    @endforeach
     <div class="year-end-toggle">
         @if (!empty($requireAnswer))
         <div class="year-end-required-choice">

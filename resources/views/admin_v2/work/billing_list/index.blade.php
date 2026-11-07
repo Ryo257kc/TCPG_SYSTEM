@@ -156,8 +156,19 @@
         }
 
         .billing-detail-table {
-            min-width: 860px;
+            min-width: 800px;
             table-layout: fixed;
+        }
+
+        .billing-detail-table th,
+        .billing-detail-table td {
+            padding-left: 3px;
+            padding-right: 3px;
+        }
+
+        .billing-detail-actions .btn-small {
+            padding-left: 4px;
+            padding-right: 4px;
         }
 
         .billing-detail-table input,
@@ -166,6 +177,12 @@
             box-sizing: border-box;
             min-width: 0;
             font-size: 12px;
+        }
+
+        .billing-detail-table output {
+            display: block;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
         }
 
         .billing-detail-add-row td {
@@ -320,7 +337,7 @@
                         </div>
                     </div>
 
-                    <form method="post" action="{{ route('admin.work.billing_list.update') }}" class="billing-form">
+                    <form id="billing-invoice-update" method="post" action="{{ route('admin.work.billing_list.update') }}" class="billing-form">
                         @csrf
                         <input type="hidden" name="invoice_id" value="{{ $selectedInvoice['invoice_id'] }}">
                         <label>
@@ -337,12 +354,12 @@
                         </label>
                         <label>
                             <span>請求元</span>
-                                <select name="billing_source">
-                                    <option value=""></option>
-                                    @foreach ($companyOptions as $company)
-                                    <option value="{{ $company['company_id'] }}" @selected($selectedInvoice['billing_source']===$company['company_id'])>{{ $company['company_name'] }}</option>
-                                    @endforeach
-                                </select>
+                            <select name="billing_source">
+                                <option value=""></option>
+                                @foreach ($companyOptions as $company)
+                                <option value="{{ $company['company_id'] }}" @selected($selectedInvoice['billing_source']===$company['company_id'])>{{ $company['company_name'] }}</option>
+                                @endforeach
+                            </select>
                         </label>
                         <label>
                             <span>入金額</span>
@@ -363,6 +380,7 @@
                         </div>
                         <div class="billing-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
+                            <button type="submit" class="btn" formnovalidate formaction="{{ route('admin.work.billing_list.duplicate') }}" onclick="return confirm('保存済みの請求書と明細を複製します。未保存の変更は含まれず、入金済額は0円になります。よろしいですか？');">複製</button>
                             <a class="btn" href="{{ route('admin.work.billing_list.print', ['invoiceId' => $selectedInvoice['invoice_id']]) }}" target="_blank" rel="noopener">印刷</a>
                             <button type="submit" class="btn" formaction="{{ route('admin.work.billing_list.delete') }}" onclick="return confirm('請求書を削除しますか？');">削除</button>
                         </div>
@@ -383,10 +401,10 @@
                                 <col style="width: 5%;">
                                 <col style="width: 5%;">
                                 <col style="width: 9%;">
-                                <col style="width: 9%;">
+                                <col style="width: 7%;">
                                 <col style="width: 7%;">
                                 <col style="width: 18%;">
-                                <col style="width: 78px;">
+                                <col style="width: 5%;">
                             </colgroup>
                             <thead>
                                 <tr>
@@ -414,21 +432,21 @@
                                         <input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="item_name" value="{{ $detail['item_name'] }}" maxlength="50">
                                     </td>
                                     <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="category" value="{{ $detail['category'] }}" maxlength="30"></td>
-                                            <td>
-                                                <select form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" name="store_name">
-                                                    <option value=""></option>
-                                                    @if (($detail['store_name'] ?? '') !== '' && !collect($storeOptions)->contains('value', $detail['store_name']))
-                                                        <option value="{{ $detail['store_name'] }}" selected>{{ $detail['store_name'] }}</option>
-                                                    @endif
-                                                    @foreach ($storeOptions as $store)
-                                                        <option value="{{ $store['value'] }}" @selected($detail['store_name'] === $store['value'])>{{ $store['label'] }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </td>
+                                    <td>
+                                        <select form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" name="store_name">
+                                            <option value=""></option>
+                                            @if (($detail['store_name'] ?? '') !== '' && !collect($storeOptions)->contains('value', $detail['store_name']))
+                                            <option value="{{ $detail['store_name'] }}" selected>{{ $detail['store_name'] }}</option>
+                                            @endif
+                                            @foreach ($storeOptions as $store)
+                                            <option value="{{ $store['value'] }}" @selected($detail['store_name']===$store['value'])>{{ $store['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
                                     <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="number" name="quantity" value="{{ str_replace(',', '', $detail['quantity']) }}" step="1"></td>
                                     <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="unit" value="{{ $detail['unit'] }}" maxlength="10"></td>
                                     <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="unit_price" value="{{ $detail['unit_price'] }}" inputmode="numeric"></td>
-                                    <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="total_amount" value="{{ $detail['total_amount'] }}" inputmode="numeric"></td>
+                                    <td><output form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" name="total_amount" title="数量×単価で自動計算します">{{ $detail['total_amount'] }}</output></td>
                                     <td>
                                         <select form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" name="tax_category">
                                             <option value=""></option>
@@ -440,7 +458,6 @@
                                     <td><input form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="text" name="remarks" value="{{ $detail['remarks'] }}" maxlength="100"></td>
                                     <td>
                                         <span class="billing-detail-actions">
-                                            <button form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="submit" class="btn btn-small btn-primary">保存</button>
                                             <button form="billing-detail-update-{{ $detail['invoice_detail_id'] }}" type="submit" class="btn btn-small" formaction="{{ route('admin.work.billing_list.detail.delete') }}" onclick="return confirm('明細を削除しますか？');">削除</button>
                                         </span>
                                     </td>
@@ -459,18 +476,18 @@
                                         <input form="billing-detail-store" type="text" name="item_name" placeholder="項目" maxlength="50">
                                     </td>
                                     <td><input form="billing-detail-store" type="text" name="category" placeholder="区分" maxlength="30"></td>
-                                        <td>
-                                            <select form="billing-detail-store" name="store_name">
-                                                <option value=""></option>
-                                                @foreach ($storeOptions as $store)
-                                                    <option value="{{ $store['value'] }}">{{ $store['label'] }}</option>
-                                                @endforeach
-                                            </select>
-                                        </td>
+                                    <td>
+                                        <select form="billing-detail-store" name="store_name">
+                                            <option value=""></option>
+                                            @foreach ($storeOptions as $store)
+                                            <option value="{{ $store['value'] }}">{{ $store['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
                                     <td><input form="billing-detail-store" type="number" name="quantity" placeholder="数量" step="1"></td>
                                     <td><input form="billing-detail-store" type="text" name="unit" placeholder="単位" maxlength="10"></td>
                                     <td><input form="billing-detail-store" type="text" name="unit_price" placeholder="単価" inputmode="numeric"></td>
-                                    <td><input form="billing-detail-store" type="text" name="total_amount" placeholder="合計" inputmode="numeric"></td>
+                                    <td><output form="billing-detail-store" name="total_amount" title="数量×単価で自動計算します"></output></td>
                                     <td>
                                         <select form="billing-detail-store" name="tax_category">
                                             <option value=""></option>
@@ -480,7 +497,11 @@
                                         </select>
                                     </td>
                                     <td><input form="billing-detail-store" type="text" name="remarks" placeholder="備考" maxlength="100"></td>
-                                    <td><button form="billing-detail-store" type="submit" class="btn btn-small btn-primary">追加</button></td>
+                                    <td>
+                                        <span class="billing-detail-actions">
+                                            <button form="billing-detail-store" type="submit" class="btn btn-small btn-primary">追加</button>
+                                        </span>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -490,6 +511,62 @@
             </main>
         </section>
     </div>
+    <script>
+        var invoiceForm = document.getElementById('billing-invoice-update');
+        if (invoiceForm) invoiceForm.addEventListener('submit', function(event) {
+            // 複製・削除には、未保存の明細を送らない。
+            if (event.submitter && event.submitter.hasAttribute('formaction')) return;
+            var rows = [];
+            var newDetail = null;
+            var forms = Array.from(document.querySelectorAll('form[id^="billing-detail-update-"], form#billing-detail-store'));
+            for (var form of forms) {
+                if (!form.reportValidity()) {
+                    event.preventDefault();
+                    return;
+                }
+                var values = {};
+                for (var field of Array.from(form.elements)) {
+                    if (field.name && field.name !== '_token' && field.name !== 'invoice_id') values[field.name] = field.value;
+                }
+                if (form.id === 'billing-detail-store') {
+                    if (Object.keys(values).some(function(key) {
+                            return key !== 'total_amount' && values[key].trim() !== '';
+                        })) newDetail = values;
+                } else rows.push(values);
+            }
+            var hidden = invoiceForm.querySelector('input[name="detail_changes"]');
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'detail_changes';
+                invoiceForm.appendChild(hidden);
+            }
+            hidden.value = JSON.stringify({
+                rows: rows,
+                new_detail: newDetail
+            });
+        });
+
+        // 入力中の表示だけ更新する。DBへの保存値はServiceで再計算する。
+        document.addEventListener('input', function(event) {
+            var input = event.target;
+            if (!input.matches('input[name="quantity"], input[name="unit_price"]') || !input.form) return;
+            var fields = input.form.elements;
+            if (!fields.namedItem('total_amount')) return;
+
+            function numberValue(field) {
+                var text = field.value.replace(/,/g, '').trim();
+                var value = Number(text);
+                return text !== '' && Number.isFinite(value) ? Math.trunc(value) : null;
+            }
+            var quantity = numberValue(fields.namedItem('quantity'));
+            var price = numberValue(fields.namedItem('unit_price'));
+            fields.namedItem('total_amount').value = quantity === null || price === null ?
+                '' : (quantity * price).toLocaleString('en-US', {
+                    maximumFractionDigits: 0
+                });
+        });
+    </script>
 </body>
 
 </html>

@@ -330,18 +330,27 @@ class YearEndApplicationController extends Controller
 
         $request->validate([
             'insurance_engaged' => ['required', 'in:0,1'],
+            'insurance_save_mode' => ['nullable', 'in:draft,complete'],
         ], [
             'insurance_engaged.required' => '保険料控除について、変更の有無を選択してください。',
         ]);
 
+        $isDraft = $request->input('insurance_save_mode') === 'draft';
         if (!$request->boolean('insurance_engaged')) {
+            if (collect((array) $request->input('hoken_add', []))->contains(fn($row): bool => ($row['enabled'] ?? null) === '1')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'insurance_engaged' => '追加した保険があります。変更の有無を「はい」にして保存してください。入力内容はまだ保存されていません。',
+                ]);
+            }
             // 「いいえ」でも、既存行（前年コピー等）に証憑が無いまま素通りさせない。
-            $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+            if (!$isDraft) {
+                $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+            }
 
             DB::connection('sqlsrv_payroll')
                 ->table('dbo.mx_nen_tyo')
                 ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
-                ->update(['insurance_deduction_changed' => 0]);
+                ->update(['insurance_deduction_changed' => $isDraft ? null : 0]);
 
             return $this->sectionSaved($request, '保険料控除の申告内容を保存しました。');
         }
@@ -402,7 +411,9 @@ class YearEndApplicationController extends Controller
             }
 
             $validated = Validator::make($row, $fieldRules, $fieldMessages)->validate();
-            $this->requireCertificate($request, "hoken.{$hokenNo}.certificate_file", $existingRow, '保険料控除の証憑ファイルを添付してください。');
+            if (!$isDraft) {
+                $this->requireCertificate($request, "hoken.{$hokenNo}.certificate_file", $existingRow, '保険料控除の証憑ファイルを添付してください。');
+            }
             $certificate = $this->resolveCertificateFields($request, "hoken.{$hokenNo}.certificate_file", $existingRow, $staffId, $targetYear, 'hoken_' . $hokenNo);
 
             DB::connection('sqlsrv_payroll')
@@ -420,7 +431,9 @@ class YearEndApplicationController extends Controller
             }
 
             $validated = Validator::make($row, $fieldRules, $fieldMessages)->validate();
-            $this->requireCertificate($request, "hoken_add.{$slotNo}.certificate_file", null, '保険料控除の証憑ファイルを添付してください。');
+            if (!$isDraft) {
+                $this->requireCertificate($request, "hoken_add.{$slotNo}.certificate_file", null, '保険料控除の証憑ファイルを添付してください。');
+            }
             $certificate = $this->resolveCertificateFields($request, "hoken_add.{$slotNo}.certificate_file", null, $staffId, $targetYear, 'hoken_add_' . $slotNo);
 
             DB::connection('sqlsrv_payroll')
@@ -433,14 +446,16 @@ class YearEndApplicationController extends Controller
             $anyChange = true;
         }
 
-        $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+        if (!$isDraft) {
+            $this->assertNoMissingInsuranceCertificates($staffId, $targetYear);
+        }
 
         DB::connection('sqlsrv_payroll')
             ->table('dbo.mx_nen_tyo')
             ->where('nen_tyo_no', $nenTyo['nen_tyo_no'])
-            ->update(['insurance_deduction_changed' => $anyChange ? 1 : 0]);
+            ->update(['insurance_deduction_changed' => $isDraft ? null : ($anyChange ? 1 : 0)]);
 
-        return $this->sectionSaved($request, '保険料控除の申告内容を保存しました。');
+        return $this->sectionSaved($request, $isDraft ? '保険料控除を下書き保存しました。未添付の証憑は後から追加してください。' : '保険料控除の申告内容を保存しました。');
     }
 
     /**
@@ -546,14 +561,15 @@ class YearEndApplicationController extends Controller
             // 同じチェックを行う。
             $this->assertCertificateYearMatches($file, $targetYear, $fileFieldPath);
 
-            if ($previousRow !== null && !empty($previousRow->certificate_file_path)) {
-                $this->certificateFileService->delete($previousRow->certificate_file_path);
-            }
             $stored = $this->certificateFileService->store(
                 $file,
                 "year_end/{$targetYear}/{$staffId}/insurance",
                 $baseName . '_' . date('YmdHis'),
             );
+
+            if ($previousRow !== null && !empty($previousRow->certificate_file_path) && $previousRow->certificate_file_path !== $stored['path']) {
+                $this->certificateFileService->delete($previousRow->certificate_file_path);
+            }
 
             return [
                 'certificate_file_path' => $stored['path'],
@@ -643,14 +659,15 @@ class YearEndApplicationController extends Controller
 
         $file = $request->file($fileFieldPath);
         if ($file !== null && $file->isValid()) {
-            if ($previousRow !== null && !empty($previousRow->failure_certificate_file_path)) {
-                $this->certificateFileService->delete($previousRow->failure_certificate_file_path);
-            }
             $stored = $this->certificateFileService->store(
                 $file,
                 "year_end/{$targetYear}/{$staffId}/fuyo",
                 $baseName . '_' . date('YmdHis'),
             );
+
+            if ($previousRow !== null && !empty($previousRow->failure_certificate_file_path) && $previousRow->failure_certificate_file_path !== $stored['path']) {
+                $this->certificateFileService->delete($previousRow->failure_certificate_file_path);
+            }
 
             return [
                 'failure_certificate_file_path' => $stored['path'],
@@ -1006,14 +1023,15 @@ class YearEndApplicationController extends Controller
         $file = $request->file($fileFieldPath);
         if ($file !== null && $file->isValid()) {
             $existingPath = $previousRow->{$columnPrefix . '_file_path'} ?? null;
-            if (!empty($existingPath)) {
-                $this->certificateFileService->delete($existingPath);
-            }
             $stored = $this->certificateFileService->store(
                 $file,
                 "year_end/{$targetYear}/{$staffId}/personal_info",
                 $baseName . '_' . date('YmdHis'),
             );
+
+            if (!empty($existingPath) && $existingPath !== $stored['path']) {
+                $this->certificateFileService->delete($existingPath);
+            }
 
             return [
                 $columnPrefix . '_file_path' => $stored['path'],
@@ -1226,6 +1244,46 @@ class YearEndApplicationController extends Controller
         return $this->sectionSaved($request, '提出しました。事務所の確認をお待ちください。');
     }
 
+    /** 本人の今年分の保存済み証憑だけを配信する。提出済みかどうかは問わない。 */
+    public function certificatePreview(Request $request, string $type, int $recordId = 0)
+    {
+        $context = $this->requireContext($request);
+        if ($context instanceof RedirectResponse || $context instanceof JsonResponse) {
+            return $context;
+        }
+        [$staffId, , $targetYear] = $context;
+        $prefix = 'certificate';
+        if ($type === 'insurance') {
+            $row = DB::connection('sqlsrv_payroll')->table('dbo.mx_hoken')
+                ->where('hoken_no', $recordId)->where('insurance_staff_no', $staffId)
+                ->whereYear('insurance_year', $targetYear)->first();
+        } elseif ($type === 'dependent') {
+            $prefix = 'failure_certificate';
+            $row = DB::connection('sqlsrv_payroll')->table('dbo.mx_fuyo')
+                ->where('fuyo_no', $recordId)->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+                ->whereYear('registration_date', $targetYear)->first();
+        } else {
+            $prefix = match ($type) {
+                'previous-job' => 'previous_job_certificate', 'housing-loan' => 'housing_loan_certificate',
+                'address' => 'address_change_certificate', 'name' => 'name_change_certificate',
+                'disability' => 'disability_certificate', default => abort(404),
+            };
+            $row = DB::connection('sqlsrv_payroll')->table('dbo.mx_nen_tyo')
+                ->whereRaw('LTRIM(RTRIM(staff_id)) = ?', [$staffId])
+                ->whereYear('year_end', $targetYear)->orderBy('nen_tyo_no')->first();
+        }
+        $path = trim((string) ($row->{$prefix . '_file_path'} ?? ''));
+        abort_if($path === '' || !$this->certificateFileService->exists($path), 404);
+        $mime = $this->certificateFileService->mimeType($path);
+        abort_unless(in_array($mime, ['image/jpeg', 'image/png', 'application/pdf', 'text/xml', 'application/xml'], true), 422,
+            'この保存済みファイルはプレビューに対応していない形式です。JPEG・PNG・PDFで添付し直してください。');
+        $response = $this->certificateFileService->response($path, basename($path));
+        $response->headers->set('Content-Type', in_array($mime, ['text/xml', 'application/xml'], true) ? 'text/plain; charset=UTF-8' : $mime);
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('Cache-Control', 'private, no-store');
+        return $response;
+    }
+
     /** @return array{0: string, 1: array<string, mixed>, 2: int}|RedirectResponse|JsonResponse */
     private function requireContext(Request $request): array|RedirectResponse|JsonResponse
     {
@@ -1241,6 +1299,23 @@ class YearEndApplicationController extends Controller
         if (!$this->isAdmin($staffRow) && !$this->isYearEndAdjustmentPublished()) {
             abort(404);
         }
+
+        // DBや既存添付を変更する前に、全ての送信ファイルの失敗・未対応形式を検出する。
+        $validateFiles = function (array $files, string $prefix = '') use (&$validateFiles): void {
+            foreach ($files as $key => $file) {
+                $field = $prefix === '' ? (string) $key : $prefix . '.' . $key;
+                if (is_array($file)) {
+                    $validateFiles($file, $field);
+                } elseif ($file instanceof \Illuminate\Http\UploadedFile) {
+                    try {
+                        $this->certificateFileService->validateUpload($file);
+                    } catch (\Illuminate\Validation\ValidationException $e) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([$field => $e->validator->errors()->first()]);
+                    }
+                }
+            }
+        };
+        $validateFiles($request->allFiles());
 
         return [$staffId, $staffRow ?? [], (int) date('Y')];
     }

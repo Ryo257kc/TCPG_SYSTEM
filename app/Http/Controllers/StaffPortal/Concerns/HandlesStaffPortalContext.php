@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\StaffPortal\Concerns;
 
+use App\Services\Shared\ReceiptStoreOptionsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -330,24 +331,7 @@ trait HandlesStaffPortalContext
     // 往診店舗選択
     protected function receiptStoreOptions(): array
     {
-        return DB::connection('sqlsrv')
-            ->table('dbo.mx_departments')
-            ->join('dbo.mx_stores', 'dbo.mx_stores.store_code', '=', 'dbo.mx_departments.official_store_no')
-            ->select(['store_category'])
-            ->whereIn('dbo.mx_stores.business_type', ['（往診）', '（店舗）'])
-            ->where(function ($query): void {
-                $query->where('has_receipt', true)
-                    ->orWhere('has_receipt', 1);
-            })
-            ->whereNull('closed_on')
-            ->whereNotNull('store_category')
-            ->orderBy('store_category')
-            ->get()
-            ->map(fn($row): string => trim((string) ($row->store_category ?? '')))
-            ->filter(fn(string $name): bool => $name !== '')
-            ->unique()
-            ->values()
-            ->all();
+        return app(ReceiptStoreOptionsService::class)->names();
     }
 
     // 往診施設名選択

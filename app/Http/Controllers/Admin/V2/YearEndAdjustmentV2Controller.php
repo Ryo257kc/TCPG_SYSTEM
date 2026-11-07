@@ -183,6 +183,9 @@ class YearEndAdjustmentV2Controller extends Controller
 
         $targetYear = (int) $validated['target_year'];
         $publishDate = trim((string) ($validated['publish_date'] ?? ''));
+        if ($publishDate !== '') {
+            $publishDate = \Carbon\Carbon::parse($publishDate)->format('Y-m-d H:i:s');
+        }
 
         $exists = DB::connection('sqlsrv_payroll')
             ->table('dbo.year_end_adjustment_settings')

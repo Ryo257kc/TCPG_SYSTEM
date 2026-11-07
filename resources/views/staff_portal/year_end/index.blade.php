@@ -53,7 +53,8 @@
             gap: 8px;
         }
 
-        .year-end-toggle-input:checked~.year-end-toggle-fields {
+        .year-end-toggle-input:checked~.year-end-toggle-fields,
+        .year-end-required-choice:has(input[name="spouse_engaged"][value="1"]:checked)~.year-end-toggle-fields {
             display: grid;
         }
 
@@ -392,6 +393,24 @@
         .year-end-section:has(.year-end-row-delete-checkbox:checked) {
             opacity: 0.5;
         }
+        [data-section="insurance"] .year-end-section-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+        }
+        [data-section="insurance"] .year-end-section-actions > button {
+            width: auto;
+            margin: 0;
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+        [data-section="insurance"] form:not(:has(input[name="insurance_engaged"][value="1"]:checked)) .year-end-row-actions,
+        [data-section="insurance"] form:not(:has(input[name="insurance_engaged"][value="1"]:checked)) .year-end-toggle,
+        [data-section="insurance"] form:not(:has(input[name="insurance_engaged"][value="1"]:checked)) .insurance-draft-button,
+        [data-section="insurance"] form:has(input[name="insurance_engaged"][value="1"]:checked) .insurance-edit-note {
+            display: none;
+        }
     </style>
 </head>
 
@@ -422,7 +441,23 @@
             // 保険料控除は証憑を毎年再添付必須の仕様なので、アコーディオンが閉じてても
             // 未添付が分かるよう見出しにも出す（扶養親族は新規追加分のみ必須で、
             // 継続分の古いデータまで警告すると紛らわしいため対象外）。
-            $yearEndInsuranceMissingCertificate = collect($hokenRows ?? [])->contains(fn($hoken) => empty($hoken['certificate_original_name'] ?? ''));
+            $yearEndInsuranceMissingCertificate = collect($hokenRows ?? [])->contains(fn($hoken) => ($hoken['certificate_file_path'] ?? '') === '');
+            $yearEndCertificateUrls = [];
+            foreach (['previous-job' => 'previous_job_certificate', 'housing-loan' => 'housing_loan_certificate', 'address' => 'address_change_certificate', 'name' => 'name_change_certificate', 'disability' => 'disability_certificate'] as $type => $prefix) {
+                if (!empty($currentNenTyo[$prefix . '_file_path'])) {
+                    $yearEndCertificateUrls[$prefix . '_file'] = route('year_end_adjustment.certificate', ['type' => $type]);
+                }
+            }
+            foreach ($hokenRows as $hoken) {
+                if (!empty($hoken['certificate_file_path'])) {
+                    $yearEndCertificateUrls['hoken[' . $hoken['hoken_no'] . '][certificate_file]'] = route('year_end_adjustment.certificate', ['type' => 'insurance', 'recordId' => $hoken['hoken_no']]);
+                }
+            }
+            foreach ($dependentRows as $dep) {
+                if (!empty($dep['failure_certificate_file_path'])) {
+                    $yearEndCertificateUrls['fuyo[' . $dep['fuyo_no'] . '][failure_certificate_file]'] = route('year_end_adjustment.certificate', ['type' => 'dependent', 'recordId' => $dep['fuyo_no']]);
+                }
+            }
             $yearEndFirstIncompleteSection = null;
             foreach ($yearEndSectionStates as $sectionKey => $isSaved) {
             if (!$isSaved) {
@@ -544,6 +579,9 @@
                         </div>
                         @endif
 
+                        @if (!empty($yearEndCertificateUrls['previous_job_certificate_file']))
+                        <p class="year-end-field-current-file"><a href="{{ $yearEndCertificateUrls['previous_job_certificate_file'] }}" target="_blank" rel="noopener">保存済みの添付をプレビュー</a></p>
+                        @endif
                         <div class="year-end-toggle">
                             @php
                             $previousJobChanged = isset($application['previous_job_withholding_changed']) ? (bool) $application['previous_job_withholding_changed'] : null;
@@ -808,11 +846,14 @@
                     </div>
                 </div>
 
+                @if ($yearEndInsuranceMissingCertificate)
+                <p class="year-end-note insurance-edit-note">未添付の証憑があります。「はい」を選んで証憑を添付してください。</p>
+                @endif
                 @forelse ($hokenRows as $hoken)
                 @php
                 $hokenNo = (int) ($hoken['hoken_no'] ?? 0);
                 $hokenConfirmed = (int) ($hoken['checked_flag'] ?? 0) === 1;
-                $hokenMissingCertificate = empty($hoken['certificate_original_name'] ?? '');
+                $hokenMissingCertificate = ($hoken['certificate_file_path'] ?? '') === '';
                 @endphp
                 @include('staff_portal.year_end.sections._confirm_or_change', [
                 'sectionKey' => 'hoken-' . $hokenNo,
@@ -915,7 +956,8 @@
 
                 @if ($editable)
                 <div class="year-end-section-actions">
-                    <button type="submit" class="btn year-end-btn-save">保存して次へ</button>
+                    <button type="submit" name="insurance_save_mode" value="draft" class="btn insurance-draft-button">下書き保存</button>
+                    <button type="submit" name="insurance_save_mode" value="complete" class="btn year-end-btn-save">保存して次へ</button>
                 </div>
                 @endif
             </form>
@@ -1083,17 +1125,24 @@
                         }
 
                         event.preventDefault();
-                        submitSectionForm(section, form);
+                        submitSectionForm(section, form, submitter);
                     });
                 });
 
-                function submitSectionForm(section, form) {
+                function submitSectionForm(section, form, submitter) {
                     var errorBox = form.querySelector('[data-error]');
                     errorBox.hidden = true;
                     errorBox.innerHTML = '';
                     section.classList.add('year-end-accordion-saving');
 
                     var formData = new FormData(form);
+                    if (submitter && submitter.name) formData.append(submitter.name, submitter.value);
+                    if (section.dataset.section === 'insurance' && formData.get('insurance_engaged') !== '1') {
+                        // 非表示の編集内容は送らず、「変更なし」の確認だけを保存する。
+                        Array.from(formData.keys()).forEach(function(key) {
+                            if (/^hoken(?:_add)?\[/.test(key)) formData.delete(key);
+                        });
+                    }
 
                     fetch(form.getAttribute('action'), {
                         method: 'POST',
@@ -1103,9 +1152,14 @@
                             'X-Requested-With': 'XMLHttpRequest'
                         },
                     }).then(function(res) {
-                        return res.json().then(function(data) {
+                        return res.json().catch(function() {
+                            return {invalidResponse: true, message: res.status === 413
+                                ? '添付ファイルの合計サイズがサーバーの上限を超えています。画像を小さくするか、分けて保存してください。'
+                                : '保存結果を確認できませんでした（HTTP ' + res.status + '）。ファイルのサイズ・形式を確認し、再度お試しください。'};
+                        }).then(function(data) {
+                            if (res.status === 413) data.message = '添付ファイルの合計サイズがサーバーの上限を超えています。画像を小さくするか、分けて保存してください。';
                             return {
-                                ok: res.ok,
+                                ok: res.ok && !data.invalidResponse,
                                 status: res.status,
                                 data: data
                             };
@@ -1129,6 +1183,15 @@
                             try {
                                 sessionStorage.setItem('year_end_force_open_insurance', '1');
                             } catch (e) {}
+                            location.reload();
+                            return;
+                        }
+
+                        // 保険の添付名・未添付警告・追加行を、保存後の情報で表示し直す。
+                        if (section.dataset.section === 'insurance') {
+                            if (formData.get('insurance_save_mode') === 'draft') {
+                                try { sessionStorage.setItem('year_end_force_open_insurance', '1'); } catch (e) {}
+                            }
                             location.reload();
                             return;
                         }

@@ -186,6 +186,7 @@ Route::prefix('admin')->group(function (): void {
 
         Route::get('/work/billing-list/{invoiceId}/print', [BillingListV2Controller::class, 'print'])->name('admin.work.billing_list.print');
         Route::post('/work/billing-list/store', [BillingListV2Controller::class, 'storeInvoice'])->name('admin.work.billing_list.store');
+        Route::post('/work/billing-list/duplicate', [BillingListV2Controller::class, 'duplicateInvoice'])->name('admin.work.billing_list.duplicate');
         Route::post('/work/billing-list/update', [BillingListV2Controller::class, 'updateInvoice'])->name('admin.work.billing_list.update');
         Route::post('/work/billing-list/delete', [BillingListV2Controller::class, 'deleteInvoice'])->name('admin.work.billing_list.delete');
         Route::post('/work/billing-list/detail/store', [BillingListV2Controller::class, 'storeDetail'])->name('admin.work.billing_list.detail.store');
@@ -320,6 +321,7 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
 
     // 年末調整（スタッフ申請）
     Route::get('/year-end-adjustment', [YearEndApplicationController::class, 'index'])->name('year_end_adjustment');
+    Route::get('/year-end-adjustment/certificate/{type}/{recordId?}', [YearEndApplicationController::class, 'certificatePreview'])->where('type', 'insurance|dependent|previous-job|housing-loan|address|name|disability')->whereNumber('recordId')->name('year_end_adjustment.certificate');
     Route::post('/year-end-adjustment/personal-info', [YearEndApplicationController::class, 'updatePersonalInfo'])->name('year_end_adjustment.personal_info.update');
     Route::post('/year-end-adjustment/dependents', [YearEndApplicationController::class, 'updateDependents'])->name('year_end_adjustment.dependents.update');
     Route::post('/year-end-adjustment/spouse', [YearEndApplicationController::class, 'updateSpouse'])->name('year_end_adjustment.spouse.update');
