@@ -6,10 +6,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TCPG SYSTEM 個人賃金台帳</title>
   <link rel="stylesheet" href="{{ asset('css/print.css') }}">
+  <style>
+    @page { size: A4 portrait; margin: 8mm; }
+    body {
+      color: #1f2a37;
+      font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .print-page {
+      width: 194mm;
+      min-height: 281mm;
+      padding: 8mm;
+    }
+    .print-title {
+      margin-bottom: 4px;
+      text-align: left;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .print-meta { font-size: 13px; font-weight: 400; }
+    .print-toolbar { display: flex; align-items: center; gap: 8px; }
+    .print-toolbar label { display: inline-flex; align-items: center; gap: 4px; }
+    .print-table th,
+    .print-table td {
+      border-color: #b7bcc4;
+      padding: 2px 1px;
+      font-size: 12px;
+      word-break: normal;
+    }
+    .print-table th {
+      background: #f4f6f8;
+      font-size: 9px;
+      font-weight: 500;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+    .print-table .item-col { width: 88px; text-align: left; }
+    .print-table .num { text-align: right; }
+    .print-table .ledger-total-row td,
+    .print-table .ledger-total-row th { background: #f1f3f5; font-weight: 600; }
+    .print-table .ledger-grand-total-cell {
+      background: #e5e7eb !important;
+      color: #111827;
+      font-weight: 700;
+    }
+    @media print {
+      .print-toolbar { display: none; }
+      .print-page { width: auto; min-height: auto; margin: 0; padding: 0; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+    }
+  </style>
 </head>
 
 <body>
-  <button type="button" class="print-button" onclick="window.print()">印刷</button>
+  <form method="get" action="{{ url()->current() }}" class="print-toolbar">
+    <button type="button" class="print-button" onclick="window.print()">印刷</button>
+    <input type="hidden" name="staff_id" value="{{ $selectedStaffId ?? '' }}">
+    <input type="hidden" name="payment_date" value="{{ $selectedPaymentDate ?? '' }}">
+    <input type="hidden" name="show_bonus" value="0">
+    <label><input type="checkbox" name="show_bonus" value="1" @checked(request()->boolean('show_bonus', true)) onchange="this.form.requestSubmit()">賞与を表示</label>
+    <noscript><button type="submit">表示を更新</button></noscript>
+  </form>
 
   @php
   $allowanceEntries = is_array($allowanceEntries ?? null) ? $allowanceEntries : [];
@@ -48,7 +108,7 @@
   ['label' => '総出勤日数', 'key' => 'work_in_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
   ['label' => '平日出勤日数', 'key' => 'work_in_num_net', 'type' => 'num', 'digits' => 0, 'sum' => true],
   ['label' => '休日出勤日数', 'key' => 'work_holiday_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
-  ['label' => '欠勤日数', 'key' => 'absence_num', 'type' => 'num', 'digits' => 0, 'sum' => true],
+  ['label' => '欠勤日数', 'key' => 'absence_num', 'type' => 'num', 'digits' => 2, 'sum' => true],
   ['label' => '総出勤時間', 'key' => 'work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
   ['label' => '所定時間', 'key' => 'work_time_net', 'type' => 'num', 'digits' => 2, 'sum' => true],
   ['label' => '休日出勤時間', 'key' => 'holiday_work_time', 'type' => 'num', 'digits' => 2, 'sum' => true],
@@ -67,6 +127,7 @@
   ['label' => '支給合計', 'key' => 'supply_sum', 'type' => 'money', 'sum' => true],
   ['label' => '健康保険料', 'key' => 'kenpo', 'type' => 'money', 'sum' => true],
   ['label' => '介護保険料', 'key' => 'kaigo', 'type' => 'money', 'sum' => true],
+  ['label' => '子ども支援金', 'key' => 'child_support_funds', 'type' => 'money', 'sum' => true],
   ['label' => '厚生年金保険料', 'key' => 'kounen', 'type' => 'money', 'sum' => true],
   ['label' => '雇用保険料', 'key' => 'koyou', 'type' => 'money', 'sum' => true],
   ['label' => '社会保険料合計', 'key' => 'syaho_sum', 'type' => 'money', 'sum' => true],
@@ -75,7 +136,7 @@
   ['label' => '控除項目1', 'key' => 'koujyo_1', 'type' => 'money', 'sum' => true],
   ['label' => '控除合計', 'key' => 'deduction_sum', 'type' => 'money', 'sum' => true],
   ['label' => '年末調整', 'key' => 'adjustment_year_end', 'type' => 'money', 'sum' => true],
-  ['label' => '立替精算等', 'key' => 'cost_liquidation', 'type' => 'money', 'sum' => true],
+  ['label' => '立替経費精算', 'key' => 'cost_liquidation', 'type' => 'money', 'sum' => true],
   ['label' => '差引支給額合計', 'key' => 'transfer_amount', 'type' => 'money', 'sum' => true],
   ['label' => '健保標準報酬月額', 'key' => 'kenpo_monthly_amo', 'type' => 'money', 'sum' => false],
   ['label' => '厚年標準報酬月額', 'key' => 'kounen_monthly_amo', 'type' => 'money', 'sum' => false],
@@ -115,6 +176,11 @@
   };
 
   $ledgerRows = array_values((array) ($ledgerRows ?? []));
+  // 取得済みデータの表示対象だけを切り替え、改ページ・期間合計も同じ対象に揃える。
+  if (!request()->boolean('show_bonus', true)) {
+    $ledgerRows = array_values(array_filter($ledgerRows, fn(array $row): bool => ($row['payment_type'] ?? '') !== '賞与'));
+    $rowDefs = array_values(array_filter($rowDefs, fn(array $item): bool => $item['key'] !== 'bonus_amount'));
+  }
   $pages = array_chunk($ledgerRows, 6);
   $staffInfo = (array) ($staffInfo ?? []);
   @endphp
@@ -146,8 +212,8 @@
 
     <table class="print-table">
       <thead>
-        <tr>
-          <th>項目</th>
+        <tr class="ledger-total-row">
+          <th class="item-col">項目</th>
           @foreach ($pageRows as $row)
           <th>
             {{ $row['column_label'] ?? '' }}<br>
@@ -155,19 +221,19 @@
           </th>
           @endforeach
           @if ($isLastPage)
-          <th>合計</th>
+          <th class="ledger-grand-total-cell">合計</th>
           @endif
         </tr>
       </thead>
       <tbody>
         @foreach ($rowDefs as $item)
-        <tr>
-          <th>{{ $item['label'] }}</th>
+        <tr class="{{ in_array($item['key'], ['taxation_sum', 'not_taxation_sum', 'supply_sum', 'syaho_sum', 'deduction_sum', 'transfer_amount'], true) ? 'ledger-total-row' : '' }}">
+          <td class="item-col">{{ $item['label'] }}</td>
           @foreach ($pageRows as $row)
-          <td style="text-align:right;">{{ $formatValue($row, $item) }}</td>
+          <td class="num">{{ $formatValue($row, $item) }}</td>
           @endforeach
           @if ($isLastPage)
-          <td style="text-align:right;">{{ $formatTotal($ledgerRows, $item) }}</td>
+          <td class="num ledger-grand-total-cell">{{ $formatTotal($ledgerRows, $item) }}</td>
           @endif
         </tr>
         @endforeach

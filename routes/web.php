@@ -107,6 +107,7 @@ Route::prefix('admin')->group(function (): void {
         Route::get('/sales/pdf', [DashboardV2Controller::class, 'salesPdf'])->name('admin.sales.pdf');
         Route::get('/work/information', [InformationV2Controller::class, 'index'])->name('admin.work.information');
         Route::post('/work/information/save', [InformationV2Controller::class, 'save'])->name('admin.work.information.save');
+        Route::post('/work/information/delete', [InformationV2Controller::class, 'delete'])->name('admin.work.information.delete');
         Route::get('/work/maintenance', [MaintenanceV2Controller::class, 'index'])->name('admin.work.maintenance');
         Route::post('/work/maintenance/save', [MaintenanceV2Controller::class, 'save'])->name('admin.work.maintenance.save');
         Route::delete('/work/maintenance/{maintenanceId}', [MaintenanceV2Controller::class, 'destroy'])->name('admin.work.maintenance.destroy');
@@ -298,6 +299,9 @@ Route::prefix('staff')->middleware('staff.auth')->group(function (): void {
     Route::get('/office/sales', [OfficeController::class, 'sales'])->name('office.sales');
     Route::get('/office/sales/print', [OfficeController::class, 'salesPrint'])->name('office.sales.print');
     Route::get('/office/sales/uncollected', [OfficeController::class, 'uncollectedReceivables'])->name('office.sales.uncollected');
+    Route::post('/office/sales/uncollected/returns/process', [OfficeController::class, 'saveReturnProcessingDate'])->name('office.sales.uncollected.returns.process');
+    Route::get('/office/sales/uncollected/returns/print', [OfficeController::class, 'returnsPrint'])->name('office.sales.uncollected.returns.print');
+    Route::get('/office/sales/uncollected/returns/csv', [OfficeController::class, 'returnsCsv'])->name('office.sales.uncollected.returns.csv');
     Route::get('/office/sales/uncollected/print', [OfficeController::class, 'uncollectedReceivablesPrint'])->name('office.sales.uncollected.print');
     Route::get('/office/sales/uncollected/detail-print', [OfficeController::class, 'uncollectedReceivablesDetailPrint'])->name('office.sales.uncollected.detail_print');
 

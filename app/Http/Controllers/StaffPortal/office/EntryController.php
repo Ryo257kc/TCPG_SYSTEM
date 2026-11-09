@@ -110,7 +110,7 @@ class EntryController extends Controller
                 'claim_amount' => $this->formatMoneyValue($claimAmount),
                 'adjustment_amount' => $this->formatMoneyValue($adjustmentAmount),
                 'returned_amount' => $this->formatMoneyValue($returnedAmount),
-                'grand_total' => $this->formatMoneyValue($claimAmount + $adjustmentAmount - $returnedAmount),
+                'grand_total' => $this->formatMoneyValue($claimAmount + $adjustmentAmount + $returnedAmount),
                 'payment_amount' => $this->formatMoneyValue((float) $filtered->sum(fn($row) => (float) ($row->payment_amount ?? 0))),
             ];
         })->all();
@@ -518,7 +518,7 @@ class EntryController extends Controller
                 department.official_store_no as official_store_no,
                 {$prefixCase} as journal_prefix,
                 {$itemCase} as item_name,
-                SUM(ISNULL(detail.claim_amount, 0) + ISNULL(detail.adjustment_amount, 0) - ISNULL(detail.returned_amount, 0)) as amount
+                SUM(ISNULL(detail.claim_amount, 0) + ISNULL(detail.adjustment_amount, 0)) as amount
             ")
             ->where('detail.treatment_month', '>=', $targetMonthStart->format('Y-m-d'))
             ->where('detail.treatment_month', '<', $targetMonthNext->format('Y-m-d'))

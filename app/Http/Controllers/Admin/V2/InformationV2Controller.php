@@ -44,6 +44,16 @@ class InformationV2Controller extends Controller
         ]);
     }
 
+    public function delete(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['mesa_no' => ['required', 'integer', 'min:1']]);
+        $affected = DB::connection('sqlsrv')->table('dbo.mx_message')
+            ->where('mesa_no', (int) $validated['mesa_no'])->delete();
+
+        return redirect()->route('admin.work.information')
+            ->with('status', $affected > 0 ? 'お知らせを削除しました。' : '削除対象のお知らせが見つかりません。');
+    }
+
     public function save(Request $request): RedirectResponse
     {
         $validated = $request->validate([

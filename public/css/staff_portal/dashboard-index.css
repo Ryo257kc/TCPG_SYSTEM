@@ -60,6 +60,7 @@
 }
 
 .dashboard-info-text {
+    white-space: pre-line;
     margin: 0;
     padding: 16px 18px;
     border: 1px solid rgba(241, 164, 102, 0.24);

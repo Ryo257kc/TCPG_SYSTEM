@@ -112,6 +112,7 @@
                                 <span>No.{{ $message['mesa_no'] }}</span>
                                 <span>{{ $message['mase_date_label'] }}</span>
                             </div>
+                            <button type="submit" class="btn information-delete-button" formaction="{{ route('admin.work.information.delete') }}" formnovalidate onclick="return confirm('このお知らせを削除しますか？削除すると元に戻せません。');">削除</button>
                             <button type="submit" class="btn btn-primary">保存</button>
                         </div>
                     </form>
