@@ -7,7 +7,7 @@ use Tests\TestCase;
 
 class YearEndInsuranceAttachmentDisplayTest extends TestCase
 {
-    private function renderInsurance(array $rows): string
+    private function renderInsurance(array $rows, bool $editable = true): string
     {
         $rows = array_map(fn(array $row): array => $row + ['declared_amount' => null], $rows);
         DB::shouldReceive('connection')->never();
@@ -17,7 +17,7 @@ class YearEndInsuranceAttachmentDisplayTest extends TestCase
         ], 0);
         return view('staff_portal.year_end.index', [
             'errors' => new \Illuminate\Support\ViewErrorBag(),
-            'displayName' => 'テスト', 'targetYear' => 2026, 'editable' => true,
+            'displayName' => 'テスト', 'targetYear' => 2026, 'editable' => $editable,
             'statusLabel' => '下書き', 'application' => $application, 'currentNenTyo' => [],
             'currentAddress' => '', 'currentAddressFuri' => '', 'currentStaffName' => '',
             'currentStaffNameFuri' => '', 'currentBirthday' => '', 'currentHeadHouse' => '',
@@ -54,6 +54,15 @@ class YearEndInsuranceAttachmentDisplayTest extends TestCase
         $html = $this->renderInsurance([]);
         self::assertStringNotContainsString('証憑未添付あり', $html);
         self::assertStringNotContainsString('証憑ファイルが未添付です', $html);
+    }
+
+    public function test_submitted_insurance_hides_actions_but_keeps_attachment_preview(): void
+    {
+        $rows = [['hoken_no' => 1, 'certificate_file_path' => 'insurance/one.pdf']];
+        $submitted = $this->renderInsurance($rows, false);
+        self::assertStringNotContainsString('class="year-end-row-actions"', $submitted);
+        self::assertStringContainsString('/staff/year-end-adjustment/certificate/insurance/1', $submitted);
+        self::assertStringContainsString('class="year-end-row-actions"', $this->renderInsurance($rows));
     }
 
     public function test_draft_button_is_added_only_to_the_insurance_form(): void

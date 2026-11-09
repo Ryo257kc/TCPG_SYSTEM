@@ -36,6 +36,7 @@
             <p class="year-end-attachment-warning">⚠ {{ $missingAttachmentWarning }}</p>
             @endif
         </div>
+        @if ($editable)
         <div class="year-end-row-actions">
             <label class="year-end-row-action-btn" for="year-end-toggle-{{ $sectionKey }}">編集</label>
             @if (!empty($deleteFieldName))
@@ -48,6 +49,7 @@
             @endif
             @endif
         </div>
+        @endif
     </div>
     @endif
 
