@@ -47,6 +47,24 @@ class YearEndInsuranceSaveValidationTest extends TestCase
         }
     }
 
+    public function test_previous_job_validation_errors_are_japanese_without_database_writes(): void
+    {
+        [$controller] = $this->controllerWithExistingDraft();
+        $request = Request::create('/', 'POST', [
+            'previous_job_withholding_changed' => '1',
+            'zen_syamei' => '', 'zen_tai_date' => 'invalid', 'zen_shotoku' => -1,
+        ]);
+        $request->headers->set('Accept', 'application/json');
+        try {
+            $controller->updatePreviousJob($request);
+            self::fail('Invalid previous job fields must be rejected.');
+        } catch (ValidationException $e) {
+            self::assertSame('前職の会社名を入力してください。', $e->errors()['zen_syamei'][0]);
+            self::assertSame('退職日は正しい日付で入力してください。', $e->errors()['zen_tai_date'][0]);
+            self::assertSame('前職の給与収入額は0以上で入力してください。', $e->errors()['zen_shotoku'][0]);
+        }
+    }
+
     public function test_yes_with_new_insurance_without_attachment_returns_file_error_before_writing(): void
     {
         [$controller, $connection] = $this->controllerWithExistingDraft();

@@ -151,6 +151,21 @@ class YearEndApplicationController extends Controller
                 'zen_syaho_kou' => ['nullable', 'numeric', 'min:0'],
                 'zen_kyuyo_tax' => ['nullable', 'numeric', 'min:0'],
                 'zen_bonus_tax' => ['nullable', 'numeric', 'min:0'],
+            ], [
+                'required' => ':attributeを入力してください。',
+                'string' => ':attributeは文字列で入力してください。',
+                'max' => ':attributeは:max文字以内で入力してください。',
+                'date' => ':attributeは正しい日付で入力してください。',
+                'numeric' => ':attributeは数値で入力してください。',
+                'min' => ':attributeは:min以上で入力してください。',
+            ], [
+                'zen_syamei' => '前職の会社名',
+                'zen_add' => '前職の所在地',
+                'zen_tai_date' => '退職日',
+                'zen_shotoku' => '前職の給与収入額',
+                'zen_syaho_kou' => '前職の社会保険料等の金額',
+                'zen_kyuyo_tax' => '前職の源泉徴収税額',
+                'zen_bonus_tax' => '前職の賞与分源泉徴収税額',
             ]);
 
             $this->requireCertificate($request, 'previous_job_certificate_file', $previous, '前職の源泉徴収票を添付してください。', 'previous_job_certificate_file_path');

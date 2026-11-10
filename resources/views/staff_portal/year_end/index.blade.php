@@ -54,7 +54,7 @@
         }
 
         .year-end-toggle-input:checked~.year-end-toggle-fields,
-        .year-end-required-choice:has(input[name="spouse_engaged"][value="1"]:checked)~.year-end-toggle-fields {
+        .year-end-required-choice:has(input[value="1"]:checked)~.year-end-toggle-fields {
             display: grid;
         }
 
